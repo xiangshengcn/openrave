@@ -174,6 +174,7 @@ A. Most likely not, usually an iksolver finishes within 10 minutes.
 
 
 """
+
 from __future__ import with_statement # for python 2.5
 
 from sympy import __version__ as sympy_version
@@ -188,6 +189,9 @@ __version__ = '0x1000004a' # hex of the version, has to be prefixed with 0x. als
 
 import sys, copy, time, math, datetime
 import __builtin__
+
+import traceback
+
 from optparse import OptionParser
 try:
     from openravepy.metaclass import AutoReloader
@@ -3149,6 +3153,8 @@ class IKFastSolver(AutoReloader):
     def solve6DIntersectingAxes(self, T0links, T1links, transvars,rotvars,solveRotationFirst,endbranchtree):
         """Solve 6D equations using fact that 3 axes are intersecting. The 3 intersecting axes are all part of T0links and will be used to compute the rotation of the robot. The other 3 axes are part of T1links and will be used to first compute the position.
         """
+        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
+        
         self._iktype = 'transform6d'
         assert(len(transvars)==3 and len(rotvars) == 3)
         T0 = self.multiplyMatrix(T0links)
