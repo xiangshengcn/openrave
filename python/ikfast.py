@@ -2225,26 +2225,42 @@ class IKFastSolver(AutoReloader):
 
         self._solvejointvars = solvejointvars
         self._jointvars = jointvars
-        # set up the destination symbols
+
+        """
+        set up for the end-effector 
+        (1) symbols, by using Symbol("..."), and
+        (2) symbolic variables, by assigning them their corresponding symbols
+        """
+        # rotation matrix R
         self.Tee = eye(4)
         for i in range(0,3):
             for j in range(0,3):
                 self.Tee[i,j] = Symbol("r%d%d"%(i,j))
+
+        # coordinate vector p
         self.Tee[0,3] = Symbol("px")
         self.Tee[1,3] = Symbol("py")
         self.Tee[2,3] = Symbol("pz")
+
+        # symbolic variables
         r00,r01,r02,px,r10,r11,r12,py,r20,r21,r22,pz = self.Tee[0:12]
         self.pp = Symbol('pp')
         self.ppsubs = [(self.pp,px**2+py**2+pz**2)]
+
+        # dot product of p and each column of R
         self.npxyz = [Symbol('npx'),Symbol('npy'),Symbol('npz')]
         self.npxyzsubs = [(self.npxyz[i],px*self.Tee[0,i]+py*self.Tee[1,i]+pz*self.Tee[2,i]) for i in range(3)]
-        # cross products between columns of self.Tee
+        
+        # cross products between columns of R
         self.rxp = []
         self.rxpsubs = []
         for i in range(3):
             self.rxp.append([Symbol('rxp%d_%d'%(i,j)) for j in range(3)])
             c = self.Tee[0:3,i].cross(self.Tee[0:3,3])
             self.rxpsubs += [(self.rxp[-1][j],c[j]) for j in range(3)]
+
+        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
+            
         # have to include new_rXX
         self.pvars = self.Tee[0:12]+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2] + [Symbol('new_r00'), Symbol('new_r01'), Symbol('new_r02'), Symbol('new_r10'), Symbol('new_r11'), Symbol('new_r12'), Symbol('new_r20'), Symbol('new_r21'), Symbol('new_r22')]
         self._rotsymbols = list(self.Tee[0:3,0:3])
