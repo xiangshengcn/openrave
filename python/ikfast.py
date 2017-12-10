@@ -289,6 +289,19 @@ try:
 except ImportError:
     pass
 
+# ========== TGN starts to learn IKfast ==========
+def ikfast_print_stack():
+    tb = traceback.extract_stack()
+    print('\n%-26s %5s %24s' % ('        FUNCTION','LINE', 'FILE      '))
+    print('---------------------------------------------------------')
+    for function_call in tb:
+        if 'ikfast.py' in function_call[0]:
+            print('%-26s %5d %24s' % (function_call[2], function_call[1], 'ikfast'))
+        if 'inversekinematics' in function_call[0]:
+            print('%-26s %5d %24s' % (function_call[2], function_call[1], 'inversekinematics'))
+            
+# ===================== TGN ======================
+
 # changes to sympy:
 
 # core/power.py Pow
