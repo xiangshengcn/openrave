@@ -293,12 +293,12 @@ except ImportError:
 def ikfast_print_stack():
     tb = traceback.extract_stack()
     print('\n%-26s %5s %24s' % ('        FUNCTION','LINE', 'FILE      '))
+    keyword_of_interest = ['ikfast', 'inversekinematics']
     print('---------------------------------------------------------')
     for function_call in tb:
-        if 'ikfast.py' in function_call[0]:
-            print('%-26s %5d %24s' % (function_call[2], function_call[1], 'ikfast'))
-        if 'inversekinematics' in function_call[0]:
-            print('%-26s %5d %24s' % (function_call[2], function_call[1], 'inversekinematics'))
+        for keyword in keyword_of_interest:
+            if keyword in function_call[0]:
+                print('%-26s %5d %24s' % (function_call[2], function_call[1], keyword))
             
 # ===================== TGN ======================
 
