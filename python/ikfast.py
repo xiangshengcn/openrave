@@ -1576,13 +1576,13 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def multiplyMatrix(Ts):
-#        Tfinal = Ts[0]
-#        for T in Ts[1:-1]:
-        Tfinal = eye(4)
-        for T in Ts:
+        Tfinal = Ts[0]
+        for T in Ts[1:]:
+#        Tfinal = eye(4)
+#        for T in Ts:
             Tfinal = Tfinal*T
         return Tfinal
-
+    
     @staticmethod
     def equal(eq0,eq1):
         if isinstance(eq0, Poly):
@@ -2334,6 +2334,32 @@ class IKFastSolver(AutoReloader):
         self.globalsymbols = []
         self._scopecounter = 0
 
+# before passing to the solver, set big numbers to constant variables, this will greatly reduce computation times
+#         numbersubs = []
+#         LinksRaw2 = []
+#         for Torig in LinksRaw:
+#             T = Matrix(Torig)
+#             #print axisAngleFromRotationMatrix(numpy.array(numpy.array(T[0:3,0:3]),numpy.float64))
+#             for i in range(12):
+#                 ti = T[i]
+#                 if ti.is_number and len(str(ti)) > 30:
+#                     matchnumber = self.MatchSimilarFraction(ti,numbersubs)
+#                     if matchnumber is None:
+#                         sym = self.gsymbolgen.next()
+#                         log.info('adding global symbol %s=%s'%(sym,ti))
+#                         numbersubs.append((sym,ti))
+#                         T[i] = sym
+#                     else:
+#                         T[i] = matchnumber
+#             LinksRaw2.append(T)
+#         if len(numbersubs) > 10:
+#             log.info('substituting %d global symbols',len(numbersubs))
+#             LinksRaw = LinksRaw2
+#             self.globalsymbols += numbersubs
+
+        self.Teeleftmult = self.multiplyMatrix(LinksLeft) # the raw ee passed to the ik solver function
+        self._CheckPreemptFn(progress=0.01)
+
         print('========================= START OF SETUP ===============================\n')
         info_to_print =  ['ifreejointvars',
                           'freevarsubs',
@@ -2366,34 +2392,8 @@ class IKFastSolver(AutoReloader):
             exec(exec_str)
         print('\n')
         print('========================== END OF SETUP ================================\n')
-
         exec(ipython_str)
-
-        # before passing to the solver, set big numbers to constant variables, this will greatly reduce computation times
-#         numbersubs = []
-#         LinksRaw2 = []
-#         for Torig in LinksRaw:
-#             T = Matrix(Torig)
-#             #print axisAngleFromRotationMatrix(numpy.array(numpy.array(T[0:3,0:3]),numpy.float64))
-#             for i in range(12):
-#                 ti = T[i]
-#                 if ti.is_number and len(str(ti)) > 30:
-#                     matchnumber = self.MatchSimilarFraction(ti,numbersubs)
-#                     if matchnumber is None:
-#                         sym = self.gsymbolgen.next()
-#                         log.info('adding global symbol %s=%s'%(sym,ti))
-#                         numbersubs.append((sym,ti))
-#                         T[i] = sym
-#                     else:
-#                         T[i] = matchnumber
-#             LinksRaw2.append(T)
-#         if len(numbersubs) > 10:
-#             log.info('substituting %d global symbols',len(numbersubs))
-#             LinksRaw = LinksRaw2
-#             self.globalsymbols += numbersubs
-
-        self.Teeleftmult = self.multiplyMatrix(LinksLeft) # the raw ee passed to the ik solver function
-        self._CheckPreemptFn(progress=0.01)
+        
         chaintree = solvefn(self, LinksRaw, jointvars, isolvejointvars)
         if self.useleftmultiply:
             chaintree.leftmultiply(Tleft=self.multiplyMatrix(LinksLeft), Tleftinv=self.multiplyMatrix(LinksLeftInv[::-1]))
@@ -2966,6 +2966,8 @@ class IKFastSolver(AutoReloader):
     def solveFullIK_6D(self, LinksRaw, jointvars, isolvejointvars,Tmanipraw=eye(4)):
         """Solves the full 6D translatio + rotation IK
         """
+        exec(ipython_str)
+        
         self._iktype = 'transform6d'
         Tgripper = eye(4)
         for i in range(4):
