@@ -297,8 +297,10 @@ def ikfast_print_stack():
     print('---------------------------------------------------------')
     for function_call in tb:
         for keyword in keyword_of_interest:
-            if keyword in function_call[0]:
+            if (keyword in function_call[0]) and (function_call[2] not in 'ikfast_print_stack'):
                 print('%-26s %5d %24s' % (function_call[2], function_call[1], keyword))
+
+ipython_str = 'from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())'
             
 # ===================== TGN ======================
 
@@ -1563,8 +1565,9 @@ class IKFastSolver(AutoReloader):
     @staticmethod
     def affineInverse(affinematrix):
         T = eye(4)
-        T[0:3,0:3] = affinematrix[0:3,0:3].transpose()
-        T[0:3,3] = -affinematrix[0:3,0:3].transpose() * affinematrix[0:3,3]
+        affinematrix_transpose = affinematrix[0:3,0:3].transpose()
+        T[0:3,0:3] =  affinematrix_transpose
+        T[0:3,3]   = -affinematrix_transpose * affinematrix[0:3,3]
         return T
 
     @staticmethod
@@ -1573,6 +1576,8 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def multiplyMatrix(Ts):
+#        Tfinal = Ts[0]
+#        for T in Ts[1:-1]:
         Tfinal = eye(4)
         for T in Ts:
             Tfinal = Tfinal*T
@@ -2361,8 +2366,8 @@ class IKFastSolver(AutoReloader):
             exec(exec_str)
         print('\n')
         print('========================== END OF SETUP ================================\n')
-        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
 
+        exec(ipython_str)
 
         # before passing to the solver, set big numbers to constant variables, this will greatly reduce computation times
 #         numbersubs = []
@@ -2386,6 +2391,7 @@ class IKFastSolver(AutoReloader):
 #             log.info('substituting %d global symbols',len(numbersubs))
 #             LinksRaw = LinksRaw2
 #             self.globalsymbols += numbersubs
+
         self.Teeleftmult = self.multiplyMatrix(LinksLeft) # the raw ee passed to the ik solver function
         self._CheckPreemptFn(progress=0.01)
         chaintree = solvefn(self, LinksRaw, jointvars, isolvejointvars)
