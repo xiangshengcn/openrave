@@ -2270,22 +2270,6 @@ class IKFastSolver(AutoReloader):
         irxp = 16
         self._rotpossymbols = self._rotsymbols + list(self.Tee[0:3,3])+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2]
 
-        print('========================= START OF SETUP ===============================\n')
-        info_to_print =  ['ifreejointvars', 'freevarsubs', 'freevarsubsinv',
-                          'freevars', 'freejointvars', 
-                          'invsubs', '_solvejointvars', '_jointvars',
-                          'Tee', 'pp', 'ppsubs', 'npxyz', 'npxyzsubs',
-                          'rxp', 'rxpsubs', 'pvars', '_rotsymbols',
-                          '_rotpossymbols']
-        for each_info in info_to_print:
-            print('\n%s' % each_info)
-            exec_str = "print \"      \", self." + each_info
-            exec(exec_str)
-        print('\n')
-        print('========================== END OF SETUP ================================\n')
-
-        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
-
         # norm of each row/column vector in R is 1
         # groups of rotation variables that are unit vectors
         self._rotnormgroups = []
@@ -2344,6 +2328,41 @@ class IKFastSolver(AutoReloader):
         self.gsymbolgen = cse_main.numbered_symbols('gconst')
         self.globalsymbols = []
         self._scopecounter = 0
+
+        print('========================= START OF SETUP ===============================\n')
+        info_to_print =  ['ifreejointvars',
+                          'freevarsubs',
+                          'freevarsubsinv',
+                          'freevars',
+                          'freejointvars', 
+                          'invsubs',
+                          '_solvejointvars',
+                          '_jointvars',
+                          'Tee',
+                          'pp',
+                          'ppsubs',
+                          'npxyz',
+                          'npxyzsubs',
+                          'rxp',
+                          'rxpsubs',
+                          'pvars',
+                          '_rotsymbols',
+                          '_rotpossymbols',
+                          '_rotnormgroups',
+                          '_rotdotgroups',
+                          '_rotposdotgroups',
+                          '_rotcrossgroups',
+                          '_rotposcrossgroups',
+                          'Teeinv'
+                          ]
+        for each_info in info_to_print:
+            print('\n%s' % each_info)
+            exec_str = "print \"      \", self." + each_info
+            exec(exec_str)
+        print('\n')
+        print('========================== END OF SETUP ================================\n')
+        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
+
 
         # before passing to the solver, set big numbers to constant variables, this will greatly reduce computation times
 #         numbersubs = []
@@ -3206,7 +3225,7 @@ class IKFastSolver(AutoReloader):
     def solve6DIntersectingAxes(self, T0links, T1links, transvars,rotvars,solveRotationFirst,endbranchtree):
         """Solve 6D equations using fact that 3 axes are intersecting. The 3 intersecting axes are all part of T0links and will be used to compute the rotation of the robot. The other 3 axes are part of T1links and will be used to first compute the position.
         """
-        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
+#        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
         
         self._iktype = 'transform6d'
         assert(len(transvars)==3 and len(rotvars) == 3)
