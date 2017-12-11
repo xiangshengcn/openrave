@@ -290,6 +290,12 @@ except ImportError:
     pass
 
 # ========== TGN starts to learn IKfast ==========
+
+import os
+def clc():
+    os.system('clear')
+    os.system('clear')
+
 def ikfast_print_stack():
     tb = traceback.extract_stack()
     print('\n%-26s %5s %24s' % ('        FUNCTION','LINE', 'FILE      '))
@@ -301,7 +307,7 @@ def ikfast_print_stack():
                 print('%-26s %5d %24s' % (function_call[2], function_call[1], keyword))
 
 ipython_str = 'from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())'
-            
+
 # ===================== TGN ======================
 
 # changes to sympy:
@@ -2219,14 +2225,17 @@ class IKFastSolver(AutoReloader):
             if dofindex in freeindices:
                 # convert all free variables to constants
                 self.ifreejointvars.append(i)
-                self.freevarsubs += [(cos(var.var), var.cvar), (sin(var.var), var.svar)]
-                self.freevarsubsinv += [(var.cvar,cos(var.var)), (var.svar,sin(var.var))]
+                self.freevarsubs += [(cos(var.var), var.cvar), \
+                                     (sin(var.var), var.svar)]
+                self.freevarsubsinv += [(var.cvar,cos(var.var)), \
+                                        (var.svar,sin(var.var))]
                 self.freevars += [var.cvar,var.svar]
                 self.freejointvars.append(var.var)
             else:
                 solvejointvars.append(v)
                 isolvejointvars.append(i)
-                self.invsubs += [(var.cvar,cos(v)),(var.svar,sin(v))]
+                self.invsubs += [(var.cvar,cos(v)),\
+                                 (var.svar,sin(v))]
 
         self._solvejointvars = solvejointvars
         self._jointvars = jointvars
@@ -2250,11 +2259,13 @@ class IKFastSolver(AutoReloader):
         # symbolic variables
         r00,r01,r02,px,r10,r11,r12,py,r20,r21,r22,pz = self.Tee[0:12]
         self.pp = Symbol('pp')
-        self.ppsubs = [(self.pp,px**2+py**2+pz**2)]
+        self.ppsubs = [(self.pp, \
+                        px**2+py**2+pz**2)]
 
         # dot product of p and each column of R
         self.npxyz = [Symbol('npx'),Symbol('npy'),Symbol('npz')]
-        self.npxyzsubs = [(self.npxyz[i],px*self.Tee[0,i]+py*self.Tee[1,i]+pz*self.Tee[2,i]) for i in range(3)]
+        self.npxyzsubs = [(self.npxyz[i], \
+                           px*self.Tee[0,i]+py*self.Tee[1,i]+pz*self.Tee[2,i]) for i in range(3)]
         
         # cross products between columns of R
         self.rxp = []
@@ -2265,7 +2276,11 @@ class IKFastSolver(AutoReloader):
             self.rxpsubs += [(self.rxp[-1][j],c[j]) for j in range(3)]
 
         # have to include new_rXX
-        self.pvars = self.Tee[0:12]+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2] + [Symbol('new_r00'), Symbol('new_r01'), Symbol('new_r02'), Symbol('new_r10'), Symbol('new_r11'), Symbol('new_r12'), Symbol('new_r20'), Symbol('new_r21'), Symbol('new_r22')]
+        self.pvars = self.Tee[0:12] + \
+                     self.npxyz+[self.pp] + self.rxp[0]+self.rxp[1]+self.rxp[2] + \
+                     [Symbol('new_r00'), Symbol('new_r01'), Symbol('new_r02'), \
+                      Symbol('new_r10'), Symbol('new_r11'), Symbol('new_r12'), \
+                      Symbol('new_r20'), Symbol('new_r21'), Symbol('new_r22')]
         self._rotsymbols = list(self.Tee[0:3,0:3])
 
         # add positions
@@ -2273,42 +2288,67 @@ class IKFastSolver(AutoReloader):
         inp = 12
         ipp = 15
         irxp = 16
-        self._rotpossymbols = self._rotsymbols + list(self.Tee[0:3,3])+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2]
+        self._rotpossymbols = self._rotsymbols + \
+                              list(self.Tee[0:3,3])+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2]
 
         # norm of each row/column vector in R is 1
-        # groups of rotation variables that are unit vectors
+        # groups of rotation variables are unit vectors
         self._rotnormgroups = []
         for i in range(3):
+            # row
             self._rotnormgroups.append([self.Tee[i,0],self.Tee[i,1],self.Tee[i,2],S.One])
+            # column
             self._rotnormgroups.append([self.Tee[0,i],self.Tee[1,i],self.Tee[2,i],S.One])
         self._rotposnormgroups = list(self._rotnormgroups)
         self._rotposnormgroups.append([self.Tee[0,3],self.Tee[1,3],self.Tee[2,3],self.pp])
         
-        # dot products between rotation rows/columns are 0
+        # dot product of each pair of rows/columns in R are 0
         self._rotdotgroups = []
-
-        for i,j in combinations(range(3),2):
-            self._rotdotgroups.append([[i,j],[i+3,j+3],[i+6,j+6],S.Zero])
+        for i,j in [(0,1),(0,2),(1,2)]: #combinations(range(3),2):
+            # pair of rows
             self._rotdotgroups.append([[3*i,3*j],[3*i+1,3*j+1],[3*i+2,3*j+2],S.Zero])
-        self._rotposdotgroups = list(self._rotdotgroups)
+            # pair of columns
+            self._rotdotgroups.append([[i,j],[i+3,j+3],[i+6,j+6],S.Zero])
 
+        self._rotposdotgroups = list(self._rotdotgroups)
         for i in range(3):
             self._rotposdotgroups.append([[i,ip],[i+3,ip+1],[i+6,ip+2],self.npxyz[i]])
             self._rotposdotgroups.append([[3*i+0,inp],[3*i+1,inp+1],[3*i+2,inp+2],self.Tee[i,3]])
         self._rotcrossgroups = []
+
+        """
+[[[0, 3], [1, 4], [2, 5], 0],
+ [[0, 1], [3, 4], [6, 7], 0],
+ [[0, 6], [1, 7], [2, 8], 0],
+ [[0, 2], [3, 5], [6, 8], 0],
+ [[3, 6], [4, 7], [5, 8], 0],
+ [[1, 2], [4, 5], [7, 8], 0],
+------------------------- Above are _rotdotgroups
+------------------------- Below are _rotposdotgroups
+ [[0, 9], [3, 10], [6, 11], npx],
+ [[0, 12], [1, 13], [2, 14], px],
+ [[1, 9], [4, 10], [7, 11], npy],
+ [[3, 12], [4, 13], [5, 14], py],
+ [[2, 9], [5, 10], [8, 11], npz],
+ [[6, 12], [7, 13], [8, 14], pz]]
+
+        """
         
-        # cross products of rotation rows and columns always yield the left over vector
-        for i,j,k in [(0,1,2),(0,2,1),(1,2,0)]:
-            # column
+        # cross product of each pair of rows/columns is the remaining row/column
+        for i,j,k in [(0,1,2),(1,2,0),(0,2,1)]:
+            # pair of columns
             self._rotcrossgroups.append([[i+3,j+6],[i+6,j+3],k])
             self._rotcrossgroups.append([[i+6,j],[i,j+6],k+3])
             self._rotcrossgroups.append([[i,j+3],[i+3,j],k+6])
-            # row
+            # pair of rows
             self._rotcrossgroups.append([[3*i+1,3*j+2],[3*i+2,3*j+1],3*k])
             self._rotcrossgroups.append([[3*i+2,3*j],[3*i,3*j+2],3*k+1])
             self._rotcrossgroups.append([[3*i,3*j+1],[3*i+1,3*j],3*k+2])
             # swap if sign is negative: if j!=1+i
+            # i.e. k==1, the 2nd row/column; will change into
+            # if k==1:
             if j!=1+i:
+                assert(k==1)
                 for crossgroup in self._rotcrossgroups[-6:]:
                     crossgroup[0],crossgroup[1] = crossgroup[1],crossgroup[0]
 
@@ -2316,9 +2356,42 @@ class IKFastSolver(AutoReloader):
         self._rotposcrossgroups = list(self._rotcrossgroups)
         for i in range(3):
             # column i cross position
-            self._rotposcrossgroups.append([[i+3,ip+2],[i+6,ip+1],irxp+3*i+0])
-            self._rotposcrossgroups.append([[i+6,ip+0],[i,ip+2],irxp+3*i+1])
-            self._rotposcrossgroups.append([[i,ip+1],[i+3,ip+0],irxp+3*i+2])
+            self._rotposcrossgroups.append([[i+3,ip+2], [i+6,ip+1], irxp+3*i+0])
+            self._rotposcrossgroups.append([[i+6,ip+0], [i,  ip+2], irxp+3*i+1])
+            self._rotposcrossgroups.append([[i,  ip+1], [i+3,ip+0], irxp+3*i+2])
+            
+        """ TGN: what are _rotposcrossgroups?
+[[[3, 7], [6, 4], 2],
+ [[6, 1], [0, 7], 5],
+ [[0, 4], [3, 1], 8],
+ [[1, 5], [2, 4], 6],
+ [[2, 3], [0, 5], 7],
+ [[0, 4], [1, 3], 8],
+ [[4, 8], [7, 5], 0],
+ [[7, 2], [1, 8], 3],
+ [[1, 5], [4, 2], 6],
+ [[4, 8], [5, 7], 0],
+ [[5, 6], [3, 8], 1],
+ [[3, 7], [4, 6], 2],
+ [[6, 5], [3, 8], 1],----
+ [[0, 8], [6, 2], 4],    \
+ [[3, 2], [0, 5], 7],     \ [0] and [1] are swapped when k==1
+ [[2, 7], [1, 8], 3],     /
+ [[0, 8], [2, 6], 4],    /
+ [[1, 6], [0, 7], 5],----
+------------------------- Above are _rotcrossgroups
+------------------------- Below are _rotposcrossgroups
+                          16--24 are what positions?
+ [[3, 11], [6, 10], 16],
+ [[6, 9], [0, 11], 17],
+ [[0, 10], [3, 9], 18],
+ [[4, 11], [7, 10], 19],
+ [[7, 9], [1, 11], 20],
+ [[1, 10], [4, 9], 21],
+ [[5, 11], [8, 10], 22],
+ [[8, 9], [2, 11], 23],
+ [[2, 10], [5, 9], 24]]
+        """
             
         self.Teeinv = self.affineInverse(self.Tee)
 
@@ -2326,7 +2399,6 @@ class IKFastSolver(AutoReloader):
         if self.useleftmultiply:
             while not self.has(LinksRaw[0],*solvejointvars):
                 LinksLeft.append(LinksRaw.pop(0))
-
                 LinksLeftInv = [self.affineInverse(T) for T in LinksLeft]
         self.testconsistentvalues = None
 
@@ -2360,7 +2432,7 @@ class IKFastSolver(AutoReloader):
         self.Teeleftmult = self.multiplyMatrix(LinksLeft) # the raw ee passed to the ik solver function
         self._CheckPreemptFn(progress=0.01)
 
-        print('========================= START OF SETUP ===============================\n')
+        print('========================= START OF SETUP PRINT ===============================\n')
         info_to_print =  ['ifreejointvars',
                           'freevarsubs',
                           'freevarsubsinv',
@@ -2391,9 +2463,9 @@ class IKFastSolver(AutoReloader):
             exec_str = "print \"      \", self." + each_info
             exec(exec_str)
         print('\n')
-        print('========================== END OF SETUP ================================\n')
-        exec(ipython_str)
-        
+        print('========================== END OF SETUP PRINT ================================\n')
+
+        # MAIN FUNCTION
         chaintree = solvefn(self, LinksRaw, jointvars, isolvejointvars)
         if self.useleftmultiply:
             chaintree.leftmultiply(Tleft=self.multiplyMatrix(LinksLeft), Tleftinv=self.multiplyMatrix(LinksLeftInv[::-1]))
@@ -2422,32 +2494,54 @@ class IKFastSolver(AutoReloader):
     def ComputeConsistentValues(self,jointvars,T,numsolutions=1,subs=None):
         """computes a set of substitutions that satisfy the IK equations 
         """
-        possibleangles = [S.Zero, pi.evalf()/2, asin(3.0/5).evalf(), asin(4.0/5).evalf(), asin(5.0/13).evalf(), asin(12.0/13).evalf()]
+        possibleangles_old = [S.Zero, pi.evalf()/2, asin(3.0/5).evalf(), asin(4.0/5).evalf(), asin(5.0/13).evalf(), asin(12.0/13).evalf()]
+        possibleangles = [Rational(str(x)) for x in possibleangles_old]
+        # TGN: use symbolic numbers for all possible angles instead of floating-point numbers
+        
         possibleanglescos = [S.One, S.Zero, Rational(4,5), Rational(3,5), Rational(12,13), Rational(5,13)]
         possibleanglessin = [S.Zero, S.One, Rational(3,5), Rational(4,5), Rational(5,13), Rational(12,13)]
         testconsistentvalues = []
         varsubs = []
         for jointvar in jointvars:
             varsubs += self.Variable(jointvar).subs
+            
         for isol in range(numsolutions):
+
             inds = [0]*len(jointvars)
             if isol < numsolutions-1:
                 for j in range(len(jointvars)):
                     inds[j] = (isol+j)%len(possibleangles)
+                    
             valsubs = []
             for i,ind in enumerate(inds):
                 v,s,c = possibleangles[ind],possibleanglessin[ind],possibleanglescos[ind]
                 var = self.Variable(jointvars[i])
                 valsubs += [(var.var,v),(var.cvar,c),(var.svar,s),(var.tvar,s/c),(var.htvar,s/(1+c))]
+                
             psubs = []
             for i in range(12):
                 psubs.append((self.pvars[i],T[i].subs(varsubs).subs(self.globalsymbols+valsubs)))
             for s,v in self.ppsubs+self.npxyzsubs+self.rxpsubs:
                 psubs.append((s,v.subs(psubs)))
+                
             allsubs = valsubs+psubs
             if subs is not None:
                 allsubs += [(dvar,var.subs(varsubs).subs(valsubs)) for dvar,var in subs]
             testconsistentvalues.append(allsubs)
+
+
+        set_num_counter = 0
+        for each_set_consistent_values in testconsistentvalues:
+            item_counter = 0
+            print 'Set ', set_num_counter
+            print '------------------------------------------'
+            for val in each_set_consistent_values:
+                print val[0], "=", val[1], ",",
+                item_counter += 1
+                if item_counter in [5,10,15,20,25,30,35,39,43,47,51,54,57]:
+                    print('')
+            print('\n')
+            set_num_counter += 1
         return testconsistentvalues
 
     def solveFullIK_Direction3D(self,LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One])):
@@ -2964,9 +3058,8 @@ class IKFastSolver(AutoReloader):
         return transtree
 
     def solveFullIK_6D(self, LinksRaw, jointvars, isolvejointvars,Tmanipraw=eye(4)):
-        """Solves the full 6D translatio + rotation IK
+        """Solves the full 6D translation + rotation IK
         """
-        exec(ipython_str)
         
         self._iktype = 'transform6d'
         Tgripper = eye(4)
@@ -2981,7 +3074,7 @@ class IKFastSolver(AutoReloader):
 #                 if Links[0][i,3] != S.Zero:
 #                     self.Tee[i,3] = S.Zero
 #             self.Teeinv = self.affineInverse(self.Tee)
-        
+
         LinksInv = [self.affineInverse(link) for link in Links]
         self.Tfinal = self.multiplyMatrix(Links)
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars,self.Tfinal,numsolutions=4)
@@ -2989,6 +3082,8 @@ class IKFastSolver(AutoReloader):
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 6:
             raise self.CannotSolveError('need 6 joints')
+
+        exec(ipython_str)
         
         log.info('ikfast 6d: %s',solvejointvars)        
         tree = self.TestIntersectingAxes(solvejointvars,Links, LinksInv,endbranchtree)
