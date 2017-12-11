@@ -2495,7 +2495,7 @@ class IKFastSolver(AutoReloader):
         """computes a set of substitutions that satisfy the IK equations 
         """
         possibleangles_old = [S.Zero, pi.evalf()/2, asin(3.0/5).evalf(), asin(4.0/5).evalf(), asin(5.0/13).evalf(), asin(12.0/13).evalf()]
-        possibleangles = [Rational(str(x)) for x in possibleangles_old]
+        possibleangles = [self.convertRealToRational(x) for x in possibleangles_old]
         # TGN: use symbolic numbers for all possible angles instead of floating-point numbers
         
         possibleanglescos = [S.One, S.Zero, Rational(4,5), Rational(3,5), Rational(12,13), Rational(5,13)]
@@ -2530,6 +2530,7 @@ class IKFastSolver(AutoReloader):
             testconsistentvalues.append(allsubs)
 
 
+        print('========================== START OF CONSISTENT VALUES PRINT ================================\n')
         set_num_counter = 0
         for each_set_consistent_values in testconsistentvalues:
             item_counter = 0
@@ -2542,6 +2543,7 @@ class IKFastSolver(AutoReloader):
                     print('')
             print('\n')
             set_num_counter += 1
+        print('========================== END OF CONSISTENT VALUES PRINT  ================================\n')
         return testconsistentvalues
 
     def solveFullIK_Direction3D(self,LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One])):
@@ -3068,24 +3070,27 @@ class IKFastSolver(AutoReloader):
                 Tgripper[i,j] = self.convertRealToRational(Tmanipraw[i,j])
         Tfirstright = LinksRaw[-1]*Tgripper
         Links = LinksRaw[:-1]
-#         if Links[0][0:3,0:3] == eye(3):
-#             # first axis is prismatic, so zero out self.Tee
-#             for i in range(3):
-#                 if Links[0][i,3] != S.Zero:
-#                     self.Tee[i,3] = S.Zero
-#             self.Teeinv = self.affineInverse(self.Tee)
-
+        #         if Links[0][0:3,0:3] == eye(3):
+        #             # first axis is prismatic, so zero out self.Tee
+        #             for i in range(3):
+        #                 if Links[0][i,3] != S.Zero:
+        #                     self.Tee[i,3] = S.Zero
+        #             self.Teeinv = self.affineInverse(self.Tee)
+    
+        # take inverse for each link matrix
         LinksInv = [self.affineInverse(link) for link in Links]
+        # take product of all link matrices
         self.Tfinal = self.multiplyMatrix(Links)
+        # plug simple pre-set values into forward kinematics formulas
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars,self.Tfinal,numsolutions=4)
+        # construct a SolverStoreSolution object
         endbranchtree = [AST.SolverStoreSolution (jointvars,isHinge=[self.IsHinge(var.name) for var in jointvars])]
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 6:
             raise self.CannotSolveError('need 6 joints')
-
+        log.info('ikfast 6d: %s',solvejointvars)
         exec(ipython_str)
         
-        log.info('ikfast 6d: %s',solvejointvars)        
         tree = self.TestIntersectingAxes(solvejointvars,Links, LinksInv,endbranchtree)
         if tree is None:
             sliderjointvars = [var for var in solvejointvars if not self.IsHinge(var.name)]
@@ -3172,7 +3177,10 @@ class IKFastSolver(AutoReloader):
         return chaintree
     
     def TestIntersectingAxes(self,solvejointvars,Links,LinksInv,endbranchtree):
-        for T0links,T1links,transvars,rotvars,solveRotationFirst in self.iterateThreeIntersectingAxes(solvejointvars,Links, LinksInv):
+        
+        exec(ipython_str)
+        
+        for T0links,T1links,transvars,rotvars,solveRotationFirst in self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv):
             try:
                 return self.solve6DIntersectingAxes(T0links,T1links,transvars,rotvars,solveRotationFirst=solveRotationFirst, endbranchtree=endbranchtree)
             
