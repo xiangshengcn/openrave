@@ -2259,17 +2259,34 @@ class IKFastSolver(AutoReloader):
             c = self.Tee[0:3,i].cross(self.Tee[0:3,3])
             self.rxpsubs += [(self.rxp[-1][j],c[j]) for j in range(3)]
 
-        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
-            
         # have to include new_rXX
         self.pvars = self.Tee[0:12]+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2] + [Symbol('new_r00'), Symbol('new_r01'), Symbol('new_r02'), Symbol('new_r10'), Symbol('new_r11'), Symbol('new_r12'), Symbol('new_r20'), Symbol('new_r21'), Symbol('new_r22')]
         self._rotsymbols = list(self.Tee[0:3,0:3])
+
         # add positions
         ip = 9
         inp = 12
         ipp = 15
         irxp = 16
         self._rotpossymbols = self._rotsymbols + list(self.Tee[0:3,3])+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2]
+
+        print('========================= START OF SETUP ===============================\n')
+        info_to_print =  ['ifreejointvars', 'freevarsubs', 'freevarsubsinv',
+                          'freevars', 'freejointvars', 
+                          'invsubs', '_solvejointvars', '_jointvars',
+                          'Tee', 'pp', 'ppsubs', 'npxyz', 'npxyzsubs',
+                          'rxp', 'rxpsubs', 'pvars', '_rotsymbols',
+                          '_rotpossymbols']
+        for each_info in info_to_print:
+            print('\n%s' % each_info)
+            exec_str = "print \"      \", self." + each_info
+            exec(exec_str)
+        print('\n')
+        print('========================== END OF SETUP ================================\n')
+
+        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
+
+        # norm of each row/column vector in R is 1
         # groups of rotation variables that are unit vectors
         self._rotnormgroups = []
         for i in range(3):
@@ -2277,16 +2294,20 @@ class IKFastSolver(AutoReloader):
             self._rotnormgroups.append([self.Tee[0,i],self.Tee[1,i],self.Tee[2,i],S.One])
         self._rotposnormgroups = list(self._rotnormgroups)
         self._rotposnormgroups.append([self.Tee[0,3],self.Tee[1,3],self.Tee[2,3],self.pp])
-        # dot product of rotation rows and columns is always 0
+        
+        # dot products between rotation rows/columns are 0
         self._rotdotgroups = []
+
         for i,j in combinations(range(3),2):
             self._rotdotgroups.append([[i,j],[i+3,j+3],[i+6,j+6],S.Zero])
             self._rotdotgroups.append([[3*i,3*j],[3*i+1,3*j+1],[3*i+2,3*j+2],S.Zero])
         self._rotposdotgroups = list(self._rotdotgroups)
+
         for i in range(3):
             self._rotposdotgroups.append([[i,ip],[i+3,ip+1],[i+6,ip+2],self.npxyz[i]])
             self._rotposdotgroups.append([[3*i+0,inp],[3*i+1,inp+1],[3*i+2,inp+2],self.Tee[i,3]])
         self._rotcrossgroups = []
+        
         # cross products of rotation rows and columns always yield the left over vector
         for i,j,k in [(0,1,2),(0,2,1),(1,2,0)]:
             # column
@@ -2301,6 +2322,7 @@ class IKFastSolver(AutoReloader):
             if j!=1+i:
                 for crossgroup in self._rotcrossgroups[-6:]:
                     crossgroup[0],crossgroup[1] = crossgroup[1],crossgroup[0]
+
         # add positions
         self._rotposcrossgroups = list(self._rotcrossgroups)
         for i in range(3):
@@ -2310,11 +2332,13 @@ class IKFastSolver(AutoReloader):
             self._rotposcrossgroups.append([[i,ip+1],[i+3,ip+0],irxp+3*i+2])
             
         self.Teeinv = self.affineInverse(self.Tee)
+
         LinksLeft = []
         if self.useleftmultiply:
             while not self.has(LinksRaw[0],*solvejointvars):
                 LinksLeft.append(LinksRaw.pop(0))
-        LinksLeftInv = [self.affineInverse(T) for T in LinksLeft]
+
+                LinksLeftInv = [self.affineInverse(T) for T in LinksLeft]
         self.testconsistentvalues = None
 
         self.gsymbolgen = cse_main.numbered_symbols('gconst')
