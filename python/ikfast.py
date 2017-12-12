@@ -177,10 +177,10 @@ A. Most likely not, usually an iksolver finishes within 10 minutes.
 
 from __future__ import with_statement # for python 2.5
 
-__author__ = 'Rosen Diankov'
+__author__    = 'Rosen Diankov'
 __copyright__ = 'Copyright (C) 2009-2012 Rosen Diankov <rosen.diankov@gmail.com>'
-__license__ = 'Lesser GPL, Version 3'
-__version__ = '0x1000004a' # hex of the version, has to be prefixed with 0x. also in ikfast.h
+__license__   = 'Lesser GPL, Version 3'
+__version__   = '0x1000004a' # hex of the version, has to be prefixed with 0x. also in ikfast.h
 
 # ========== TGN's modification of IPython ==========
 import os
@@ -191,13 +191,14 @@ def clc():
 import traceback
 def ikfast_print_stack():
     tb = traceback.extract_stack()
-    print('\n%-26s %5s %24s' % ('        FUNCTION','LINE', 'FILE      '))
-    keyword_of_interest = [ 'ikfast_AST','ikfast', 'inversekinematics']
+    pattern = '%-30s %5s %24s' 
+    print( '\n'+pattern % ('        FUNCTION','LINE', 'FILE      '))
+    keyword_of_interest = [ 'ikfast_IKFastSolver.py', 'ikfast_AST.py', 'ikfast.py', 'inversekinematics.py']
     print('---------------------------------------------------------')
     for function_call in tb:
         for keyword in keyword_of_interest:
             if (keyword in function_call[0]) and (function_call[2] not in 'ikfast_print_stack'):
-                print('%-26s %5d %24s' % (function_call[2], function_call[1], keyword))
+                print(pattern % (function_call[2], function_call[1], keyword))
                 break
 
 ipython_str = 'ikfast_print_stack(); ' + \

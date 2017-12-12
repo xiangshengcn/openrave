@@ -1,3 +1,5 @@
+from ikfast import fmod, atan2check, clc, ikfast_print_stack, ipython_str
+
 from sympy import __version__ as sympy_version
 if sympy_version < '0.7.0':
     raise ImportError('ikfast needs sympy 0.7.x or greater')
@@ -84,8 +86,6 @@ except ImportError:
 #     CodeGenerators['vb6special'] = ikfast_generator_vb.CodeGeneratorVB6Special
 # except ImportError:
 #     pass
-
-from ikfast import fmod, atan2check
 
 class IKFastSolver(AutoReloader):
     """Solves the analytical inverse kinematics equations. The symbol naming conventions are as follows:
@@ -1888,7 +1888,7 @@ class IKFastSolver(AutoReloader):
             raise self.CannotSolveError('need 6 joints')
         log.info('ikfast 6d: %s',solvejointvars)
 
-        
+        exec(ipython_str)
         tree = self.TestIntersectingAxes(solvejointvars,Links, LinksInv,endbranchtree)
         if tree is None:
             sliderjointvars = [var for var in solvejointvars if not self.IsHinge(var.name)]
@@ -1976,7 +1976,7 @@ class IKFastSolver(AutoReloader):
     
     def TestIntersectingAxes(self,solvejointvars,Links,LinksInv,endbranchtree):
         
-        #exec(ipython_str)
+        exec(ipython_str)
         
         for T0links,T1links,transvars,rotvars,solveRotationFirst in self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv):
             try:
@@ -2014,8 +2014,11 @@ class IKFastSolver(AutoReloader):
         return Tlefttrans, NewLinks, Trighttrans
     
     def iterateThreeIntersectingAxes(self, solvejointvars, Links, LinksInv):
-        """Search for 3 consectuive intersecting axes. If a robot has this condition, it makes a lot of IK computations simpler.
+        """Search for 3 consectuive intersecting axes. If a robot has this condition, it makes IK computations much simpler.
         """
+
+        exec(ipython_str)
+        
         TestLinks=Links
         TestLinksInv=LinksInv
         ilinks = [i for i,Tlink in enumerate(TestLinks) if self.has(Tlink,*solvejointvars)]
