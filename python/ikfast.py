@@ -204,6 +204,14 @@ def ikfast_print_stack():
 ipython_str = 'ikfast_print_stack(); ' + \
               'from IPython.terminal import embed; ' + \
               'ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())'
+
+def print_matrix(matrices, ind=None):
+    if ind is None:
+        ind = range(len(matrices))
+    for i in ind:
+        print i, ':',
+        print matrices[i]
+        print '\n',
 # ========== End of TGN's modification ==============
 
 # numpy for computing eigenvalues

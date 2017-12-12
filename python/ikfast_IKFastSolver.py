@@ -1,14 +1,15 @@
-from ikfast import fmod, atan2check, clc, ikfast_print_stack, ipython_str
+from ikfast import fmod, atan2check, clc, ikfast_print_stack, ipython_str, \
+    print_matrix
 
 from sympy import __version__ as sympy_version
 if sympy_version < '0.7.0':
     raise ImportError('ikfast needs sympy 0.7.x or greater')
 sympy_smaller_073 = sympy_version < '0.7.3'
 
-__author__ = 'Rosen Diankov'
+__author__    = 'Rosen Diankov'
 __copyright__ = 'Copyright (C) 2009-2012 Rosen Diankov <rosen.diankov@gmail.com>'
-__license__ = 'Lesser GPL, Version 3'
-__version__ = '0x1000004a' # hex of the version, has to be prefixed with 0x. also in ikfast.h
+__license__   = 'Lesser GPL, Version 3'
+__version__   = '0x1000004a' # hex of the version, has to be prefixed with 0x. also in ikfast.h
 
 import sys, copy, time, math, datetime
 import __builtin__
@@ -27,7 +28,7 @@ from sympy import *
 if sympy_version > '0.7.1':
     _zeros, _ones = zeros, ones
     zeros = lambda args: _zeros(*args)
-    ones = lambda args: _ones(*args)
+    ones  = lambda args: _ones(*args)
     
 try:
     import mpmath # on some distributions, sympy does not have mpmath in its scope
@@ -570,6 +571,8 @@ class IKFastSolver(AutoReloader):
     
     @staticmethod
     def has(eqs,*sym):
+        """check if eqs depends on any variable in sym
+        """
         return any([eq.has(*sym) for eq in eqs]) if len(sym) > 0 else False
     
     def trigsimp(self, eq,trigvars):
@@ -1015,8 +1018,8 @@ class IKFastSolver(AutoReloader):
         self.freejointvars = []
         self.invsubs = []
         for i,v in enumerate(jointvars):
-            var = self.Variable(v)
-            axis = self.axismap[v.name]
+            var = self.Variable(v)      # call IKFastSolver.Variable constructor
+            axis = self.axismap[v.name] # axismap is dictionary
             dofindex = axis.joint.GetDOFIndex()+axis.iaxis
             if dofindex in freeindices:
                 # convert all free variables to constants
@@ -1887,8 +1890,6 @@ class IKFastSolver(AutoReloader):
         if len(solvejointvars) != 6:
             raise self.CannotSolveError('need 6 joints')
         log.info('ikfast 6d: %s',solvejointvars)
-
-        exec(ipython_str)
         tree = self.TestIntersectingAxes(solvejointvars,Links, LinksInv,endbranchtree)
         if tree is None:
             sliderjointvars = [var for var in solvejointvars if not self.IsHinge(var.name)]
@@ -1975,9 +1976,6 @@ class IKFastSolver(AutoReloader):
         return chaintree
     
     def TestIntersectingAxes(self,solvejointvars,Links,LinksInv,endbranchtree):
-        
-        exec(ipython_str)
-        
         for T0links,T1links,transvars,rotvars,solveRotationFirst in self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv):
             try:
                 return self.solve6DIntersectingAxes(T0links,T1links,transvars,rotvars,solveRotationFirst=solveRotationFirst, endbranchtree=endbranchtree)
@@ -1989,12 +1987,23 @@ class IKFastSolver(AutoReloader):
     def _ExtractTranslationsOutsideOfMatrixMultiplication(self, Links, solvejointvars):
         """try to extract translations outside of the multiplication (left and right)
         
-        Tlefttrans * MultiplyMatrix((NewLinks) * Trighttrans = MultiplyMatrix(Links)
+        Tlefttrans * MultiplyMatrix(NewLinks) * Trighttrans = MultiplyMatrix(Links)
         where Tleftrans and Trighttrans are only translation matrices
         :return: Tlefttrans, NewLinks, Trighttrans
         """
         NewLinks = list(Links)
+
+        # initialize T_left_trans and T_right_trans
+        Tlefttrans = eye(4)
         Trighttrans = eye(4)
+        
+        # work on the first two matrices to find T_left_trans
+        separated_trans = NewLinks[0][0:3,0:3] * NewLinks[1][0:3,3]
+        for j in range(0,3):
+            if not separated_trans[j].has(*solvejointvars):
+                Tlefttrans[j,3] = separated_trans[j]
+
+        # work on the last two matrices to find T_right_trans
         Trighttrans[0:3,3] = NewLinks[-2][0:3,0:3].transpose() * NewLinks[-2][0:3,3]
         Trot_with_trans = Trighttrans * NewLinks[-1]
         separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
@@ -2003,29 +2012,53 @@ class IKFastSolver(AutoReloader):
                 Trighttrans[j,3] = S.Zero
             else:
                 Trighttrans[j,3] = separated_trans[j]
-        NewLinks[-2] = NewLinks[-2] * self.affineInverse(Trighttrans)
         
-        separated_trans = NewLinks[0][0:3,0:3] * NewLinks[1][0:3,3]
-        Tlefttrans = eye(4)
-        for j in range(0,3):
-            if not separated_trans[j].has(*solvejointvars):
-                Tlefttrans[j,3] = separated_trans[j]
-        NewLinks[1] = self.affineInverse(Tlefttrans) * NewLinks[1]
+        if any(Tlefttrans-eye(4)):
+               print 'T_left_trans', Tlefttrans
+                       
+        if any(Trighttrans-eye(4)):
+               print 'T_right_trans', Trighttrans
+
+        
+        a = NewLinks[1][:,:]
+        print 'old left: ', self.affineInverse(Tlefttrans)*a
+        a[0:3,3] -= Tlefttrans[0:3,3]
+        print 'new left: ', a
+        b = NewLinks[-2][:,:]
+        print 'old right: ', b*self.affineInverse(Trighttrans)
+        b[0:3,3] -= b[0:3,0:3]*Trighttrans[0:3,3]
+        print 'new right: ', b
+        
+
+        # update the second matrix
+        # NewLinks[1] = self.affineInverse(Tlefttrans) * NewLinks[1]
+        NewLinks[1] = eye(3).row_join(-Tlefttrans[0:3,3]).col_join(Matrix([0,0,0,1]).transpose()) * NewLinks[1]
+        # update the penultimate matrix
+        # NewLinks[-2] = NewLinks[-2] * self.affineInverse(Trighttrans)
+        NewLinks[-2] = NewLinks[-2] * eye(3).row_join(-Trighttrans[0:3,3]).col_join(Matrix([0,0,0,1]).transpose())
+
+        exec(ipython_str)
+
+        # Mathmatically equivalent, but above is correct and below is wrong
+        # NewLinks[1][0:3,3] =  NewLinks[1][0:3,3]-Tlefttrans[0:3,3]
+        # NewLinks[-2][0:3,3] = NewLinks[-2][0:3,3]-NewLinks[-2][0:3,0:3]*Trighttrans[0:3,3]
+        assert(not any(a-NewLinks[1] ))
+        assert(not any(b-NewLinks[-2]))
+        
         return Tlefttrans, NewLinks, Trighttrans
     
     def iterateThreeIntersectingAxes(self, solvejointvars, Links, LinksInv):
         """Search for 3 consectuive intersecting axes. If a robot has this condition, it makes IK computations much simpler.
         """
-
-        exec(ipython_str)
-        
         TestLinks=Links
         TestLinksInv=LinksInv
+        # extract indices for matrices that contain joint variables
         ilinks = [i for i,Tlink in enumerate(TestLinks) if self.has(Tlink,*solvejointvars)]
         hingejointvars = [var for var in solvejointvars if self.IsHinge(var.name)]
         polysymbols = []
         for solvejointvar in solvejointvars:
             polysymbols += [s[0] for s in self.Variable(solvejointvar).subs]
+
         for i in range(len(ilinks)-2):
             startindex = ilinks[i]
             endindex = ilinks[i+2]+1
@@ -2036,8 +2069,10 @@ class IKFastSolver(AutoReloader):
             if numVariablesInRotation < 3:
                 continue
             solveRotationFirst = None
-            # sometimes the intersecting condition can be there, but is masked by small epsilon errors
-            # so set any coefficients in T0[:3,3] below self.precision precision to zero
+            """ Sometimes three axes intersect but intersecting condition isn't satisfied ONLY due to machine epsilon,
+                so we set zero to any coefficients in T0[:3,3] below self.precision
+            """
+
             translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
             if not self.has(translationeqs,*hingejointvars):
                 T1links = TestLinksInv[:startindex][::-1]
