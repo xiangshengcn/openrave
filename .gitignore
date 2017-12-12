@@ -13,3 +13,4 @@ src/
 .settings/
 3rdparty/
 myrelpath.pyc
+python/Doxyfile 
