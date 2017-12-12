@@ -76,7 +76,7 @@ class AST:
                 n += 2*len(self.jointevalsin)
             return n
         def checkValidSolution(self):
-            from ikfast import IKFastSolver
+            from ikfast_IKFastSolver import IKFastSolver
             valid=True
 #            exec(ipython_str)
             if self.jointeval is not None:
@@ -157,7 +157,7 @@ class AST:
         def end(self, generator):
             return generator.endPolynomialRoots(self)
         def checkValidSolution(self):
-            from ikfast import IKFastSolver
+            from ikfast_IKFastSolver import IKFastSolver
             valid = True
             if self.poly is not None:
                 valid &= IKFastSolver.isValidSolution(self.poly.as_expr())
