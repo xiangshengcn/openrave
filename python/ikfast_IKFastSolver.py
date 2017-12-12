@@ -2032,12 +2032,24 @@ class IKFastSolver(AutoReloader):
 
         # update the second matrix
         # NewLinks[1] = self.affineInverse(Tlefttrans) * NewLinks[1]
-        NewLinks[1] = eye(3).row_join(-Tlefttrans[0:3,3]).col_join(Matrix([0,0,0,1]).transpose()) * NewLinks[1]
+
+        A = zeros(4)
+        A[0:3,3] = Tlefttrans[0:3,3]
+        NewLinks[1] -= A
+        """
+        NewLinks[1] -= Matrix([[0,0,0,Tlefttrans[0,3]], \
+                               [0,0,0,Tlefttrans[1,3]], \
+                               [0,0,0,Tlefttrans[2,3]], \
+                               [0,0,0,0]])
+        """
+        # zeros(3).row_join(Tlefttrans[0:3,3]).col_join(Matrix([0,0,0,0]).transpose())
         # update the penultimate matrix
         # NewLinks[-2] = NewLinks[-2] * self.affineInverse(Trighttrans)
-        NewLinks[-2] = NewLinks[-2] * eye(3).row_join(-Trighttrans[0:3,3]).col_join(Matrix([0,0,0,1]).transpose())
+        #NewLinks[-2] = NewLinks[-2] * eye(3).row_join(-Trighttrans[0:3,3]).col_join(Matrix([0,0,0,1]).transpose())
 
-        exec(ipython_str)
+        A[0:3,3] = NewLinks[-2][0:3,0:3]*Trighttrans[0:3,3];
+        NewLinks[-2] -= A
+        # exec(ipython_str)
 
         # Mathmatically equivalent, but above is correct and below is wrong
         # NewLinks[1][0:3,3] =  NewLinks[1][0:3,3]-Tlefttrans[0:3,3]
