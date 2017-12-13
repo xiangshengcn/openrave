@@ -1980,10 +1980,12 @@ class IKFastSolver(AutoReloader):
         return chaintree
     
     def TestIntersectingAxes(self,solvejointvars,Links,LinksInv,endbranchtree):
-        for T0links,T1links,transvars,rotvars,solveRotationFirst in self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv):
+        for T0links, T1links, transvars, rotvars, solveRotationFirst in \
+            self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv): # generator
             try:
-                return self.solve6DIntersectingAxes(T0links,T1links,transvars,rotvars,solveRotationFirst=solveRotationFirst, endbranchtree=endbranchtree)
-            
+                return self.solve6DIntersectingAxes(T0links, T1links, transvars, rotvars, \
+                                                    solveRotationFirst=solveRotationFirst, \
+                                                    endbranchtree=endbranchtree)
             except (self.CannotSolveError,self.IKFeasibilityError), e:
                 log.warn('%s',e)
         return None
@@ -2048,9 +2050,19 @@ class IKFastSolver(AutoReloader):
                 Tlefttrans[j,3] = S.Zero
 
         # work on the product of the last two matrices to find T_right_trans
-        Trighttrans[0:3,3] = Links[-2][0:3,0:3].transpose() * Links[-2][0:3,3]
-        Trot_with_trans = Trighttrans * Links[-1]
-        separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
+        #
+        # original:
+        #
+        # Trighttrans[0:3,3] = Links[-2][0:3,0:3].transpose() * Links[-2][0:3,3]
+        # Trot_with_trans = Trighttrans * Links[-1]
+        # separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
+        #
+        # first iteration:
+        separated_trans = Links[-1][0:3,0:3].transpose() * \
+                          ( Links[-2][0:3,0:3].transpose()*Links[-2][0:3,3]+Links[-1][0:3,3])
+        # second iteration:
+        
+        
         for j in range(0,3):
             if separated_trans[j].has(*solvejointvars):
                 Trighttrans[j,3] = S.Zero
@@ -2088,7 +2100,10 @@ class IKFastSolver(AutoReloader):
         return Tlefttrans, Trighttrans
 
     def iterateThreeIntersectingAxes(self, solvejointvars, Links, LinksInv):
-        """Search for 3 consectuive intersecting axes. If a robot has this condition, it makes IK computations much simpler.
+        """
+        This generator searches for 3 consecutive intersecting axes. 
+        If a robot has this condition, it makes IK computations much simpler.
+        Called only by TestIntersectingAxes.
         """
         TestLinks=Links
         TestLinksInv=LinksInv
@@ -2103,7 +2118,15 @@ class IKFastSolver(AutoReloader):
             startindex = ilinks[i]
             endindex = ilinks[i+2]+1
 
-            T0links = TestLinks[startindex:endindex]
+            T0links    = TestLinks[startindex:endindex]
+            if startindex is 0:
+                T0linksInv = TestLinksInv[endindex-1::-1]
+            else:
+                T0linksInv = TestLinksInv[endindex-1:startindex-1:-1]
+                
+
+            exec(ipython_str)
+            
             # There are exectly three joint variables in T0links, one in the first matrix, on in the last.
             # To isolate the left and right translation parts that are independent of solvejointvars,
             # we examine the 2nd and 2nd last matrices in T0links, respectively.
@@ -2114,7 +2137,8 @@ class IKFastSolver(AutoReloader):
             T0 = self.multiplyMatrix(T0links)
 
             # count number of variables in T0[0:3,0:3]
-            numVariablesInRotation = sum([self.has(T0[0:3,0:3],solvejointvar) for solvejointvar in solvejointvars])
+            numVariablesInRotation = sum([self.has(T0[0:3,0:3],solvejointvar) \
+                                          for solvejointvar in solvejointvars])
             if numVariablesInRotation < 3:
                 assert(numVariableInRotation is 3)
                 continue
@@ -2122,7 +2146,7 @@ class IKFastSolver(AutoReloader):
 
             # (was RD's comments; TGN changed the wording)
             # Sometimes three axes intersect but intersecting condition isn't satisfied ONLY due to machine epsilon,
-            # so we set S.Zero to any coefficients in T0[:3,3] below some threshold
+            # so we use RoundEquationsTerms to set S.Zero to any coefficients in T0[:3,3] below some threshold
             translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[0:3,3]]
             # TGN: inconsistency in code, should decide whether to write 0:3 or merely :3
 
@@ -2131,7 +2155,7 @@ class IKFastSolver(AutoReloader):
                 # seems to me: instead of working on A*B, C*D, now we work on inv(C*D) and inv(A*B)
                 # where A,B,C,D = TestLinks[0],TestLinks[1],TestLinks[-2],TestLinks[-1]
 
-                T0links = TestLinksInv[startindex:endindex][::-1]
+                T0links = T0linksInv #TestLinksInv[startindex:endindex][::-1]
                 Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                           ( T0links, solvejointvars )
                 T0 = self.multiplyMatrix(T0links)
@@ -2172,7 +2196,7 @@ class IKFastSolver(AutoReloader):
                     log.info('found 3 consecutive intersecting axes links[%d:%d], ' + \
                              'rotvars=%s, translationvars=%s', \
                              startindex, endindex, rotvars,transvars)
-                    yield T0links,T1links,transvars,rotvars,solveRotationFirst
+                    yield T0links, T1links, transvars, rotvars, solveRotationFirst
 
     def RoundEquationTerms(self, eq, epsilon=None):
         """
