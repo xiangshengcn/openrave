@@ -8,8 +8,8 @@ msvc_soqt/
 src/
 .project
 .pydevproject
-*#
-*~
+*#*
+*~*
 .settings/
 3rdparty/
 myrelpath.pyc

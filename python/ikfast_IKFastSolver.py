@@ -2103,26 +2103,28 @@ class IKFastSolver(AutoReloader):
             startindex = ilinks[i]
             endindex = ilinks[i+2]+1
 
-            # attempt to isolate translation parts for TestLinks[startindex:endindex] w.r.t solvejointvars
             T0links = TestLinks[startindex:endindex]
-            # the first [last] matrix of T0links MUST have joint variables
-            # so we examine the 2nd [2nd last] matrix and attempt to extract left [right] translations
+            # There are exectly three joint variables in T0links, one in the first matrix, on in the last.
+            # To isolate the left and right translation parts that are independent of solvejointvars,
+            # we examine the 2nd and 2nd last matrices in T0links, respectively.
+            
             Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                       ( T0links, solvejointvars )
             # T0links can be modified by the above call
             T0 = self.multiplyMatrix(T0links)
+
             # count number of variables in T0[0:3,0:3]
             numVariablesInRotation = sum([self.has(T0[0:3,0:3],solvejointvar) for solvejointvar in solvejointvars])
             if numVariablesInRotation < 3:
                 assert(numVariableInRotation is 3)
                 continue
             solveRotationFirst = None
+
             # (was RD's comments; TGN changed the wording)
             # Sometimes three axes intersect but intersecting condition isn't satisfied ONLY due to machine epsilon,
-            # so we set zero to any coefficients in T0[:3,3] below self.precision
-            
-            # TGN: inconsistency in code, should decide whether to write 0:3 or merely :3
+            # so we set S.Zero to any coefficients in T0[:3,3] below some threshold
             translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[0:3,3]]
+            # TGN: inconsistency in code, should decide whether to write 0:3 or merely :3
 
             if self.has(translationeqs, *hingejointvars):
                 # work on the inverse of TestLinks[startindex:endindex]
