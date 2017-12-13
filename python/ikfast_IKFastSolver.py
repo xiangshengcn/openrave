@@ -1997,33 +1997,45 @@ class IKFastSolver(AutoReloader):
 
         such that
 
-        Tlefttrans * MultiplyMatrix(NewLinks) * Trighttrans = MultiplyMatrix(Links)
+        Tlefttrans * MultiplyMatrix(NewLinks) * Trighttrans = MultiplyMatrix(Links).
 
-        where Tleftrans and Trighttrans are purely translation matrices in form
+        Tleftrans and Trighttrans are purely translation matrices in form [resp.]
 
-                      [ 1     x ]
-        Tlefttrans  = [   1   x ]
-        Trighttrans = [     1 x ]
-                      [       1 ] 
+        [ I_3 | p_1 ]       [ I_3 | p_2 ]
+        -------------  and  -------------
+        [  0  |  1  ]       [  0  |  1  ]
 
-        only the 2nd and the last 2nd matrices of Links are modified in NewLinks
+        where p_1, p_2 do not contain solvejointvars.
+
+        Only the 2nd and the last 2nd matrices of Links are modified in NewLinks.
+
+        This is equivalent to finding 
+
+        p = T*p_2 + p' + p_1
+
+        where p  is the translation vector in MultiplyMatrix(Links)   , and
+              p'                           in MultiplyMatrix(NewLinks)
         """
 
-        # they are identical for now
+        # they are identical for now, shallow copy!
         NewLinks = list(Links)
 
+        # deep copy their values before they get modified
+        a = Links[1][:,:]
+        b = Links[-2][:,:]        
+        
         # initialize T_left_trans, T_right_trans, and Temp
         Tlefttrans  = eye(4)
         Trighttrans = eye(4)
         Temp        = zeros(4)
         
-        # work on the first two matrices to find T_left_trans
+        # work on the product of the first two matrices to find T_left_trans
         separated_trans = NewLinks[0][0:3,0:3] * NewLinks[1][0:3,3]
         for j in range(0,3):
             if not separated_trans[j].has(*solvejointvars):
                 Tlefttrans[j,3] = separated_trans[j]
 
-        # work on the last two matrices to find T_right_trans
+        # work on the product of the last two matrices to find T_right_trans
         Trighttrans[0:3,3] = NewLinks[-2][0:3,0:3].transpose() * NewLinks[-2][0:3,3]
         Trot_with_trans = Trighttrans * NewLinks[-1]
         separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
@@ -2041,28 +2053,38 @@ class IKFastSolver(AutoReloader):
                print 'T_right_trans', Trighttrans
         """
 
+        Temp[0:3,3] = Tlefttrans[0:3,3];
         # update the second matrix
-        Temp[0:3,3] = Tlefttrans[0:3,3]
         NewLinks[1] -= Temp
 
         # update the second last matrix
         Temp[0:3,3] = NewLinks[-2][0:3,0:3]*Trighttrans[0:3,3];
-        NewLinks[-2] -= Temp
+        # print "NewLinks[-2]-Temp = ", NewLinks[-2]-Temp
+        # print "NewLinks[-2]*self.affineInverse(Trighttrans) = ", NewLinks[-2]*self.affineInverse(Trighttrans)
 
+        #A = NewLinks[-2][:,:]
+        NewLinks[-2] -= Temp
+        #A[:,3] -= Temp[:,3]
+        #print "NewLinks[-2] = ",NewLinks[-2]
+        #print "A = ", A
+        #assert(not any(A-NewLinks[-2]))
+
+        #exec(ipython_str)
+        
         # TGN adds mathematically equivalent formulas for checking
-        a = Links[1][:,:]
         # print 'old left: ', self.affineInverse(Tlefttrans)*a
         a[0:3,3] -= Tlefttrans[0:3,3]
         # print 'new left: ', a
-        b = Links[-2][:,:]
         # print 'old right: ', b*self.affineInverse(Trighttrans)
         b[0:3,3] -= b[0:3,0:3]*Trighttrans[0:3,3]
         # print 'new right: ', b
         assert(not any(a-NewLinks[1] ))
+        # print "b = ", b
+        # print "NewLinks[-2] = ", NewLinks[-2]
         assert(not any(b-NewLinks[-2]))
         
         return Tlefttrans, NewLinks, Trighttrans
-    
+
     def iterateThreeIntersectingAxes(self, solvejointvars, Links, LinksInv):
         """Search for 3 consectuive intersecting axes. If a robot has this condition, it makes IK computations much simpler.
         """
@@ -2078,32 +2100,33 @@ class IKFastSolver(AutoReloader):
         for i in range(len(ilinks)-2):
             startindex = ilinks[i]
             endindex = ilinks[i+2]+1
-            Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication(TestLinks[startindex:endindex], solvejointvars)
+
+            # attempt to isolate translation parts for TestLinks[startindex:endindex] w.r.t solvejointvars
+            Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication\
+                                               ( TestLinks[startindex:endindex], solvejointvars )
             T0 = self.multiplyMatrix(T0links)
             # count number of variables in T0[0:3,0:3]
             numVariablesInRotation = sum([self.has(T0[0:3,0:3],solvejointvar) for solvejointvar in solvejointvars])
             if numVariablesInRotation < 3:
                 continue
             solveRotationFirst = None
-            """ Sometimes three axes intersect but intersecting condition isn't satisfied ONLY due to machine epsilon,
-                so we set zero to any coefficients in T0[:3,3] below self.precision
-            """
+            # (was RD's comments; TGN changed the wording)
+            # Sometimes three axes intersect but intersecting condition isn't satisfied ONLY due to machine epsilon,
+            # so we set zero to any coefficients in T0[:3,3] below self.precision
+            
+            # TGN: inconsistency in code, should decide whether to write 0:3 or merely :3
+            translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[0:3,3]]
 
-            translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
-            if not self.has(translationeqs,*hingejointvars):
-                T1links = TestLinksInv[:startindex][::-1]
-                if len(T1links) > 0:
-                    T1links[0] = self.affineInverse(Tlefttrans) * T1links[0]
-                else:
-                    T1links = [self.affineInverse(Tlefttrans)]
-                T1links.append(self.Tee)
-                T1links += TestLinksInv[endindex:][::-1]
-                T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
-                solveRotationFirst = False
-            else:
+            if self.has(translationeqs, *hingejointvars):
+                # work on the inverse of TestLinks[startindex:endindex]
+                # seems to me: instead of working on A*B, C*D, now we work on inv(C*D) and inv(A*B)
+                # where A,B,C,D = TestLinks[0],TestLinks[1],TestLinks[-2],TestLinks[-1]
                 Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                                    ( TestLinksInv[startindex:endindex][::-1], solvejointvars )
                 T0 = self.multiplyMatrix(T0links)
+
+                #exec(ipython_str)
+                            
                 translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
                 if not self.has(translationeqs,*hingejointvars):
                     T1links = TestLinks[endindex:]
@@ -2115,6 +2138,17 @@ class IKFastSolver(AutoReloader):
                     T1links += TestLinks[:startindex]
                     T1links[-1] = T1links[-1] * Tlefttrans
                     solveRotationFirst = False
+            else:
+                T1links = TestLinksInv[:startindex][::-1]
+                if len(T1links) > 0:
+                    T1links[0] = self.affineInverse(Tlefttrans) * T1links[0]
+                else:
+                    T1links = [self.affineInverse(Tlefttrans)]
+                T1links.append(self.Tee)
+                T1links += TestLinksInv[endindex:][::-1]
+                T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
+                solveRotationFirst = False
+
             if solveRotationFirst is not None:
                 rotvars = []
                 transvars = []
@@ -2124,25 +2158,41 @@ class IKFastSolver(AutoReloader):
                     else:
                         transvars.append(svar)
                 if len(rotvars) == 3 and len(transvars) == 3:
-                    log.info('found 3 consecutive intersecting axes links[%d:%d], rotvars=%s, translationvars=%s',startindex, endindex, rotvars,transvars)
+                    log.info('found 3 consecutive intersecting axes links[%d:%d], ' + \
+                             'rotvars=%s, translationvars=%s', \
+                             startindex, endindex, rotvars,transvars)
                     yield T0links,T1links,transvars,rotvars,solveRotationFirst
 
-    def RoundEquationTerms(self,eq,epsilon=None):
-        if eq.is_Add:
+    def RoundEquationTerms(self, eq, epsilon=None):
+        """
+        Recursively go down the computational graph, and round constants below epsilon as S.Zero
+        """
+        
+        # TGN moved it here
+        if epsilon is None:
+            epsilon = 5*(10**-self.precision)
+
+        if eq.is_Add: # ..+..-..+..
             neweq = S.Zero
             for subeq in eq.args:
                 neweq += self.RoundEquationTerms(subeq,epsilon)
-        elif eq.is_Mul:
+                
+        elif eq.is_Mul: # ..*../..*..
             neweq = self.RoundEquationTerms(eq.args[0],epsilon)
             for subeq in eq.args[1:]:
                 neweq *= self.RoundEquationTerms(subeq,epsilon)
-        elif eq.is_Function:
+                
+        elif eq.is_Function: # for sin, cos, etc.
             newargs = [self.RoundEquationTerms(subeq,epsilon) for subeq in eq.args]
             neweq = eq.func(*newargs)
+            
         elif eq.is_number:
-            if epsilon is None:
-                epsilon = 5*(10**-self.precision)
-            if abs(eq.evalf()) <= epsilon:
+            # TGN: the rounding happens here. Since epsilon is only checked and modified here
+            #      with the same value each time, we can move its assignment to top
+            #if epsilon is None:
+            #    epsilon = 5*(10**-self.precision)
+            if abs(eq.evalf()) <= epsilon: # <= or < ?
+                # print "rounding ", eq.evalf(), " to S.Zero"
                 neweq = S.Zero
             else:
                 neweq = eq

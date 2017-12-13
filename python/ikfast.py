@@ -20,7 +20,7 @@ def ikfast_print_stack():
     pattern = '%-30s %5s %24s' 
     print( '\n'+pattern % ('        FUNCTION','LINE', 'FILE      '))
     keyword_of_interest = [ 'ikfast_IKFastSolver.py', 'ikfast_AST.py', 'ikfast.py', 'inversekinematics.py']
-    print('---------------------------------------------------------')
+    print('--------------------------------------------------------------')
     for function_call in tb:
         for keyword in keyword_of_interest:
             if (keyword in function_call[0]) and (function_call[2] not in 'ikfast_print_stack'):
