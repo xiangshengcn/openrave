@@ -2141,7 +2141,7 @@ class IKFastSolver(AutoReloader):
             if numVariablesInRotation < 3:
                 assert(numVariableInRotation is 3)
                 continue
-            solveRotationFirst = None
+            solveRotationFirst = False
 
             # (was RD's comments; TGN changed the wording)
             # Sometimes three axes intersect but intersecting condition isn't satisfied ONLY due to machine epsilon,
@@ -2193,7 +2193,7 @@ class IKFastSolver(AutoReloader):
                     Tlefttrans[3,3] = 0
                     Tlefttrans[0:3,3] = T1links[-1][0:3,0:3]*Tlefttrans[0:3,3]
                     T1links[-1] += Tlefttrans
-                    solveRotationFirst = False # TGN: can solveRotationFirst be True???
+                    solveRotationFirst = True
             else:
                 # first attempt succeeds as translation eqns don't depend on hingejointvars
                 #
@@ -2235,9 +2235,9 @@ class IKFastSolver(AutoReloader):
                 Trighttrans[0:3,3] = T1links[-1][0:3,0:3]*Trighttrans[0:3,3]
                 T1links[-1] -= Trighttrans
                 
-                solveRotationFirst = False
+                solveRotationFirst = True
 
-            if solveRotationFirst is not None:
+            if solveRotationFirst:
                 # collect rotation and translation variables
                 rotvars   = []
                 transvars = []
@@ -2246,6 +2246,7 @@ class IKFastSolver(AutoReloader):
                         rotvars.append(solvejointvar)
                     else:
                         transvars.append(solvejointvar)
+                        
                 if len(rotvars) == 3 and len(transvars) == 3:
                     log.info('found 3 consecutive intersecting axes links[%d:%d], ' + \
                              'rotvars=%s, translationvars=%s', \
@@ -2339,33 +2340,42 @@ class IKFastSolver(AutoReloader):
         T0links = [T0posoffset] + T0links
         T1links = [T0posoffset] + T1links
         T1 = self.multiplyMatrix(T1links)
-        othersolvedvars = rotvars+self.freejointvars if solveRotationFirst else self.freejointvars[:]
+        #othersolvedvars = rotvars + self.freejointvars if solveRotationFirst else self.freejointvars[:]
+        # in original code, solveRotationFirst is either None or False
+        othersolvedvars = self.freejointvars[:]
         T1linksinv = [self.affineInverse(T) for T in T1links]
         AllEquations = self.buildEquationsFromPositions(T1links,T1linksinv,transvars,othersolvedvars,uselength=True)
         self.checkSolvability(AllEquations,transvars,self.freejointvars)
         rottree = []
-        if solveRotationFirst:
-            # can even get here?? it is either None or False
-            assert(0)
-            newendbranchtree = endbranchtree
-        else:
-            newendbranchtree = [AST.SolverSequence([rottree])]
+        #if solveRotationFirst:
+        #    # can even get here?? it is either None or False
+        #    assert(0)
+        #    newendbranchtree = endbranchtree
+        #else:
+        newendbranchtree = [AST.SolverSequence([rottree])]
         curvars = transvars[:]
         solsubs=self.freevarsubs[:]
         transtree = self.SolveAllEquations(AllEquations,curvars=curvars,othersolvedvars=othersolvedvars[:],solsubs=solsubs,endbranchtree=newendbranchtree)
-        transtree = self.verifyAllEquations(AllEquations,rotvars if solveRotationFirst else transvars+rotvars,self.freevarsubs[:],transtree)
+        #transtree = self.verifyAllEquations(AllEquations, \
+        #                                    rotvars if solveRotationFirst \
+        #                                    else transvars+rotvars, \
+        #                                    self.freevarsubs[:], transtree)
+        transtree = self.verifyAllEquations(AllEquations, \
+                                            transvars+rotvars, \
+                                            self.freevarsubs[:], transtree)
+
         solvertree= []
         solvedvarsubs = self.freevarsubs[:]
-        if solveRotationFirst:
-            # can even get here?? it is either None or False
-            assert(0)
-            storesolutiontree = transtree
-        else:
-            solvertree += transtree
-            storesolutiontree = endbranchtree
-            for tvar in transvars:
-                solvedvarsubs += self.Variable(tvar).subs
-
+        #if solveRotationFirst:
+        #    # can even get here?? it is either None or False
+        #    assert(0)
+        #    storesolutiontree = transtree
+        #else:
+        solvertree += transtree
+        storesolutiontree = endbranchtree
+        for tvar in transvars:
+            solvedvarsubs += self.Variable(tvar).subs
+                
         Ree = zeros((3,3))
         for i in range(3):
             for j in range(3):
@@ -2385,10 +2395,10 @@ class IKFastSolver(AutoReloader):
             if len(rottree) == 0:
                 raise self.CannotSolveError('could not solve for all rotation variables: %s:%s'%(str(freevar),str(freevalue)))
 
-            if solveRotationFirst:
-                solvertree.append(AST.SolverRotation(T1sub, rottree))
-            else:
-                rottree[:] = [AST.SolverRotation(T1sub, rottree[:])]
+            #if solveRotationFirst:
+            #    solvertree.append(AST.SolverRotation(T1sub, rottree))
+            #else:
+            rottree[:] = [AST.SolverRotation(T1sub, rottree[:])]
             return solvertree
         finally:
             # remove the Ree global symbols
