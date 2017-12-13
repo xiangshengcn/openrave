@@ -2166,6 +2166,7 @@ class IKFastSolver(AutoReloader):
                         Trighttrans[3,3] = 0
                         T1links[0] += Trighttrans
                     else:
+                        assert(endindex is len(TestLinks))
                         T1links = [Trighttrans]
 
                     exec(ipython_str)
@@ -2173,25 +2174,47 @@ class IKFastSolver(AutoReloader):
                     T1links.append(self.Teeinv)
                     T1links += TestLinks[:startindex]
                     T1links[-1] = T1links[-1] * Tlefttrans
-                    solveRotationFirst = False
+                    solveRotationFirst = False # TGN: can solveRotationFirst be True???
             else:
                 # first attempt succeeds as translation eqns don't depend on hingejointvars
+                #
+                #   A_s * A_{s+1} * ... A_{e-1} = Tlefttrans * prod(T0links_NEW) * Trighttrans
+
                 T1links = TestLinksInv[:startindex][::-1]
+                # inv(A_{s-1}), ..., inv(A_1), inv(A_0)
                 if len(T1links) > 0:
                     Tlefttrans[0,0] = 0
                     Tlefttrans[1,1] = 0
                     Tlefttrans[2,2] = 0
                     Tlefttrans[3,3] = 0
+                    # combine inv(A_{s-1}) with inv(Tlefttrans)
                     T1links[0] -= Tlefttrans
                 else:
+                    assert(startindex is 0)
                     Tlefttrans[0:3,3] = -Tlefttrans[0:3,3]
                     T1links = [Tlefttrans]
 
-                exec(ipython_str)
-                    
+                # append Tee, inv(A_{n-1}), ..., inv(A_{e+1}), inv(A_e)
                 T1links.append(self.Tee)
                 T1links += TestLinksInv[endindex:][::-1]
-                T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
+                # So T1links reads
+                #
+                # inv(A_{s-1}), ..., inv(A_1), inv(A_0), Tee, inv(A_{n-1}), ..., inv(A_{e+1}), inv(A_e)
+                #
+                # while T0links contains
+                #
+                # A_s, A_{s+1}, ..., A_{e-2}, A_{e-1}
+                #
+                # Note that A_{s+1} and A_{e-2} are updated by _ExtractTranslationsOutsideOfMatrixMultiplication
+                
+                # combine inv(A_e) with inv(Trighttrans)
+                Trighttrans[0,0] = 0
+                Trighttrans[1,1] = 0
+                Trighttrans[2,2] = 0
+                Trighttrans[3,3] = 0
+                Trighttrans[0:3,3] = T1links[-1][0:3,0:3]*Trighttrans[0:3,3]
+                T1links[-1] -= Trighttrans
+                
                 solveRotationFirst = False
 
             if solveRotationFirst is not None:
