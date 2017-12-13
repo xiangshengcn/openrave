@@ -1880,16 +1880,20 @@ class IKFastSolver(AutoReloader):
         LinksInv = [self.affineInverse(link) for link in Links]
         # take product of all link matrices
         self.Tfinal = self.multiplyMatrix(Links)
+
         # plug simple pre-set values into forward kinematics formulas
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars,self.Tfinal,numsolutions=4)
-        # construct a SolverStoreSolution object
-        #exec(ipython_str)
 
+        # construct a SolverStoreSolution object
         endbranchtree = [AST.SolverStoreSolution (jointvars,isHinge=[self.IsHinge(var.name) for var in jointvars])]
+        
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 6:
             raise self.CannotSolveError('need 6 joints')
         log.info('ikfast 6d: %s',solvejointvars)
+
+        # check if some set of three consecutive axes intersect at one point
+        # if so, the IK solution will be easier to derive
         tree = self.TestIntersectingAxes(solvejointvars,Links, LinksInv,endbranchtree)
         if tree is None:
             sliderjointvars = [var for var in solvejointvars if not self.IsHinge(var.name)]
@@ -1985,17 +1989,33 @@ class IKFastSolver(AutoReloader):
         return None
 
     def _ExtractTranslationsOutsideOfMatrixMultiplication(self, Links, solvejointvars):
-        """try to extract translations outside of the multiplication (left and right)
-        
-        Tlefttrans * MultiplyMatrix(NewLinks) * Trighttrans = MultiplyMatrix(Links)
-        where Tleftrans and Trighttrans are only translation matrices
-        :return: Tlefttrans, NewLinks, Trighttrans
         """
+        Try to extract translations outside of the multiplication, from both left and right,
+        i.e., find and return 
+
+        Tlefttrans, NewLinks, Trighttrans
+
+        such that
+
+        Tlefttrans * MultiplyMatrix(NewLinks) * Trighttrans = MultiplyMatrix(Links)
+
+        where Tleftrans and Trighttrans are purely translation matrices in form
+
+                      [ 1     x ]
+        Tlefttrans  = [   1   x ]
+        Trighttrans = [     1 x ]
+                      [       1 ] 
+
+        only the 2nd and the last 2nd matrices of Links are modified in NewLinks
+        """
+
+        # they are identical for now
         NewLinks = list(Links)
 
-        # initialize T_left_trans and T_right_trans
-        Tlefttrans = eye(4)
+        # initialize T_left_trans, T_right_trans, and Temp
+        Tlefttrans  = eye(4)
         Trighttrans = eye(4)
+        Temp        = zeros(4)
         
         # work on the first two matrices to find T_left_trans
         separated_trans = NewLinks[0][0:3,0:3] * NewLinks[1][0:3,3]
@@ -2012,48 +2032,32 @@ class IKFastSolver(AutoReloader):
                 Trighttrans[j,3] = S.Zero
             else:
                 Trighttrans[j,3] = separated_trans[j]
-        
+                
+        """
         if any(Tlefttrans-eye(4)):
                print 'T_left_trans', Tlefttrans
                        
         if any(Trighttrans-eye(4)):
                print 'T_right_trans', Trighttrans
-
-        
-        a = NewLinks[1][:,:]
-        print 'old left: ', self.affineInverse(Tlefttrans)*a
-        a[0:3,3] -= Tlefttrans[0:3,3]
-        print 'new left: ', a
-        b = NewLinks[-2][:,:]
-        print 'old right: ', b*self.affineInverse(Trighttrans)
-        b[0:3,3] -= b[0:3,0:3]*Trighttrans[0:3,3]
-        print 'new right: ', b
-        
+        """
 
         # update the second matrix
-        # NewLinks[1] = self.affineInverse(Tlefttrans) * NewLinks[1]
+        Temp[0:3,3] = Tlefttrans[0:3,3]
+        NewLinks[1] -= Temp
 
-        A = zeros(4)
-        A[0:3,3] = Tlefttrans[0:3,3]
-        NewLinks[1] -= A
-        """
-        NewLinks[1] -= Matrix([[0,0,0,Tlefttrans[0,3]], \
-                               [0,0,0,Tlefttrans[1,3]], \
-                               [0,0,0,Tlefttrans[2,3]], \
-                               [0,0,0,0]])
-        """
-        # zeros(3).row_join(Tlefttrans[0:3,3]).col_join(Matrix([0,0,0,0]).transpose())
-        # update the penultimate matrix
-        # NewLinks[-2] = NewLinks[-2] * self.affineInverse(Trighttrans)
-        #NewLinks[-2] = NewLinks[-2] * eye(3).row_join(-Trighttrans[0:3,3]).col_join(Matrix([0,0,0,1]).transpose())
+        # update the second last matrix
+        Temp[0:3,3] = NewLinks[-2][0:3,0:3]*Trighttrans[0:3,3];
+        NewLinks[-2] -= Temp
 
-        A[0:3,3] = NewLinks[-2][0:3,0:3]*Trighttrans[0:3,3];
-        NewLinks[-2] -= A
-        # exec(ipython_str)
-
-        # Mathmatically equivalent, but above is correct and below is wrong
-        # NewLinks[1][0:3,3] =  NewLinks[1][0:3,3]-Tlefttrans[0:3,3]
-        # NewLinks[-2][0:3,3] = NewLinks[-2][0:3,3]-NewLinks[-2][0:3,0:3]*Trighttrans[0:3,3]
+        # TGN adds mathematically equivalent formulas for checking
+        a = Links[1][:,:]
+        # print 'old left: ', self.affineInverse(Tlefttrans)*a
+        a[0:3,3] -= Tlefttrans[0:3,3]
+        # print 'new left: ', a
+        b = Links[-2][:,:]
+        # print 'old right: ', b*self.affineInverse(Trighttrans)
+        b[0:3,3] -= b[0:3,0:3]*Trighttrans[0:3,3]
+        # print 'new right: ', b
         assert(not any(a-NewLinks[1] ))
         assert(not any(b-NewLinks[-2]))
         
@@ -2097,7 +2101,8 @@ class IKFastSolver(AutoReloader):
                 T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
                 solveRotationFirst = False
             else:
-                Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication(TestLinksInv[startindex:endindex][::-1], solvejointvars)
+                Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
+                                                   ( TestLinksInv[startindex:endindex][::-1], solvejointvars )
                 T0 = self.multiplyMatrix(T0links)
                 translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
                 if not self.has(translationeqs,*hingejointvars):
