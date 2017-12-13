@@ -2013,12 +2013,12 @@ class IKFastSolver(AutoReloader):
 
         p = T*p_2 + p' + p_1
 
-        where p  is the translation vector in MultiplyMatrix(Links)   , and
-              p'                           in MultiplyMatrix(NewLinks)
+        where p  is the translation vector in MultiplyMatrix(Links_IN ) , and
+              p'                           in MultiplyMatrix(Links_OUT)
         """
 
-        # they are identical for now, shallow copy!
-        NewLinks = list(Links)
+        # this is doing shallow copy, so redundant???
+        # NewLinks = list(Links)
 
         # deep copy their values before they get modified
         a = Links[1][:,:]
@@ -2030,14 +2030,14 @@ class IKFastSolver(AutoReloader):
         Temp        = zeros(4)
         
         # work on the product of the first two matrices to find T_left_trans
-        separated_trans = NewLinks[0][0:3,0:3] * NewLinks[1][0:3,3]
+        separated_trans = Links[0][0:3,0:3] * Links[1][0:3,3]
         for j in range(0,3):
             if not separated_trans[j].has(*solvejointvars):
                 Tlefttrans[j,3] = separated_trans[j]
 
         # work on the product of the last two matrices to find T_right_trans
-        Trighttrans[0:3,3] = NewLinks[-2][0:3,0:3].transpose() * NewLinks[-2][0:3,3]
-        Trot_with_trans = Trighttrans * NewLinks[-1]
+        Trighttrans[0:3,3] = Links[-2][0:3,0:3].transpose() * Links[-2][0:3,3]
+        Trot_with_trans = Trighttrans * Links[-1]
         separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
         for j in range(0,3):
             if separated_trans[j].has(*solvejointvars):
@@ -2053,24 +2053,14 @@ class IKFastSolver(AutoReloader):
                print 'T_right_trans', Trighttrans
         """
 
-        Temp[0:3,3] = Tlefttrans[0:3,3];
         # update the second matrix
-        NewLinks[1] -= Temp
+        Temp[0:3,3] = Tlefttrans[0:3,3];        
+        Links[1] -= Temp
 
-        # update the second last matrix
-        Temp[0:3,3] = NewLinks[-2][0:3,0:3]*Trighttrans[0:3,3];
-        # print "NewLinks[-2]-Temp = ", NewLinks[-2]-Temp
-        # print "NewLinks[-2]*self.affineInverse(Trighttrans) = ", NewLinks[-2]*self.affineInverse(Trighttrans)
+        # update the penultimate (second last) matrix
+        Temp[0:3,3] = Links[-2][0:3,0:3]*Trighttrans[0:3,3];
+        Links[-2] -= Temp
 
-        #A = NewLinks[-2][:,:]
-        NewLinks[-2] -= Temp
-        #A[:,3] -= Temp[:,3]
-        #print "NewLinks[-2] = ",NewLinks[-2]
-        #print "A = ", A
-        #assert(not any(A-NewLinks[-2]))
-
-        #exec(ipython_str)
-        
         # TGN adds mathematically equivalent formulas for checking
         # print 'old left: ', self.affineInverse(Tlefttrans)*a
         a[0:3,3] -= Tlefttrans[0:3,3]
@@ -2078,12 +2068,12 @@ class IKFastSolver(AutoReloader):
         # print 'old right: ', b*self.affineInverse(Trighttrans)
         b[0:3,3] -= b[0:3,0:3]*Trighttrans[0:3,3]
         # print 'new right: ', b
-        assert(not any(a-NewLinks[1] ))
+        assert(not any(a-Links[1] ))
         # print "b = ", b
         # print "NewLinks[-2] = ", NewLinks[-2]
-        assert(not any(b-NewLinks[-2]))
+        assert(not any(b-Links[-2]))
         
-        return Tlefttrans, NewLinks, Trighttrans
+        return Tlefttrans, Trighttrans
 
     def iterateThreeIntersectingAxes(self, solvejointvars, Links, LinksInv):
         """Search for 3 consectuive intersecting axes. If a robot has this condition, it makes IK computations much simpler.
@@ -2102,8 +2092,9 @@ class IKFastSolver(AutoReloader):
             endindex = ilinks[i+2]+1
 
             # attempt to isolate translation parts for TestLinks[startindex:endindex] w.r.t solvejointvars
-            Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication\
-                                               ( TestLinks[startindex:endindex], solvejointvars )
+            T0links = TestLinks[startindex:endindex]
+            Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication\
+                                      ( T0links, solvejointvars )
             T0 = self.multiplyMatrix(T0links)
             # count number of variables in T0[0:3,0:3]
             numVariablesInRotation = sum([self.has(T0[0:3,0:3],solvejointvar) for solvejointvar in solvejointvars])
@@ -2121,8 +2112,10 @@ class IKFastSolver(AutoReloader):
                 # work on the inverse of TestLinks[startindex:endindex]
                 # seems to me: instead of working on A*B, C*D, now we work on inv(C*D) and inv(A*B)
                 # where A,B,C,D = TestLinks[0],TestLinks[1],TestLinks[-2],TestLinks[-1]
-                Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
-                                                   ( TestLinksInv[startindex:endindex][::-1], solvejointvars )
+
+                T0links = TestLinksInv[startindex:endindex][::-1]
+                Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
+                                          ( T0links, solvejointvars )
                 T0 = self.multiplyMatrix(T0links)
 
                 #exec(ipython_str)
