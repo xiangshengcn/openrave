@@ -2114,9 +2114,10 @@ class IKFastSolver(AutoReloader):
         for solvejointvar in solvejointvars:
             polysymbols += [s[0] for s in self.Variable(solvejointvar).subs]
 
-        for i in range(len(ilinks)-2):
+        num_of_combination = len(ilinks)-2
+        for i in range(num_of_combination):
             startindex = ilinks[i]
-            endindex = ilinks[i+2]+1
+            endindex   = ilinks[i+2]+1
 
             T0links    = TestLinks[startindex:endindex]
             # There are exectly three joint variables in T0links, one in the first matrix, on in the last.
@@ -2129,7 +2130,6 @@ class IKFastSolver(AutoReloader):
             #    T0linksInv = TestLinksInv[endindex-1:startindex-1:-1]
             T0linksInv = TestLinksInv[startindex:endindex][::-1]
 
-                
             Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                       ( T0links, T0linksInv, solvejointvars )
             # T0links can be modified by the above call; T0linksInv does not change
@@ -2159,7 +2159,10 @@ class IKFastSolver(AutoReloader):
                 translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
                 if not self.has(translationeqs,*hingejointvars):
                     T1links = TestLinks[endindex:]
+                    # A_e, A_{e+1}, ..., A_{n-1}
                     if len(T1links) > 0:
+                        # left multiply Trighttrans onto A_e
+                        # T1links[0] = Trighttrans * T1links[0] 
                         Trighttrans[0,0] = 0
                         Trighttrans[1,1] = 0
                         Trighttrans[2,2] = 0
@@ -2170,27 +2173,45 @@ class IKFastSolver(AutoReloader):
                         T1links = [Trighttrans]
 
                     exec(ipython_str)
-                        
+
+                    # append inv(Tee), A_0, A_1, ..., A_{s-1}
                     T1links.append(self.Teeinv)
                     T1links += TestLinks[:startindex]
-                    T1links[-1] = T1links[-1] * Tlefttrans
-                    solveRotationFirst = False # TGN: can solveRotationFirst be True???
-            else:
-                # first attempt succeeds as translation eqns don't depend on hingejointvars
-                #
-                #   A_s * A_{s+1} * ... A_{e-1} = Tlefttrans * prod(T0links_NEW) * Trighttrans
-
-                T1links = TestLinksInv[:startindex][::-1]
-                # inv(A_{s-1}), ..., inv(A_1), inv(A_0)
-                if len(T1links) > 0:
+                    # So T1links reads
+                    #
+                    # A_e, A_{e+1}, ..., A_{n-1}, inv(Tee), A_0, A_1, ..., A_{s-1}
+                    #
+                    # while T0linksInv contains inv(A_{e-1}), ..., inv(A_{s+1}), inv(A_s)
+                    #
+                    # where inv(A_{e-2}) and inv(A_{s+1}) are updated by _ExtractTranslationsOutsideOfMatrixMultiplication
+                    
+                    # right multiply Tlefttrans onto A_{s-1}
+                    # T1links[-1] = T1links[-1] * Tlefttrans
                     Tlefttrans[0,0] = 0
                     Tlefttrans[1,1] = 0
                     Tlefttrans[2,2] = 0
                     Tlefttrans[3,3] = 0
-                    # combine inv(A_{s-1}) with inv(Tlefttrans)
+                    Tlefttrans[0:3,3] = T1links[-1][0:3,0:3]*Tlefttrans[0:3,3]
+                    T1links[-1] += Tlefttrans
+                    solveRotationFirst = False # TGN: can solveRotationFirst be True???
+            else:
+                # first attempt succeeds as translation eqns don't depend on hingejointvars
+                #
+                #  A_s * A_{s+1} * ... A_{e-1} = Tlefttrans * prod(T0links_NEW) * Trighttrans
+
+                T1links = TestLinksInv[:startindex][::-1]
+                # inv(A_{s-1}), ..., inv(A_1), inv(A_0)
+                if len(T1links) > 0:
+                    # left multiply inv(Tlefttrans) onto inv(A_{s-1})
+                    # T1links[0] = self.affineInverse(Tlefttrans) * T1links[0]
+                    Tlefttrans[0,0] = 0
+                    Tlefttrans[1,1] = 0
+                    Tlefttrans[2,2] = 0
+                    Tlefttrans[3,3] = 0
                     T1links[0] -= Tlefttrans
                 else:
                     assert(startindex is 0)
+                    # T1links = [self.affineInverse(Tlefttrans)] 
                     Tlefttrans[0:3,3] = -Tlefttrans[0:3,3]
                     T1links = [Tlefttrans]
 
@@ -2201,13 +2222,12 @@ class IKFastSolver(AutoReloader):
                 #
                 # inv(A_{s-1}), ..., inv(A_1), inv(A_0), Tee, inv(A_{n-1}), ..., inv(A_{e+1}), inv(A_e)
                 #
-                # while T0links contains
+                # while T0links contains A_s, A_{s+1}, ..., A_{e-2}, A_{e-1}
                 #
-                # A_s, A_{s+1}, ..., A_{e-2}, A_{e-1}
-                #
-                # Note that A_{s+1} and A_{e-2} are updated by _ExtractTranslationsOutsideOfMatrixMultiplication
+                # where A_{s+1} and A_{e-2} are updated by _ExtractTranslationsOutsideOfMatrixMultiplication
                 
-                # combine inv(A_e) with inv(Trighttrans)
+                # right multiply inv(Trighttrans) onto inv(A_e)
+                # T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
                 Trighttrans[0,0] = 0
                 Trighttrans[1,1] = 0
                 Trighttrans[2,2] = 0
@@ -2218,17 +2238,19 @@ class IKFastSolver(AutoReloader):
                 solveRotationFirst = False
 
             if solveRotationFirst is not None:
-                rotvars = []
+                # collect rotation and translation variables
+                rotvars   = []
                 transvars = []
-                for svar in solvejointvars:
-                    if self.has(T0[0:3,0:3],svar):
-                        rotvars.append(svar)
+                for solvejointvar in solvejointvars:
+                    if self.has(T0[0:3,0:3],solvejointvar):
+                        rotvars.append(solvejointvar)
                     else:
-                        transvars.append(svar)
+                        transvars.append(solvejointvar)
                 if len(rotvars) == 3 and len(transvars) == 3:
                     log.info('found 3 consecutive intersecting axes links[%d:%d], ' + \
                              'rotvars=%s, translationvars=%s', \
                              startindex, endindex, rotvars,transvars)
+                    # generator reports only one set of 3 axes at a time
                     yield T0links, T1links, transvars, rotvars, solveRotationFirst
 
     def RoundEquationTerms(self, eq, epsilon=None):
@@ -2323,6 +2345,8 @@ class IKFastSolver(AutoReloader):
         self.checkSolvability(AllEquations,transvars,self.freejointvars)
         rottree = []
         if solveRotationFirst:
+            # can even get here?? it is either None or False
+            assert(0)
             newendbranchtree = endbranchtree
         else:
             newendbranchtree = [AST.SolverSequence([rottree])]
@@ -2333,6 +2357,8 @@ class IKFastSolver(AutoReloader):
         solvertree= []
         solvedvarsubs = self.freevarsubs[:]
         if solveRotationFirst:
+            # can even get here?? it is either None or False
+            assert(0)
             storesolutiontree = transtree
         else:
             solvertree += transtree
