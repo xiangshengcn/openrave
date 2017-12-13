@@ -1997,7 +1997,7 @@ class IKFastSolver(AutoReloader):
 
         such that
 
-        Tlefttrans * MultiplyMatrix(NewLinks) * Trighttrans = MultiplyMatrix(Links).
+        Tlefttrans * MultiplyMatrix(Links_OUT) * Trighttrans = MultiplyMatrix(Links_IN).
 
         Tleftrans and Trighttrans are purely translation matrices in form [resp.]
 
@@ -2005,16 +2005,21 @@ class IKFastSolver(AutoReloader):
         -------------  and  -------------
         [  0  |  1  ]       [  0  |  1  ]
 
-        where p_1, p_2 do not contain solvejointvars.
+        where p_1, p_2 do not depend on solvejointvars.
 
-        Only the 2nd and the last 2nd matrices of Links are modified in NewLinks.
+        Since the first and last matrices MUST contain solvejointvars, we only
+        modify the 2nd and penultimate matrices of Links.
 
         This is equivalent to finding 
 
-        p = T*p_2 + p' + p_1
+        p = p_1 + R*p_2 + p'
 
-        where p  is the translation vector in MultiplyMatrix(Links_IN ) , and
-              p'                           in MultiplyMatrix(Links_OUT)
+        where MultiplyMatrix(Links_IN) and MultiplyMatrix(Links_OUT) are
+
+        [ R | p ]       [ R | p']
+        ---------  and  ---------  respectively.
+        [ 0 | 1 ]       [ 0 | 1 ]
+
         """
 
         # this is doing shallow copy, so redundant???
@@ -2030,10 +2035,17 @@ class IKFastSolver(AutoReloader):
         Temp        = zeros(4)
         
         # work on the product of the first two matrices to find T_left_trans
+        """
         separated_trans = Links[0][0:3,0:3] * Links[1][0:3,3]
         for j in range(0,3):
             if not separated_trans[j].has(*solvejointvars):
                 Tlefttrans[j,3] = separated_trans[j]
+        """
+
+        Tlefttrans[0:3,3] = Links[0][0:3,0:3] * Links[1][0:3,3]
+        for j in range(0,3):
+            if Tlefttrans[j].has(*solvejointvars):
+                Tlefttrans[j,3] = S.Zero
 
         # work on the product of the last two matrices to find T_right_trans
         Trighttrans[0:3,3] = Links[-2][0:3,0:3].transpose() * Links[-2][0:3,3]
@@ -2093,12 +2105,16 @@ class IKFastSolver(AutoReloader):
 
             # attempt to isolate translation parts for TestLinks[startindex:endindex] w.r.t solvejointvars
             T0links = TestLinks[startindex:endindex]
-            Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication\
+            # the first [last] matrix of T0links MUST have joint variables
+            # so we examine the 2nd [2nd last] matrix and attempt to extract left [right] translations
+            Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                       ( T0links, solvejointvars )
+            # T0links can be modified by the above call
             T0 = self.multiplyMatrix(T0links)
             # count number of variables in T0[0:3,0:3]
             numVariablesInRotation = sum([self.has(T0[0:3,0:3],solvejointvar) for solvejointvar in solvejointvars])
             if numVariablesInRotation < 3:
+                assert(numVariableInRotation is 3)
                 continue
             solveRotationFirst = None
             # (was RD's comments; TGN changed the wording)
