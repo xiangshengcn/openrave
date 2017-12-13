@@ -1990,7 +1990,7 @@ class IKFastSolver(AutoReloader):
                 log.warn('%s',e)
         return None
 
-    def _ExtractTranslationsOutsideOfMatrixMultiplication(self, Links, solvejointvars):
+    def _ExtractTranslationsOutsideOfMatrixMultiplication(self, Links, LinksInv, solvejointvars):
         """
         Try to extract translations outside of the multiplication, from both left and right,
         i.e., find and return 
@@ -2058,10 +2058,10 @@ class IKFastSolver(AutoReloader):
         # separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
         #
         # first iteration:
-        separated_trans = Links[-1][0:3,0:3].transpose() * \
-                          ( Links[-2][0:3,0:3].transpose()*Links[-2][0:3,3]+Links[-1][0:3,3])
+        # separated_trans = Links[-1][0:3,0:3].transpose() * \
+        #                  ( Links[-2][0:3,0:3].transpose()*Links[-2][0:3,3]+Links[-1][0:3,3])
         # second iteration:
-        
+        separated_trans = -LinksInv[-2][0:3,0:3]*LinksInv[-1][0:3,3]-LinksInv[-2][0:3,3]
         
         for j in range(0,3):
             if separated_trans[j].has(*solvejointvars):
@@ -2119,20 +2119,17 @@ class IKFastSolver(AutoReloader):
             endindex = ilinks[i+2]+1
 
             T0links    = TestLinks[startindex:endindex]
+            # There are exectly three joint variables in T0links, one in the first matrix, on in the last.
+            # To isolate the left and right translation parts that are independent of solvejointvars,
+            # we examine the 2nd and 2nd last matrices in T0links, respectively.
+
             if startindex is 0:
                 T0linksInv = TestLinksInv[endindex-1::-1]
             else:
                 T0linksInv = TestLinksInv[endindex-1:startindex-1:-1]
-                
 
-            exec(ipython_str)
-            
-            # There are exectly three joint variables in T0links, one in the first matrix, on in the last.
-            # To isolate the left and right translation parts that are independent of solvejointvars,
-            # we examine the 2nd and 2nd last matrices in T0links, respectively.
-            
             Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
-                                      ( T0links, solvejointvars )
+                                      ( T0links, T0linksInv, solvejointvars )
             # T0links can be modified by the above call
             T0 = self.multiplyMatrix(T0links)
 
@@ -2155,10 +2152,10 @@ class IKFastSolver(AutoReloader):
                 # seems to me: instead of working on A*B, C*D, now we work on inv(C*D) and inv(A*B)
                 # where A,B,C,D = TestLinks[0],TestLinks[1],TestLinks[-2],TestLinks[-1]
 
-                T0links = T0linksInv #TestLinksInv[startindex:endindex][::-1]
+                # T0links = T0linksInv #TestLinksInv[startindex:endindex][::-1]
                 Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
-                                          ( T0links, solvejointvars )
-                T0 = self.multiplyMatrix(T0links)
+                                          ( T0linksInv, T0links, solvejointvars )
+                T0 = self.multiplyMatrix(T0linksInv)
 
                 #exec(ipython_str)
                             
