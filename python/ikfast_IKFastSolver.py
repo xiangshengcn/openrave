@@ -2123,14 +2123,16 @@ class IKFastSolver(AutoReloader):
             # To isolate the left and right translation parts that are independent of solvejointvars,
             # we examine the 2nd and 2nd last matrices in T0links, respectively.
 
-            if startindex is 0:
-                T0linksInv = TestLinksInv[endindex-1::-1]
-            else:
-                T0linksInv = TestLinksInv[endindex-1:startindex-1:-1]
+            #if startindex is 0:
+            #    T0linksInv = TestLinksInv[endindex-1::-1]
+            #else:
+            #    T0linksInv = TestLinksInv[endindex-1:startindex-1:-1]
+            T0linksInv = TestLinksInv[startindex:endindex][::-1]
 
+                
             Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                       ( T0links, T0linksInv, solvejointvars )
-            # T0links can be modified by the above call
+            # T0links can be modified by the above call; T0linksInv does not change
             T0 = self.multiplyMatrix(T0links)
 
             # count number of variables in T0[0:3,0:3]
@@ -2148,34 +2150,45 @@ class IKFastSolver(AutoReloader):
             # TGN: inconsistency in code, should decide whether to write 0:3 or merely :3
 
             if self.has(translationeqs, *hingejointvars):
-                # work on the inverse of TestLinks[startindex:endindex]
-                # seems to me: instead of working on A*B, C*D, now we work on inv(C*D) and inv(A*B)
-                # where A,B,C,D = TestLinks[0],TestLinks[1],TestLinks[-2],TestLinks[-1]
-
-                # T0links = T0linksInv #TestLinksInv[startindex:endindex][::-1]
+                # first attempt does not succeed, so we try working on T0linksInv
                 Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                           ( T0linksInv, T0links, solvejointvars )
+                # T0linksInv can be modified by the above call; T0links does not change
                 T0 = self.multiplyMatrix(T0linksInv)
-
-                #exec(ipython_str)
                             
                 translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
                 if not self.has(translationeqs,*hingejointvars):
                     T1links = TestLinks[endindex:]
                     if len(T1links) > 0:
-                        T1links[0] = Trighttrans * T1links[0]
+                        Trighttrans[0,0] = 0
+                        Trighttrans[1,1] = 0
+                        Trighttrans[2,2] = 0
+                        Trighttrans[3,3] = 0
+                        T1links[0] += Trighttrans
                     else:
                         T1links = [Trighttrans]
+
+                    exec(ipython_str)
+                        
                     T1links.append(self.Teeinv)
                     T1links += TestLinks[:startindex]
                     T1links[-1] = T1links[-1] * Tlefttrans
                     solveRotationFirst = False
             else:
+                # first attempt succeeds as translation eqns don't depend on hingejointvars
                 T1links = TestLinksInv[:startindex][::-1]
                 if len(T1links) > 0:
-                    T1links[0] = self.affineInverse(Tlefttrans) * T1links[0]
+                    Tlefttrans[0,0] = 0
+                    Tlefttrans[1,1] = 0
+                    Tlefttrans[2,2] = 0
+                    Tlefttrans[3,3] = 0
+                    T1links[0] -= Tlefttrans
                 else:
-                    T1links = [self.affineInverse(Tlefttrans)]
+                    Tlefttrans[0:3,3] = -Tlefttrans[0:3,3]
+                    T1links = [Tlefttrans]
+
+                exec(ipython_str)
+                    
                 T1links.append(self.Tee)
                 T1links += TestLinksInv[endindex:][::-1]
                 T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
