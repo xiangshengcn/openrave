@@ -1,5 +1,5 @@
 from ikfast import fmod, atan2check, clc, ikfast_print_stack, ipython_str, \
-    print_matrix
+    print_matrix, LOGGING_FORMAT
 
 from sympy import __version__ as sympy_version
 if sympy_version < '0.7.0':
@@ -64,7 +64,10 @@ except ImportError:
                     yield [_internal_items[i]]+cc
 
 import logging
-log = logging.getLogger('openravepy.ikfast')
+logging.basicConfig( format = LOGGING_FORMAT, \
+                     datefmt='%d-%m-%Y:%H:%M:%S', \
+                     level=logging.DEBUG)
+log = logging.getLogger('IKFastSolver')
 
 try:
     # not necessary, just used for testing

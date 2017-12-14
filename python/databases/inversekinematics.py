@@ -166,7 +166,12 @@ except:
     import pickle
 
 import logging
-log = logging.getLogger('openravepy.'+__name__.split('.',2)[-1])
+LOGGING_FORMAT = ' %(levelname)-6s [%(lineno)d IN %(filename)s : %(funcName)s]\n' + \
+                 '\t%(message)s\n'
+logging.basicConfig( format = LOGGING_FORMAT, \
+                     datefmt='%d-%m-%Y:%H:%M:%S', \
+                     level=logging.DEBUG)
+log = logging.getLogger('ikfast_generator_cpp')
 
 class InverseKinematicsError(Exception):
     def __init__(self,parameter=u''):

@@ -38,6 +38,9 @@ def print_matrix(matrices, ind=None):
         print i, ':',
         print matrices[i]
         print '\n',
+
+LOGGING_FORMAT = ' %(levelname)-6s [%(filename)s : %(funcName)s : %(lineno)d]\n' + \
+                 '\t%(message)s\n'
 # ========== End of TGN's modification ==============
 
 # numpy for computing eigenvalues

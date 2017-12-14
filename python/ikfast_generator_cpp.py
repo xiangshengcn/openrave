@@ -56,6 +56,7 @@ except:
         TranslationZAxisAngleYNorm4D=0x44000010
 
 from sympy import *
+from ikfast import LOGGING_FORMAT
 
 try:
     import re # for indenting
@@ -80,7 +81,10 @@ except ImportError:
     using_swiginac = False
 
 import logging
-log = logging.getLogger('openravepy.ikfast')
+logging.basicConfig( format = LOGGING_FORMAT, \
+                     datefmt='%d-%m-%Y:%H:%M:%S', \
+                     level=logging.DEBUG)
+log = logging.getLogger('ikfast_generator_cpp')
 
 from sympy.core import function # for sympy 0.7.1+
 class fmod(function.Function):
