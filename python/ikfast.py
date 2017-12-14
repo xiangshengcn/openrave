@@ -39,7 +39,7 @@ def print_matrix(matrices, ind=None):
         print matrices[i]
         print '\n',
 
-LOGGING_FORMAT = ' %(levelname)-6s [%(filename)s : %(funcName)s : %(lineno)d]\n' + \
+LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s]\n' + \
                  '\t%(message)s\n'
 # ========== End of TGN's modification ==============
 

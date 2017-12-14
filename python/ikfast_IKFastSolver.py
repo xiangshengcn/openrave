@@ -2176,8 +2176,6 @@ class IKFastSolver(AutoReloader):
                         assert(endindex is len(TestLinks))
                         T1links = [Trighttrans]
 
-                    exec(ipython_str)
-
                     # append inv(Tee), A_0, A_1, ..., A_{s-1}
                     T1links.append(self.Teeinv)
                     T1links += TestLinks[:startindex]
@@ -5924,7 +5922,14 @@ class IKFastSolver(AutoReloader):
         
         self._scopecounter+=1
         scopecounter = int(self._scopecounter)
-        log.info('depth=%d c=%d, %s %s: cases=%r', len(currentcases) if currentcases is not None else 0, self._scopecounter, othersolvedvars,curvars, currentcases)
+        log.info('depth = %d, c = %d\n' + \
+                 '        %s, %s\n' + \
+                 '        cases = %r', \
+                 len(currentcases) if currentcases is not None else 0, \
+                 self._scopecounter, othersolvedvars,curvars, \
+                 None if currentcases is None else list(currentcases)
+                 )
+
         solsubs = solsubs[:]
         freevarinvsubs = [(f[1],f[0]) for f in self.freevarsubs]
         solinvsubs = [(f[1],f[0]) for f in solsubs]
@@ -6487,7 +6492,7 @@ class IKFastSolver(AutoReloader):
         maxlevel2scopecounter = 300 # used to limit how deep the hierarchy goes or otherwise IK can get too big
         if len(currentcases) >= self.maxcasedepth or (scopecounter > maxlevel2scopecounter and len(currentcases) >= 2):
             log.warn('c=%d, %d levels deep in checking degenerate cases, skip.\n' + \
-                     'curvars = %r, AllEquations = %r', \
+                     '        curvars = %r, AllEquations = %r', \
                      scopecounter, len(currentcases), curvars, AllEquations)
             lastbranch.append(AST.SolverBreak('%d cases reached'%self.maxcasedepth, [(var,self.SimplifyAtan2(self._SubstituteGlobalSymbols(eq, originalGlobalSymbols))) for var, eq in currentcasesubs], othersolvedvars, solsubs, originalGlobalSymbols, endbranchtree))
             return prevbranch
@@ -6711,7 +6716,7 @@ class IKFastSolver(AutoReloader):
             trysubstitutions = self.ppsubs+self.npxyzsubs+self.rxpsubs
         else:
             trysubstitutions = self.ppsubs
-        log.debug('c=%d have %d zero substitutions', scopecounter, len(flatzerosubstitutioneqs))
+        log.debug('c = %d, %d zero substitutions', scopecounter, len(flatzerosubstitutioneqs))
         
         for iflatzerosubstitutioneqs, (cond, evalcond, othervarsubs, dictequations) in enumerate(flatzerosubstitutioneqs):
             # have to convert to fractions before substituting!
@@ -6741,7 +6746,11 @@ class IKFastSolver(AutoReloader):
                     for singlecond in cond:
                         newcases.add(singlecond)                            
                     if not self.degeneratecases.CheckCases(newcases):
-                        log.info('depth=%d, c=%d, iter=%d/%d, starting newcases: %r', len(currentcases), scopecounter, iflatzerosubstitutioneqs, len(flatzerosubstitutioneqs), newcases)
+                        log.info('depth = %d, c = %d, iter = %d/%d\n' +\
+                                 '        start new cases: %r', \
+                                 len(currentcases), scopecounter, iflatzerosubstitutioneqs, len(flatzerosubstitutioneqs), \
+                                 list(newcases))
+                        
                         if len(NewEquationsClean) > 0:
                             newcasesubs = currentcasesubs+othervarsubs
                             self.globalsymbols = []
@@ -6777,7 +6786,10 @@ class IKFastSolver(AutoReloader):
                                 newtree.append(AST.SolverSolution(curvar.name, jointeval=[S.Zero,pi/2,pi,-pi/2], isHinge=self.IsHinge(curvar.name)))
                             newtree += endbranchtree
                         zerobranches.append(([evalcond]+extrazerochecks,newtree,dictequations)) # what about extradictequations?
-                        log.info('depth=%d, c=%d, iter=%d/%d, adding newcases: %r', len(currentcases), scopecounter, iflatzerosubstitutioneqs, len(flatzerosubstitutioneqs), newcases)
+                        log.info('depth = %d, c = %d, iter = %d/%d\n' \
+                                 + '        add new cases: %r', \
+                                 len(currentcases), scopecounter, iflatzerosubstitutioneqs, len(flatzerosubstitutioneqs), \
+                                 list(newcases))
                         self.degeneratecases.AddCases(newcases)
                     else:
                         log.warn('already has handled cases %r', newcases)                        
@@ -7614,8 +7626,8 @@ class IKFastSolver(AutoReloader):
                             cvarfrac[0] = -cvarfrac[0]
                             cvarfracsimp_denom = -cvarfracsimp_denom
                         if self.equal(svarfracsimp_denom,cvarfracsimp_denom) and not svarfracsimp_denom.is_number:
-                            log.debug('denominator of %s = %s\n' + \
-                                      '        do global substitution', \
+                            log.debug('denom of %s = %s\n' + \
+                                      '        do global subs', \
                                       var.name, svarfracsimp_denom)
                             #denom = self.gsymbolgen.next()
                             #solversolution.dictequations.append((denom,sign(svarfracsimp_denom)))

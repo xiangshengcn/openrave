@@ -166,7 +166,7 @@ except:
     import pickle
 
 import logging
-LOGGING_FORMAT = ' %(levelname)-6s [%(lineno)d IN %(filename)s : %(funcName)s]\n' + \
+LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s ]\n' + \
                  '\t%(message)s\n'
 logging.basicConfig( format = LOGGING_FORMAT, \
                      datefmt='%d-%m-%Y:%H:%M:%S', \
