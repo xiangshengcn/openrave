@@ -1025,7 +1025,18 @@ class InverseKinematicsModel(DatabaseGenerator):
                 solutionresults.append(samples)
                 index += num*numvalues
             wrongrate = len(solutionresults[0])/numtested
-            log.info('success rate: %f, wrong solutions: %f, no solutions: %f, missing solution: %f',float(res[1])/numtested,wrongrate,len(solutionresults[1])/numtested,len(solutionresults[2])/numtested)
+            log.info('\n' + \
+                     '  STATISTICS          %%  \n' + \
+                     '-----------------------------\n' + \
+                     '     SUCCESS      %5.1f\n' + \
+                     '     FAILURE      %5.1f\n' + \
+                     '     NO SOLN      %5.1f\n' + \
+                     'MISSING SOLN      %5.1f'   , \
+                     float(res[1])/numtested*100, \
+                     wrongrate*100, \
+                     len(solutionresults[1])/numtested*100, \
+                     len(solutionresults[2])/numtested*100)
+            exec(ipython_str)
         return successrate, wrongrate
     
     def show(self,delay=0.1,options=None,forceclosure=True):

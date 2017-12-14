@@ -1125,7 +1125,7 @@ IkReal r00 = 0, r11 = 0, r22 = 0;
         eqcode = cStringIO.StringIO()
         name = node.jointname
         self._solutioncounter += 1
-        log.info('c=%d var=%s', self._solutioncounter, name)
+        log.info('c = %d, var = %s', self._solutioncounter, name)
         node.HasFreeVar = False
         allnumsolutions = 0
         #log.info('generateSolution %s (%d)', name, len(node.dictequations))
@@ -1713,7 +1713,7 @@ IkReal r00 = 0, r11 = 0, r22 = 0;
         return ''
     def generateStoreSolution(self, node):
         self._solutioncounter += 1
-        log.info('c=%d, store solution', self._solutioncounter)
+        log.info('c = %d, store solution', self._solutioncounter)
         code = cStringIO.StringIO()
         if node.checkgreaterzero is not None and len(node.checkgreaterzero) > 0:
             origequations = self.copyequations()
