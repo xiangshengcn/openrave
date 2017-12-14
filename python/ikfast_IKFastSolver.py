@@ -794,7 +794,9 @@ class IKFastSolver(AutoReloader):
                                     checkforzeros.append(testeqmin)
                                 if checkforzeros[-1].evalf() == S.Zero:
                                     raise self.CannotSolveError('equation evaluates to 0, so can never be ok')
-                                log.info('adding atan2(%r, %r) = %r all zeros check', substitutedargs[0], substitutedargs[1], checkforzeros[-1])
+                                log.info('add atan2( %r, \n                   %r ) \n' \
+                                         + '        check zero: %r', \
+                                         substitutedargs[0], substitutedargs[1], checkforzeros[-1])
                 for arg in eq.args:
                     checkforzeros += self.checkForDivideByZero(arg)
             elif eq.is_Add:
@@ -7509,7 +7511,7 @@ class IKFastSolver(AutoReloader):
                     continue
                 try:
                     if Poly(enew,varsym.svar).TC() == S.Zero or Poly(enew,varsym.cvar) == S.Zero or Poly(enew,varsym.var) == S.Zero:
-                        log.debug('equation %s is allowing trivial solution for variable %s, ignoring ',e,varsym.name)
+                        log.debug('EQN %s allows trivial solution for %s, ignore',e,varsym.name)
                         continue
                 except PolynomialError:
                     continue
@@ -7606,7 +7608,8 @@ class IKFastSolver(AutoReloader):
                             cvarfrac[0] = -cvarfrac[0]
                             cvarfracsimp_denom = -cvarfracsimp_denom
                         if self.equal(svarfracsimp_denom,cvarfracsimp_denom) and not svarfracsimp_denom.is_number:
-                            log.debug('%s solution: denominator is equal %s, doing a global substitution',var.name,svarfracsimp_denom)
+                            log.debug('denominator of %s = %s\n' + \
+                                      '        do global substitution',var.name,svarfracsimp_denom)
                             #denom = self.gsymbolgen.next()
                             #solversolution.dictequations.append((denom,sign(svarfracsimp_denom)))
                             svarsolsimp = self.SimplifyTransform(self.trigsimp(svarfrac[0],othersolvedvars))#*denom)
@@ -7650,7 +7653,10 @@ class IKFastSolver(AutoReloader):
                             else:
                                 solversolution.equationsused = eqns
                             if len(solversolution.equationsused) > 0:
-                                log.info('%s solution: equations used for atan2: %s',var.name, str(solversolution.equationsused))
+                                log.info('%s = atan2( %s\n' + \
+                                         '                    %s )', var.name, \
+                                         str(solversolution.equationsused[0]),
+                                         str(solversolution.equationsused[1]) )
                         if len(self.checkForDivideByZero(expandedsol.subs(solversolution.dictequations))) == 0:
                             goodsolution += 1
                     if len(solversolution.jointeval) == len(sollist) and len(sollist) > 0:
@@ -7678,10 +7684,10 @@ class IKFastSolver(AutoReloader):
                     log.debug('cannot solve equation with high degree: %s',str(eqnew))
                     continue
                 if ps.TC() == S.Zero and len(ps.monoms()) > 0:
-                    log.debug('equation %s has trivial solution, ignoring...', ps)
+                    log.debug('equation %s has trivial solution, ignore', ps)
                     continue
                 if pc.TC() == S.Zero and len(pc.monoms()) > 0:
-                    log.debug('equation %s has trivial solution, ignoring...', pc)
+                    log.debug('equation %s has trivial solution, ignore', pc)
                     continue
             except PolynomialError:
                 # might not be a polynomial, so ignore
