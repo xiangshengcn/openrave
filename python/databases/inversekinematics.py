@@ -181,6 +181,12 @@ def ikfast_print_stack():
 ipython_str = 'ikfast_print_stack(); ' + \
               'from IPython.terminal import embed; ' + \
               'ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())'
+"""
+When exec(ipython_str) does not work, use
+
+from IPython.terminal import embed;
+ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())
+"""
             
 LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s ]\n' + \
                  '\t%(message)s\n'
@@ -1033,14 +1039,19 @@ class InverseKinematicsModel(DatabaseGenerator):
                 index += num*numvalues
             wrongrate = len(solutionresults[0])/numtested
             log.info('\n' + \
-                     '  STATISTICS          %%  \n' + \
-                     '-----------------------------\n' + \
-                     '     SUCCESS      %5.1f\n' + \
-                     '     FAILURE      %5.1f\n' + \
-                     '     NO SOLN      %5.1f\n' + \
-                     'MISSING SOLN      %5.1f'   , \
-                     float(res[1])/numtested*100, \
-                     wrongrate*100, \
+                     '  STATISTICS          %%  \n'       + \
+                     '-----------------------------\n'    + \
+                     '        #    TEST %d\n'             + \
+                     '        # SUCCESS %d\n'             + \
+                     '        # FAILURE %d\n'             + \
+                     '     SUCCESS RATE %5.1f\n'          + \
+                     '     FAILURE RATE %5.1f\n'          + \
+                     '     NO SOLN RATE %5.1f\n'          + \
+                     'MISSING SOLN RATE %5.1f'            , \
+                     numtested, float(res[1])             , \
+                     len(solutionresults[0])              , \
+                     float(res[1])/numtested*100          , \
+                     wrongrate*100                        , \
                      len(solutionresults[1])/numtested*100, \
                      len(solutionresults[2])/numtested*100)
         return successrate, wrongrate

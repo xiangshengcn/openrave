@@ -5934,12 +5934,12 @@ class IKFastSolver(AutoReloader):
         scopecounter = int(self._scopecounter)
         log.info('depth = %d, c = %d\n' + \
                  '        %s, %s\n' + \
-                 '        cases = %r', \
+                 '        cases = %s', \
                  len(currentcases) if currentcases is not None else 0, \
                  self._scopecounter, othersolvedvars,curvars, \
-                 None if currentcases is None else list(currentcases)
-                 )
-
+                 None if currentcases is None or len(currentcases) is 0 else \
+                 ("\n"+" "*16).join(str(x) for x in list(currentcases)))
+        
         solsubs = solsubs[:]
         freevarinvsubs = [(f[1],f[0]) for f in self.freevarsubs]
         solinvsubs = [(f[1],f[0]) for f in solsubs]
@@ -6503,8 +6503,10 @@ class IKFastSolver(AutoReloader):
         if len(currentcases) >= self.maxcasedepth or (scopecounter > maxlevel2scopecounter and len(currentcases) >= 2):
             log.warn('c = %d, %d levels deep in checking degenerate cases, skip\n' + \
                      '        curvars = %r\n' + \
-                     '        AllEquations = %r', \
-                     scopecounter, len(currentcases), curvars, AllEquations)
+                     '        AllEquations = %s', \
+                     scopecounter, len(currentcases), curvars, \
+                     ("\n"+" "*23).join(str(x) for x in list(AllEquations)))
+            
             lastbranch.append(AST.SolverBreak('%d cases reached'%self.maxcasedepth, [(var,self.SimplifyAtan2(self._SubstituteGlobalSymbols(eq, originalGlobalSymbols))) for var, eq in currentcasesubs], othersolvedvars, solsubs, originalGlobalSymbols, endbranchtree))
             return prevbranch
         
@@ -6583,7 +6585,9 @@ class IKFastSolver(AutoReloader):
                         else:
                             evalcond = cond
                         if eq == S.Zero:
-                            log.info('c=%d, adding case %s=%s in %s', scopecounter, possiblevar, possiblevalue,checkzero)                                
+                            log.info('c = %d, adding case %s = %s in %s', \
+                                     scopecounter, possiblevar, possiblevalue, checkzero)
+                            
                             # if the variable is 1 and part of the rotation matrix, can deduce other variables
                             if possiblevar in rotsymbols and (possiblevalue == S.One or possiblevalue == -S.One):
                                 row1 = int(possiblevar.name[-2])
@@ -6681,7 +6685,10 @@ class IKFastSolver(AutoReloader):
                                             checkexpr[2].append((rc**2, S.One-ra**2))
                                             #checkexpr[2].append((rc, -rb)) # not true
                                             #checkexpr[2].append((rd, ra)) # not true
-                                        log.info('dual constraint %r in %s', checkexpr[2],checkzero)
+                                        log.info('dual constraint %s\n' + \
+                                                 '	in %s', \
+                                                 ("\n"+" "*24).join(str(x) for x in list(checkexpr[2])), \
+                                                 checkzero)
                                     else:
                                         # shouldn't have any rotation vars
                                         if not possiblevar in rotsymbols and not possiblevar2 in rotsymbols:
@@ -6727,7 +6734,7 @@ class IKFastSolver(AutoReloader):
             trysubstitutions = self.ppsubs+self.npxyzsubs+self.rxpsubs
         else:
             trysubstitutions = self.ppsubs
-        log.debug('c = %d, %d zero-substitutions', scopecounter, len(flatzerosubstitutioneqs))
+        log.debug('c = %d, %d zero-substitution(s)', scopecounter, len(flatzerosubstitutioneqs))
         
         for iflatzerosubstitutioneqs, (cond, evalcond, othervarsubs, dictequations) in enumerate(flatzerosubstitutioneqs):
             # have to convert to fractions before substituting!
@@ -6758,9 +6765,9 @@ class IKFastSolver(AutoReloader):
                         newcases.add(singlecond)                            
                     if not self.degeneratecases.CheckCases(newcases):
                         log.info('depth = %d, c = %d, iter = %d/%d\n' +\
-                                 '        start new cases: %r', \
+                                 '        start new cases: %s', \
                                  len(currentcases), scopecounter, iflatzerosubstitutioneqs, len(flatzerosubstitutioneqs), \
-                                 list(newcases))
+                                 ("\n"+" "*25).join(str(x) for x in list(newcases)))
                         
                         if len(NewEquationsClean) > 0:
                             newcasesubs = currentcasesubs+othervarsubs
@@ -6797,10 +6804,11 @@ class IKFastSolver(AutoReloader):
                                 newtree.append(AST.SolverSolution(curvar.name, jointeval=[S.Zero,pi/2,pi,-pi/2], isHinge=self.IsHinge(curvar.name)))
                             newtree += endbranchtree
                         zerobranches.append(([evalcond]+extrazerochecks,newtree,dictequations)) # what about extradictequations?
+
                         log.info('depth = %d, c = %d, iter = %d/%d\n' \
-                                 + '        add new cases: %r', \
+                                 + '        add new cases: %s', \
                                  len(currentcases), scopecounter, iflatzerosubstitutioneqs, len(flatzerosubstitutioneqs), \
-                                 list(newcases))
+                                 ("\n"+" "*23).join(str(x) for x in list(newcases)))
                         self.degeneratecases.AddCases(newcases)
                     else:
                         log.warn('already has handled cases %r', newcases)                        
@@ -8246,7 +8254,8 @@ class IKFastSolver(AutoReloader):
         newunknownvars = unknownvars[:]
         newunknownvars.remove(unknownvar)
         if finaleq.has(*newunknownvars):
-            log.warn('equation relies on unsolved variables(%s): %s',newunknownvars,finaleq)
+            log.warn('equation relies on unsolved variables(%s):\n' + \
+                     '        %s',newunknownvars, finaleq)
             return self.SolvePairVariablesHalfAngle(raweqns,var0,var1,othersolvedvars)
 
         if not finaleq.has(unknownvar):
