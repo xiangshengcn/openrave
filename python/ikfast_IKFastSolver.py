@@ -793,10 +793,13 @@ class IKFastSolver(AutoReloader):
                                 else:
                                     checkforzeros.append(testeqmin)
                                 if checkforzeros[-1].evalf() == S.Zero:
-                                    raise self.CannotSolveError('equation evaluates to 0, so can never be ok')
+                                    raise self.CannotSolveError('EQN evaluates to 0, never OK')
                                 log.info('add atan2( %r, \n                   %r ) \n' \
-                                         + '        check zero: %r', \
-                                         substitutedargs[0], substitutedargs[1], checkforzeros[-1])
+                                         + '        check zero ' \
+                                         #+ ': %r' \
+                                         , substitutedargs[0], substitutedargs[1] \
+                                         #, checkforzeros[-1]
+                                )
                 for arg in eq.args:
                     checkforzeros += self.checkForDivideByZero(arg)
             elif eq.is_Add:
@@ -2439,13 +2442,13 @@ class IKFastSolver(AutoReloader):
                     if c < 5000:
                         peqs[0] = self.SimplifyTransformPoly (peqs[0])
                     else:
-                        log.info('skipping simplification since complexity is %d...', c)
+                        log.info('skip simplification since complexity = %d...', c)
                     #self.codeComplexity(poly0.as_expr()) < 2000:
                     c = sum([self.codeComplexity(eq) for eq in peqs[1].coeffs()])
                     if c < 5000:
                         peqs[1] = self.SimplifyTransformPoly (peqs[1])
                     else:
-                        log.info('skipping simplification since complexity is %d...', c)
+                        log.info('skip simplification since complexity = %d...', c)
                 try:
                     if rawpolyeqs2[splitindex] is not None:
                         rawpolyeqs=rawpolyeqs2[splitindex]
@@ -2826,7 +2829,8 @@ class IKFastSolver(AutoReloader):
                     if self.CheckExpressionUnique(AllEquations,e):
                         AllEquations.append(e.expand())
                 else:
-                    log.info('length equations too big, skipping %d,%d',self.codeComplexity(p2),self.codeComplexity(pe2))
+                    log.info('len(EQN) too big, skip %d, %d', \
+                             self.codeComplexity(p2),self.codeComplexity(pe2))
         self.sortComplexity(AllEquations)
         return AllEquations
         
@@ -4052,7 +4056,7 @@ class IKFastSolver(AutoReloader):
                     #d = AUdetmat.det().evalf()
                     #if d == S.Zero:
                     if not self.IsDeterminantNonZeroByEval(AUdetmat, len(rows)>9 and (numaufractions > 120 or numaufractions+numausymbols > 120)):
-                        log.info('skipping dependent index %d, numausymbols=%d, numausymbols=%d', i,numaufractions,numausymbols)
+                        log.info('skip dependent index %d, numausymbols=%d, numausymbols=%d', i,numaufractions,numausymbols)
                         continue
                     AU = AU2
                     rows.append(i)
@@ -4723,7 +4727,7 @@ class IKFastSolver(AutoReloader):
                         deg1index = i
                         break
                     else:
-                        log.warn('found equation with linear dof, but too complex so skipping')
+                        log.warn('found EQN with linear DOF, but too complex so skip')
             if deg1index is not None:
                 # try to solve one variable in terms of the others
                 if len(htvars) > 2:
@@ -5591,12 +5595,12 @@ class IKFastSolver(AutoReloader):
 
         # TODO if there is a divide by self._rotsymbols, then cannot proceed since cannot make Polynomials from them
         if fraction(eq)[1].has(*self._rotsymbols):
-            log.info('equation %s has rot symbols in denom, so skipping...', eq)
+            log.info('EQN %s has rot symbols in denom, so skip', eq)
             return eq
         if eq.is_Add:
             for arg in eq.args:
                 if fraction(arg)[1].has(*self._rotsymbols):
-                    log.info('equation %s has rot symbols in denom, so skipping...', arg)
+                    log.info('EQN %s has rot symbols in denom, so skip...', arg)
                     return eq
         
         simpiter = 0
@@ -6482,7 +6486,9 @@ class IKFastSolver(AutoReloader):
 
         maxlevel2scopecounter = 300 # used to limit how deep the hierarchy goes or otherwise IK can get too big
         if len(currentcases) >= self.maxcasedepth or (scopecounter > maxlevel2scopecounter and len(currentcases) >= 2):
-            log.warn('c=%d, %d levels deep in checking degenerate cases, skipping. curvars=%r, AllEquations=%r', scopecounter, len(currentcases), curvars, AllEquations)
+            log.warn('c=%d, %d levels deep in checking degenerate cases, skip.\n' + \
+                     'curvars = %r, AllEquations = %r', \
+                     scopecounter, len(currentcases), curvars, AllEquations)
             lastbranch.append(AST.SolverBreak('%d cases reached'%self.maxcasedepth, [(var,self.SimplifyAtan2(self._SubstituteGlobalSymbols(eq, originalGlobalSymbols))) for var, eq in currentcasesubs], othersolvedvars, solsubs, originalGlobalSymbols, endbranchtree))
             return prevbranch
         
@@ -7609,7 +7615,8 @@ class IKFastSolver(AutoReloader):
                             cvarfracsimp_denom = -cvarfracsimp_denom
                         if self.equal(svarfracsimp_denom,cvarfracsimp_denom) and not svarfracsimp_denom.is_number:
                             log.debug('denominator of %s = %s\n' + \
-                                      '        do global substitution',var.name,svarfracsimp_denom)
+                                      '        do global substitution', \
+                                      var.name, svarfracsimp_denom)
                             #denom = self.gsymbolgen.next()
                             #solversolution.dictequations.append((denom,sign(svarfracsimp_denom)))
                             svarsolsimp = self.SimplifyTransform(self.trigsimp(svarfrac[0],othersolvedvars))#*denom)
@@ -7684,10 +7691,10 @@ class IKFastSolver(AutoReloader):
                     log.debug('cannot solve equation with high degree: %s',str(eqnew))
                     continue
                 if ps.TC() == S.Zero and len(ps.monoms()) > 0:
-                    log.debug('equation %s has trivial solution, ignore', ps)
+                    log.debug('EQN %s has trivial solution, ignore', ps)
                     continue
                 if pc.TC() == S.Zero and len(pc.monoms()) > 0:
-                    log.debug('equation %s has trivial solution, ignore', pc)
+                    log.debug('EQN %s has trivial solution, ignore', pc)
                     continue
             except PolynomialError:
                 # might not be a polynomial, so ignore
@@ -7808,7 +7815,7 @@ class IKFastSolver(AutoReloader):
         reducesubs = [(shingeSymbol**2,1-chingeSymbol**2)]
         polyeqs = [Poly(eq.subs(varsubs).subs(reducesubs).expand(),unknownvars) for eq in raweqns if eq.has(prismaticSymbol,hingeSymbol)]
         if len(polyeqs) <= 1:
-            raise self.CannotSolveError('not enough equations')
+            raise self.CannotSolveError('not enough EQN')
         
         # try to solve one variable in terms of the others
         solvevariables = []
@@ -7861,7 +7868,7 @@ class IKFastSolver(AutoReloader):
         reducesubs = [(svar0**2,1-cvar0**2),(svar1**2,1-cvar1**2)]
         eqns = [eq.subs(varsubs).subs(reducesubs).expand() for eq in raweqns if eq.has(var0,var1)]
         if len(eqns) <= 1:
-            raise self.CannotSolveError('not enough equations')
+            raise self.CannotSolveError('not enough EQN')
         
         # group equations with single variables
         symbolgen = cse_main.numbered_symbols('const')
@@ -8119,7 +8126,7 @@ class IKFastSolver(AutoReloader):
                             polysymbols = paireq0[1-ivar].gens
                             totaleq = (csol**2+ssol**2-disc**2).subs(allsymbols).expand()
                             if self.codeComplexity(totaleq) < 4000:
-                                log.info('simplifying final equation to %d',self.codeComplexity(totaleq))
+                                log.info('simplifying final EQN to %d', self.codeComplexity(totaleq))
                                 totaleq = simplify(totaleq)
                             ptotal_cos = Poly(Poly(totaleq,*polysymbols).subs(polysymbols[0]**2,1-polysymbols[1]**2).subs(polysymbols[1]**2,1-polysymbols[0]**2),*polysymbols)
                             ptotal_sin = Poly(S.Zero,*polysymbols)
@@ -8153,7 +8160,7 @@ class IKFastSolver(AutoReloader):
                     except self.CannotSolveError,e:
                         log.warn('%s',e)
 
-                raise self.CannotSolveError('cannot cleanly separate pair equations')
+                raise self.CannotSolveError('cannot cleanly separate pair EQN')
 
         varindex=goodgroup[0][0]
         var = var0 if varindex < 2 else var1
