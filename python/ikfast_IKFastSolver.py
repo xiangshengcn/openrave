@@ -2163,11 +2163,7 @@ class IKFastSolver(AutoReloader):
                     if len(T1links) > 0:
                         # left multiply Trighttrans onto A_e
                         # T1links[0] = Trighttrans * T1links[0] 
-                        Trighttrans[0,0] = 0
-                        Trighttrans[1,1] = 0
-                        Trighttrans[2,2] = 0
-                        Trighttrans[3,3] = 0
-                        T1links[0] += Trighttrans
+                        T1links[0][0:3,3] += Trighttrans[0:3,3]
                     else:
                         assert(endindex is len(TestLinks))
                         T1links = [Trighttrans]
@@ -2187,12 +2183,8 @@ class IKFastSolver(AutoReloader):
                     
                     # right multiply Tlefttrans onto A_{s-1}
                     # T1links[-1] = T1links[-1] * Tlefttrans
-                    Tlefttrans[0,0] = 0
-                    Tlefttrans[1,1] = 0
-                    Tlefttrans[2,2] = 0
-                    Tlefttrans[3,3] = 0
                     Tlefttrans[0:3,3] = T1links[-1][0:3,0:3]*Tlefttrans[0:3,3]
-                    T1links[-1] += Tlefttrans
+                    T1links[-1][0:3,3] += Tlefttrans[0:3,3]
                     solveRotationFirst = True
             else:
                 # first attempt succeeds as translation eqns don't depend on hingejointvars
@@ -2204,11 +2196,7 @@ class IKFastSolver(AutoReloader):
                 if len(T1links) > 0:
                     # left multiply inv(Tlefttrans) onto inv(A_{s-1})
                     # T1links[0] = self.affineInverse(Tlefttrans) * T1links[0]
-                    Tlefttrans[0,0] = 0
-                    Tlefttrans[1,1] = 0
-                    Tlefttrans[2,2] = 0
-                    Tlefttrans[3,3] = 0
-                    T1links[0] -= Tlefttrans
+                    T1links[0][0:3,3] -= Tlefttrans[0:3,3]
                 else:
                     assert(startindex is 0)
                     # T1links = [self.affineInverse(Tlefttrans)] 
@@ -2228,12 +2216,8 @@ class IKFastSolver(AutoReloader):
                 
                 # right multiply inv(Trighttrans) onto inv(A_e)
                 # T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
-                Trighttrans[0,0] = 0
-                Trighttrans[1,1] = 0
-                Trighttrans[2,2] = 0
-                Trighttrans[3,3] = 0
                 Trighttrans[0:3,3] = T1links[-1][0:3,0:3]*Trighttrans[0:3,3]
-                T1links[-1] -= Trighttrans
+                T1links[-1][0:3,3] -= Trighttrans[0:3,3]
                 
                 solveRotationFirst = True
 
