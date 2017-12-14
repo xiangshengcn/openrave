@@ -8,7 +8,7 @@ __copyright__ = 'Copyright (C) 2009-2012 Rosen Diankov <rosen.diankov@gmail.com>
 __license__   = 'Lesser GPL, Version 3'
 __version__   = '0x1000004a' # hex of the version, has to be prefixed with 0x. also in ikfast.h
 
-# ========== TGN's modification of IPython ==========
+# ========== TGN's tools for studying how IKFast works ==========
 import os
 def clc():
     os.system('clear')
@@ -39,9 +39,9 @@ def print_matrix(matrices, ind=None):
         print matrices[i]
         print '\n',
 
-LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s]\n' + \
+LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s ]\n' + \
                  '\t%(message)s\n'
-# ========== End of TGN's modification ==============
+# ========== End of TGN's tools  ==============
 
 # numpy for computing eigenvalues
 import numpy
