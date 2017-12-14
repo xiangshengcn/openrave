@@ -68,6 +68,10 @@ logging.basicConfig( format = LOGGING_FORMAT, \
                      datefmt='%d-%m-%Y:%H:%M:%S', \
                      level=logging.DEBUG)
 log = logging.getLogger('IKFastSolver')
+hdlr = logging.FileHandler('/var/tmp/ikfast_IKFastSolver.log')
+formatter = logging.Formatter(LOGGING_FORMAT)
+hdlr.setFormatter(formatter)
+log.addHandler(hdlr)
 
 try:
     # not necessary, just used for testing

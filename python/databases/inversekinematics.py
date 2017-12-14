@@ -187,7 +187,13 @@ LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName
 logging.basicConfig( format = LOGGING_FORMAT, \
                      datefmt='%d-%m-%Y:%H:%M:%S', \
                      level=logging.DEBUG)
+
 log = logging.getLogger('ikfast_generator_cpp')
+hdlr = logging.FileHandler('/var/tmp/inversekinematics.log')
+formatter = logging.Formatter(LOGGING_FORMAT)
+hdlr.setFormatter(formatter)
+log.addHandler(hdlr)
+
 # ========== End of TGN's tools  ==============
 
 class InverseKinematicsError(Exception):
@@ -266,8 +272,9 @@ class InverseKinematicsModel(DatabaseGenerator):
         except ImportError,e:
             log.warn('failed to import ikfast, so reverting to older version: %s',e)
             self.ikfast = __import__('openravepy.ikfast_sympy0_6',fromlist=['openravepy'])
-        for handler in log.handlers:
-            self.ikfast.log.addHandler(handler)
+        #for handler in log.handlers:
+            # self.ikfast.log.addHandler(handler)
+            # TGN: self.ikfast.log seems to have no attribute 'addHandler'
         self.ikfastproblem = RaveCreateModule(self.env,'ikfast')
         if self.ikfastproblem is not None:
             self.env.Add(self.ikfastproblem)
@@ -1036,7 +1043,6 @@ class InverseKinematicsModel(DatabaseGenerator):
                      wrongrate*100, \
                      len(solutionresults[1])/numtested*100, \
                      len(solutionresults[2])/numtested*100)
-            exec(ipython_str)
         return successrate, wrongrate
     
     def show(self,delay=0.1,options=None,forceclosure=True):
