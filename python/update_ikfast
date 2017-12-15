@@ -1,0 +1,7 @@
+#!/bin/bash
+
+OPENRAVE_DIR=$MUJIN_INSTALL_DIR/lib/python2.7/site-packages/openravepy/_openravepy_0_9
+IKFAST_DIR=$MUJIN_JHBUILD_CHECKOUT_DIR/openrave/python
+
+cp $IKFAST_DIR/*.py $OPENRAVE_DIR
+cp $IKFAST_DIR/databases/*.py $OPENRAVE_DIR/databases

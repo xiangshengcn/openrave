@@ -15,3 +15,5 @@ src/
 myrelpath.pyc
 python/Doxyfile 
 *.pyc
+*.log
+*.out
