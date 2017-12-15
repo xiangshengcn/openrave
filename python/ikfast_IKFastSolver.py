@@ -234,6 +234,10 @@ class IKFastSolver(AutoReloader):
                 name = str('j%d')%idof
                 self.axismap[name] = axis
                 self.axismapinv[idof] = name
+
+        # TGN adds the following
+        self.trigvars_subs = [];
+        self.trigsubs = [];
     
     def _CheckPreemptFn(self, msg=u'', progress=0.25):
         """progress is a value from [0,1] where 0 is just starting and 1 is complete 
@@ -586,24 +590,56 @@ class IKFastSolver(AutoReloader):
         """check if eqs depends on any variable in sym
         """
         return any([eq.has(*sym) for eq in eqs]) if len(sym) > 0 else False
+
+
+    def gen_trigsubs(self, trigvars):
+        for v in trigvars:
+            if v not in self.trigvars_subs and self.IsHinge(v.name):
+                self.trigvars_subs.append(v)
+                log.info('add %s into self.trigsubs' % v)
+                self.trigsubs.append((sin(v)**2, 1-cos(v)**2))
+                self.trigsubs.append((Symbol('s%s'%v.name)**2, \
+                                      1-Symbol('c%s'%v.name)**2))
+        return
     
-    def trigsimp(self, eq,trigvars):
-        """recurses the sin**2 = 1-cos**2 equation for every trig var
+    def trigsimp_new(self, eq):
         """
+        NEW: recursively subs sin**2 for 1-cos**2 for every trig var
+        """
+                
+        eq = expand(eq)
+        curcount = eq.count_ops()
+        while True:
+            eq = eq.subs(self.trigsubs).expand()
+            newcount = eq.count_ops()
+            if IKFastSolver.equal(curcount, newcount):
+                break
+            curcount = newcount
+        return eq
+    
+    """    
+    def trigsimp(self, eq, trigvars):
+
+        # recursively subs sin**2 for 1-cos**2 for every trig var
+
+        exec(ipython_str)
         trigsubs = []
         for v in trigvars:
             if self.IsHinge(v.name):
-                trigsubs.append((sin(v)**2,1-cos(v)**2))
-                trigsubs.append((Symbol('s%s'%v.name)**2,1-Symbol('c%s'%v.name)**2))
-        eq=expand(eq)
+                trigsubs.append((sin(v)**2, 1-cos(v)**2))
+                trigsubs.append((Symbol('s%s'%v.name)**2, \
+                                 1-Symbol('c%s'%v.name)**2))
+                
+        eq = expand(eq)
         curcount = eq.count_ops()
         while True:
-            eq=eq.subs(trigsubs).expand()
+            eq = eq.subs(trigsubs).expand()
             newcount = eq.count_ops()
-            if IKFastSolver.equal(curcount,newcount):
+            if IKFastSolver.equal(curcount, newcount):
                 break
             curcount=newcount
         return eq
+    """
     
     def SimplifyAtan2(self, eq, incos=False, insin=False, epsilon=None):
         """simplifies equations like sin(atan2(y,x)) to y/sqrt(x**2+y**2)
@@ -1282,6 +1318,7 @@ class IKFastSolver(AutoReloader):
         print('========================== END OF SETUP PRINT ================================\n')
         
         # MAIN FUNCTION
+        self.gen_trigsubs(jointvars)
         chaintree = solvefn(self, LinksRaw, jointvars, isolvejointvars)
         if self.useleftmultiply:
             chaintree.leftmultiply(Tleft=self.multiplyMatrix(LinksLeft), Tleftinv=self.multiplyMatrix(LinksLeftInv[::-1]))
@@ -2000,7 +2037,6 @@ class IKFastSolver(AutoReloader):
         for T0links, T1links, transvars, rotvars, solveRotationFirst in \
             self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv): # generator
             try:
-                exec(ipython_str)
                 return self.solve6DIntersectingAxes(T0links, T1links, transvars, rotvars, \
                                                     solveRotationFirst=solveRotationFirst, \
                                                     endbranchtree=endbranchtree)
@@ -2345,12 +2381,16 @@ class IKFastSolver(AutoReloader):
         T0links = [T0posoffset] + T0links
         T1links = [T0posoffset] + T1links
         T1 = self.multiplyMatrix(T1links)
+
+        # TGN: getting into this function means solveRotationFirst is True?
+        assert(solveRotationFirst)
+        
         #othersolvedvars = rotvars + self.freejointvars if solveRotationFirst else self.freejointvars[:]
         # in original code, solveRotationFirst is either None or False
         othersolvedvars = self.freejointvars[:]
         T1linksinv = [self.affineInverse(T) for T in T1links]
-        AllEquations = self.buildEquationsFromPositions(T1links,T1linksinv,transvars,othersolvedvars,uselength=True)
-        self.checkSolvability(AllEquations,transvars,self.freejointvars)
+        AllEquations = self.buildEquationsFromPositions(T1links, T1linksinv, transvars, othersolvedvars, uselength=True)
+        self.checkSolvability(AllEquations, transvars, self.freejointvars)
         rottree = []
         #if solveRotationFirst:
         #    # can even get here?? it is either None or False
@@ -2360,6 +2400,7 @@ class IKFastSolver(AutoReloader):
         newendbranchtree = [AST.SolverSequence([rottree])]
         curvars = transvars[:]
         solsubs=self.freevarsubs[:]
+
         transtree = self.SolveAllEquations(AllEquations, \
                                            curvars = curvars, \
                                            othersolvedvars = othersolvedvars[:], \
@@ -2859,50 +2900,66 @@ class IKFastSolver(AutoReloader):
         chaintree.dictequations += self.ppsubs
         return chaintree
 
-    def buildEquationsFromTwoSides(self,leftside, rightside, usedvars, uselength=True):
+    def buildEquationsFromTwoSides(self, leftside, rightside, usedvars, uselength = True):
         # try to shift all the constants of each Position expression to one side
         for i in range(len(leftside)):
             for j in range(leftside[i].shape[0]):
-                p = leftside[i][j]
+                p   = leftside[i][j]
                 pee = rightside[i][j]
-                pconstterm = None
+                pconstterm   = None
                 peeconstterm = None
+
+                # pconstterm consists of all constant terms in p
                 if p.is_Add:
                     pconstterm = [term for term in p.args if term.is_number]
                 elif p.is_number:
                     pconstterm = [p]
                 else:
                     continue
+
+                # peeconstterm consists of all constant terms in pee
                 if pee.is_Add:
                     peeconstterm = [term for term in pee.args if term.is_number]
                 elif pee.is_number:
                     peeconstterm = [pee]
                 else:
                     continue
+
                 if len(pconstterm) > 0 and len(peeconstterm) > 0:
                     # shift it to the one that has the least terms
                     for term in peeconstterm if len(p.args) < len(pee.args) else pconstterm:
-                        leftside[i][j] -= term
+                        leftside[i][j]  -= term
                         rightside[i][j] -= term
 
         AllEquations = []
         for i in range(len(leftside)):
             for j in range(leftside[i].shape[0]):
-                e = self.trigsimp(leftside[i][j] - rightside[i][j],usedvars)
+                self.gen_trigsubs(usedvars)
+                e = self.trigsimp_new(leftside[i][j]-rightside[i][j])
+                # old function
+                # e2 = self.trigsimp(leftside[i][j]-rightside[i][j], usedvars)
+                # print "e  = ", e
+                # print "e2 = ", e2
+                # assert(e==e2)
+
                 if self.codeComplexity(e) < 1500:
                     e = self.SimplifyTransform(e)
                 if self.CheckExpressionUnique(AllEquations,e):
                     AllEquations.append(e)
+                    
             if uselength:
-                p2 = S.Zero
+                # here length means ||.||^2_2, square of the 2-norm
+                p2  = S.Zero
                 pe2 = S.Zero
                 for j in range(leftside[i].shape[0]):
-                    p2 += leftside[i][j]**2
+                    p2  += leftside[i][j]**2
                     pe2 += rightside[i][j]**2
                 if self.codeComplexity(p2) < 1200 and self.codeComplexity(pe2) < 1200:
                     # sympy's trigsimp/customtrigsimp give up too easily
-                    e = self.SimplifyTransform(self.trigsimp(p2,usedvars)-self.trigsimp(pe2,usedvars))
-                    if self.CheckExpressionUnique(AllEquations,e):
+                    e = self.SimplifyTransform(self.trigsimp_new(p2)-self.trigsimp_new(pe2))
+
+                    # if this length equation is not in our equation set, then add it into the set  
+                    if self.CheckExpressionUnique(AllEquations, e):
                         AllEquations.append(e.expand())
                 else:
                     log.info('length of equation too big, skip %d, %d', \
@@ -2934,14 +2991,18 @@ class IKFastSolver(AutoReloader):
             if numvarsdone > 2:
                 # more than 2 variables is almost always useless
                 break
+
         if len(Positions) == 0:
             Positions.append(zeros((len(indices),1)))
             Positionsee.append(self.multiplyMatrix(T1links).extract(indices,[3]))
+
+        # set constants below threshold to S.Zero
         if removesmallnumbers:
             for i in range(len(Positions)):
                 for j in range(len(indices)):
-                    Positions[i][j] = self.RoundEquationTerms(Positions[i][j].expand())
+                    Positions[i][j]   = self.RoundEquationTerms(Positions[i][j].expand())
                     Positionsee[i][j] = self.RoundEquationTerms(Positionsee[i][j].expand())
+                    
         return self.buildEquationsFromTwoSides(Positions, Positionsee, \
                                                transvars+othersolvedvars, \
                                                uselength = uselength)
@@ -2961,7 +3022,13 @@ class IKFastSolver(AutoReloader):
                 R = self.multiplyMatrix(T0links[(i+1):])
                 Reqs = []
                 for i in range(3):
-                    Reqs.append([self.trigsimp(Raccum[i,j]-R[i,j],othersolvedvars+rotvars) for j in range(3)])
+                    
+                    # TGN: ensure curvars is a subset of self.trigvars_subs
+                    assert(len([z for z in othersolvedvars+rotvars if z in self.trigvars_subs]) == len(othersolvedvars+rotvars))
+                    # equivalent?
+                    assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars+rotvars]))
+                    
+                    Reqs.append([self.trigsimp_new(Raccum[i,j]-R[i,j]) for j in range(3)])
                 for i in range(3):
                     for eq in Reqs[i]:
                         AllEquations.append(eq)
@@ -5997,7 +6064,11 @@ class IKFastSolver(AutoReloader):
                 NewEquations.append(eq)
         return NewEquations
     
-    def SolveAllEquations(self,AllEquations,curvars,othersolvedvars,solsubs,endbranchtree,currentcases=None,unknownvars=None, currentcasesubs=None, canguessvars=True):
+    def SolveAllEquations(self, AllEquations, curvars, othersolvedvars, solsubs, endbranchtree, \
+                          currentcases = None, \
+                          unknownvars = None, \
+                          currentcasesubs = None, \
+                          canguessvars = True):
         """
         :param canguessvars: if True, can guess the variables given internal conditions are satisified
         """
@@ -6052,7 +6123,15 @@ class IKFastSolver(AutoReloader):
         # This cannot be known at compile time, so the equation is selected and any other possibilities are rejected.
         # In the bertold robot case, the next possibility is a pair-wise solution involving two variables
         if any([s[0].numsolutions()==1 for s in solutions]):
-            return self.AddSolution(solutions,AllEquations,curvars,othersolvedvars,solsubs,endbranchtree,currentcases=currentcases, currentcasesubs=currentcasesubs, unknownvars=unknownvars)
+            return self.AddSolution(solutions, \
+                                    AllEquations, \
+                                    curvars, \
+                                    othersolvedvars, \
+                                    solsubs, \
+                                    endbranchtree, \
+                                    currentcases = currentcases, \
+                                    currentcasesubs = currentcasesubs, \
+                                    unknownvars = unknownvars)
         
         curvarsubssol = []
         for var0,var1 in combinations(curvars,2):
@@ -6079,14 +6158,21 @@ class IKFastSolver(AutoReloader):
             NewEquationsAll = []
             hasExtraConstraints = False
             for eq in raweqns:
-                neweq = self.trigsimp(eq.subs(var0,dummyvar-var1).expand(trig=True),curvars)
+
+                # TGN: ensure curvars is a subset of self.trigvars_subs
+                assert(len([z for z in curvars if z in self.trigvars_subs]) == len(curvars))
+                # equivalent?
+                assert(not any([(z not in self.trigvars_subs) for z in curvars]))
+                       
+                neweq = self.trigsimp_new(eq.subs(var0,dummyvar-var1).expand(trig=True))
                 eq = neweq.subs(self.freevarsubs+solsubs)
                 if self.CheckExpressionUnique(NewEquationsAll,eq):
                     NewEquationsAll.append(eq)
                 if neweq.has(dummyvar):
                     if neweq.has(*(othervars+curvars)):
                         hasExtraConstraints = True
-                        #break # don't know why breaking here... sometimes equations can be too complex but that doesn't mean variables are not dependent
+                        # break
+                        # don't know why breaking here... sometimes equations can be too complex but that doesn't mean variables are not dependent
                     else:
                         eq = neweq.subs(self.freevarsubs+solsubs)
                         if self.CheckExpressionUnique(NewEquations,eq):
@@ -6098,7 +6184,13 @@ class IKFastSolver(AutoReloader):
                 hasExtraConstraints = False
                 dummyvalue = var0 - var1
                 for eq in raweqns:
-                    neweq = self.trigsimp(eq.subs(var0,dummyvar+var1).expand(trig=True),curvars)
+
+                    # TGN: ensure curvars is a subset of self.trigvars_subs
+                    assert(len([z for z in curvars if z in self.trigvars_subs]) == len(curvars))
+                    # equivalent?
+                    assert(not any([(z not in self.trigvars_subs) for z in curvars]))
+                        
+                    neweq = self.trigsimp_new(eq.subs(var0,dummyvar+var1).expand(trig=True))
                     eq = neweq.subs(self.freevarsubs+solsubs)
                     if self.CheckExpressionUnique(NewEquationsAll,eq):
                         NewEquationsAll.append(eq)
@@ -7715,8 +7807,14 @@ class IKFastSolver(AutoReloader):
                         if self.chop(cvarfrac[1])== 0:
                             break
                         # sometimes the returned simplest solution makes really gross approximations
-                        svarfracsimp_denom = self.SimplifyTransform(self.trigsimp(svarfrac[1],othersolvedvars))
-                        cvarfracsimp_denom = self.SimplifyTransform(self.trigsimp(cvarfrac[1],othersolvedvars))
+
+                        # TGN: ensure curvars is a subset of self.trigvars_subs
+                        assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                        # equivalent?
+                        assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                        
+                        svarfracsimp_denom = self.SimplifyTransform(self.trigsimp_new(svarfrac[1]))
+                        cvarfracsimp_denom = self.SimplifyTransform(self.trigsimp_new(cvarfrac[1]))
                         # self.SimplifyTransform could help in reducing denoms further...
                         denomsequal = False
                         if self.equal(svarfracsimp_denom,cvarfracsimp_denom):
@@ -7730,15 +7828,26 @@ class IKFastSolver(AutoReloader):
                                       var.name, svarfracsimp_denom)
                             #denom = self.gsymbolgen.next()
                             #solversolution.dictequations.append((denom,sign(svarfracsimp_denom)))
-                            svarsolsimp = self.SimplifyTransform(self.trigsimp(svarfrac[0],othersolvedvars))#*denom)
-                            cvarsolsimp = self.SimplifyTransform(self.trigsimp(cvarfrac[0],othersolvedvars))#*denom)
+
+                            # TGN: ensure curvars is a subset of self.trigvars_subs
+                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                            # equivalent?
+                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            
+                            svarsolsimp = self.SimplifyTransform(self.trigsimp_new(svarfrac[0]))#*denom)
+                            cvarsolsimp = self.SimplifyTransform(self.trigsimp_new(cvarfrac[0]))#*denom)
                             solversolution.FeasibleIsZeros = False
                             solversolution.presetcheckforzeros.append(svarfracsimp_denom)
                             # instead of doing atan2(sign(dummy)*s, sign(dummy)*c), do atan2(s,c) + pi/2*(1-1/sign(dummy)) so equations become simpler
                             expandedsol = atan2(svarsolsimp,cvarsolsimp) + pi/2*(-S.One + S.One/sign(svarfracsimp_denom))
                         else:
-                            svarfracsimp_num = self.SimplifyTransform(self.trigsimp(svarfrac[0],othersolvedvars))
-                            cvarfracsimp_num = self.SimplifyTransform(self.trigsimp(cvarfrac[0],othersolvedvars))
+                            # TGN: ensure curvars is a subset of self.trigvars_subs
+                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                            # equivalent?
+                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            
+                            svarfracsimp_num = self.SimplifyTransform(self.trigsimp_new(svarfrac[0]))
+                            cvarfracsimp_num = self.SimplifyTransform(self.trigsimp_new(cvarfrac[0]))
                             svarsolsimp = svarfracsimp_num/svarfracsimp_denom
                             cvarsolsimp = cvarfracsimp_num/cvarfracsimp_denom
                             if svarsolsimp.is_number and cvarsolsimp.is_number:
@@ -7852,7 +7961,11 @@ class IKFastSolver(AutoReloader):
                         tempsolutions = solve(eqnew.subs(varsym.svar,sqrt(1-varsym.cvar**2)).expand(),varsym.cvar)
                         jointsolutions = []
                         for s in tempsolutions:
-                            s2 = self.trigsimp(s.subs(symbols+varsym.subsinv),othersolvedvars)
+                            # TGN: ensure curvars is a subset of self.trigvars_subs
+                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                            # equivalent?
+                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            s2 = self.trigsimp_new(s.subs(symbols+varsym.subsinv))
                             if self.isValidSolution(s2):
                                 jointsolutions.append(self.SimplifyTransform(s2))
                         if len(jointsolutions) > 0 and all([self.isValidSolution(s) and self.isValidSolution(s) for s in jointsolutions]):
@@ -7869,7 +7982,13 @@ class IKFastSolver(AutoReloader):
                 try:
                     if self.countVariables(eqnew,varsym.svar) <= 1 or (self.countVariables(eqnew,varsym.svar) <= 2 and self.countVariables(eqnew,varsym.cvar) == 0): # anything more than 1 implies quartic equation
                         tempsolutions = solve(eqnew.subs(varsym.cvar,sqrt(1-varsym.svar**2)).expand(),varsym.svar)
-                        jointsolutions = [self.SimplifyTransform(self.trigsimp(s.subs(symbols+varsym.subsinv),othersolvedvars)) for s in tempsolutions]
+
+                        # TGN: ensure curvars is a subset of self.trigvars_subs
+                        assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                        # equivalent?
+                        assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))                        
+                        jointsolutions = [self.SimplifyTransform(self.trigsimp_new(s.subs(symbols+varsym.subsinv), \
+                                                                               )) for s in tempsolutions]
                         if all([self.isValidSolution(s) and self.isValidSolution(s) for s in jointsolutions]) and len(jointsolutions) > 0:
                             solutions.append(AST.SolverSolution(var.name,jointevalsin=jointsolutions,isHinge=self.IsHinge(var.name)))
                             solutions[-1].equationsused = equationsused
@@ -8298,9 +8417,21 @@ class IKFastSolver(AutoReloader):
         finaleq = None
         checkforzeros = []
         if domagicsquare:
+
+            # TGN: ensure curvars is a subset of self.trigvars_subs
+            assert(len([z for z in othersolvedvars+[var0,var1] if z in self.trigvars_subs]) == len(othersolvedvars+[var0,var1]))
+            # equivalent?
+            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars+[var0,var1]]))
+
             # here is the magic transformation:
-            finaleq = self.trigsimp(expand(((complexterms[0]**2+complexterms[1]**2) - simpleterms[0]**2 - simpleterms[1]**2).subs(varsubsinv)),othersolvedvars+[var0,var1]).subs(varsubs)
-            denoms = [fraction(simpleterms[0])[1], fraction(simpleterms[1])[1], fraction(complexterms[0])[1], fraction(complexterms[1])[1]]
+            finaleq = self.trigsimp_new(expand(((complexterms[0]**2+complexterms[1]**2) \
+                                                - simpleterms[0]**2 - simpleterms[1]**2).subs(varsubsinv))).subs(varsubs)
+            
+            denoms = [fraction(simpleterms[0])[1], \
+                      fraction(simpleterms[1])[1], \
+                      fraction(complexterms[0])[1], \
+                      fraction(complexterms[1])[1]]
+            
             lcmvars = self.pvars+unknownvars
             for othersolvedvar in othersolvedvars:
                 lcmvars += self.Variable(othersolvedvar).vars
@@ -8317,7 +8448,10 @@ class IKFastSolver(AutoReloader):
             # try to reduce finaleq
             p0 = Poly(simpleterms[0],unknownvars[varindex],unknownvars[varindex+1])
             p1 = Poly(simpleterms[1],unknownvars[varindex],unknownvars[varindex+1])
-            if max(p0.degree_list()) > 1 and max(p1.degree_list()) > 1 and max(p0.degree_list()) == max(p1.degree_list()) and p0.LM() == p1.LM():
+            if max(p0.degree_list()) > 1 \
+               and max(p1.degree_list()) > 1 \
+               and max(p0.degree_list()) == max(p1.degree_list()) \
+               and p0.LM() == p1.LM():
                 finaleq = (p0*p1.LC()-p1*p0.LC()).as_expr()
                 finaleq = expand(simplify(finaleq.subs(allsymbols)))
                 if finaleq == S.Zero:
@@ -8358,10 +8492,10 @@ class IKFastSolver(AutoReloader):
         # now that everything is with respect to one variable, simplify and solve the equation
         eqnew, symbols = self.groupTerms(finaleq, unknownvars, symbolgen)
         allsymbols += symbols
-        solutions=solve(eqnew,unknownvar)
+        solutions = solve(eqnew,unknownvar)
         log.info('pair solution: %s, %s', eqnew,solutions)
         if solutions:
-            solversolution=AST.SolverSolution(var.name, isHinge=self.IsHinge(var.name))
+            solversolution = AST.SolverSolution(var.name, isHinge=self.IsHinge(var.name))
             processedsolutions = []
             for s in solutions:
                 processedsolution = s.subs(allsymbols+varsubsinv).subs(varsubs)
@@ -8406,7 +8540,9 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def _GetSumSquares(expr):
-        """if expr is a sum of squares, returns the list of individual expressions that were squared. otherwise returns None
+        """
+        if expr is a sum of squares, returns the list of individual expressions that were squared. 
+        otherwise returns None
         """
         values = []
         if expr.is_Add:
@@ -8434,7 +8570,8 @@ class IKFastSolver(AutoReloader):
     
     @staticmethod
     def recursiveFraction(expr):
-        """return the numerator and denominator of th eexpression as if it was one fraction
+        """
+        return the numerator and denominator of the expression as if it was one fraction
         """
         if expr.is_Add:
             allpoly = []
