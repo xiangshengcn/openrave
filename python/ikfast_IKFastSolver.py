@@ -2000,6 +2000,7 @@ class IKFastSolver(AutoReloader):
         for T0links, T1links, transvars, rotvars, solveRotationFirst in \
             self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv): # generator
             try:
+                exec(ipython_str)
                 return self.solve6DIntersectingAxes(T0links, T1links, transvars, rotvars, \
                                                     solveRotationFirst=solveRotationFirst, \
                                                     endbranchtree=endbranchtree)
@@ -2302,7 +2303,8 @@ class IKFastSolver(AutoReloader):
         return peq.from_dict(terms, *peq.gens)
 
     def iterateThreeNonIntersectingAxes(self, solvejointvars, Links, LinksInv):
-        """check for three consecutive non-intersecting axes.
+        """
+        check for three consecutive non-intersecting axes.
         if several points exist, so have to choose one that is least complex?
         """
         ilinks = [i for i,Tlink in enumerate(Links) if self.has(Tlink,*solvejointvars)]
@@ -2327,8 +2329,11 @@ class IKFastSolver(AutoReloader):
                     log.info('found 3 consecutive non-intersecting axes links[%d:%d], vars=%s',startindex,endindex,str(usedvars))
                     yield T0links, T1links
 
-    def solve6DIntersectingAxes(self, T0links, T1links, transvars,rotvars,solveRotationFirst,endbranchtree):
-        """Solve 6D equations using fact that 3 axes are intersecting. The 3 intersecting axes are all part of T0links and will be used to compute the rotation of the robot. The other 3 axes are part of T1links and will be used to first compute the position.
+    def solve6DIntersectingAxes(self, T0links, T1links, transvars, rotvars, solveRotationFirst, endbranchtree):
+        """
+        Solve 6D equations using fact that 3 axes are intersecting. 
+        The 3 intersecting axes are all part of T0links and will be used to compute the rotation of the robot. 
+        The other 3 axes are part of T1links and will be used to first compute the position.
         """
         from ikfast_AST import AST
         
@@ -2355,7 +2360,11 @@ class IKFastSolver(AutoReloader):
         newendbranchtree = [AST.SolverSequence([rottree])]
         curvars = transvars[:]
         solsubs=self.freevarsubs[:]
-        transtree = self.SolveAllEquations(AllEquations,curvars=curvars,othersolvedvars=othersolvedvars[:],solsubs=solsubs,endbranchtree=newendbranchtree)
+        transtree = self.SolveAllEquations(AllEquations, \
+                                           curvars = curvars, \
+                                           othersolvedvars = othersolvedvars[:], \
+                                           solsubs = solsubs, \
+                                           endbranchtree = newendbranchtree)
         #transtree = self.verifyAllEquations(AllEquations, \
         #                                    rotvars if solveRotationFirst \
         #                                    else transvars+rotvars, \
@@ -2383,17 +2392,22 @@ class IKFastSolver(AutoReloader):
         try:
             T1sub = T1.subs(solvedvarsubs)
             othersolvedvars = self.freejointvars if solveRotationFirst else transvars+self.freejointvars
-            AllEquations = self.buildEquationsFromRotation(T0links,Ree,rotvars,othersolvedvars)
-            self.checkSolvability(AllEquations,rotvars,othersolvedvars)
+            AllEquations = self.buildEquationsFromRotation(T0links, Ree, rotvars, othersolvedvars)
+            self.checkSolvability(AllEquations, rotvars, othersolvedvars)
             currotvars = rotvars[:]
-            rottree += self.SolveAllEquations(AllEquations,curvars=currotvars,othersolvedvars=othersolvedvars,solsubs=self.freevarsubs[:],endbranchtree=storesolutiontree)
+            rottree += self.SolveAllEquations(AllEquations, \
+                                              curvars = currotvars, \
+                                              othersolvedvars = othersolvedvars, \
+                                              solsubs = self.freevarsubs[:], \
+                                              endbranchtree = storesolutiontree)
             # has to be after SolveAllEquations...?
             for i in range(3):
                 for j in range(3):
                     self.globalsymbols.append((Ree[i,j],T1sub[i,j]))
 
             if len(rottree) == 0:
-                raise self.CannotSolveError('could not solve for all rotation variables: %s:%s'%(str(freevar),str(freevalue)))
+                raise self.CannotSolveError('could not solve for all rotation variables: %s:%s' % \
+                                            (str(freevar), str(freevalue)))
 
             #if solveRotationFirst:
             #    solvertree.append(AST.SolverRotation(T1sub, rottree))
@@ -2410,7 +2424,7 @@ class IKFastSolver(AutoReloader):
             
     def solveFullIK_6DGeneral(self, T0links, T1links, solvejointvars, endbranchtree, usesolvers=7):
         """Solve 6D equations of a general kinematics structure.
-        This method only works if there exists 3 consecutive joints in that do not always intersect!
+        This method only works if there exists 3 consecutive joints that do not always intersect!
         """
         self._iktype = 'transform6d'
         rawpolyeqs2 = [None,None]
@@ -2498,13 +2512,23 @@ class IKFastSolver(AutoReloader):
         if len(curvars) > 0:
             self.sortComplexity(AllEquationsExtra)
             self.checkSolvability(AllEquationsExtra,curvars,self.freejointvars+usedvars)
-            leftovertree = self.SolveAllEquations(AllEquationsExtra,curvars=curvars,othersolvedvars = self.freejointvars+usedvars,solsubs = solsubs,endbranchtree=origendbranchtree)
+            leftovertree = self.SolveAllEquations(AllEquationsExtra, \
+                                                  curvars = curvars, \
+                                                  othersolvedvars = self.freejointvars+usedvars, \
+                                                  solsubs = solsubs, \
+                                                  endbranchtree = origendbranchtree)
             leftovervarstree.append(AST.SolverFunction('innerfn',leftovertree))
         else:
             leftovervarstree += origendbranchtree
         return coupledsolutions
     
-    def solveFullIK_TranslationAxisAngle4D(self, LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.One,S.Zero,S.Zero]),rawmanippos=Matrix(3,1,[S.Zero,S.Zero,S.Zero]),rawglobaldir=Matrix(3,1,[S.Zero,S.Zero,S.One]), rawglobalnormaldir=None, ignoreaxis=None, rawmanipnormaldir=None, Tmanipraw=None):
+    def solveFullIK_TranslationAxisAngle4D(self, LinksRaw, jointvars, isolvejointvars, \
+                                           rawmanipdir  = Matrix(3,1,[S.One,S.Zero,S.Zero]),  \
+                                           rawmanippos  = Matrix(3,1,[S.Zero,S.Zero,S.Zero]), \
+                                           rawglobaldir = Matrix(3,1,[S.Zero,S.Zero,S.One]),  \
+                                           rawglobalnormaldir = None,
+                                           ignoreaxis = None, rawmanipnormaldir = None, \
+                                           Tmanipraw = None):
         """Solves 3D translation + Angle with respect to an axis
         :param rawglobalnormaldir: the axis in the base coordinate system that will be computing a rotation about
         :param rawglobaldir: the axis normal to rawglobalnormaldir that represents the 0 angle.
@@ -2569,7 +2593,8 @@ class IKFastSolver(AutoReloader):
         else:
             self.Tfinal[0,0] = atan2(binormaldir.dot(Tallmult[0:3,0:3]*manipdir), globaldir.dot(Tallmult[0:3,0:3]*manipdir))
         if self.Tfinal[0,0] == nan:
-            raise self.CannotSolveError('cannot solve 4D axis angle IK. Most likely manipulator direction is aligned with the rotation axis')
+            raise self.CannotSolveError('cannot solve 4D axis angle IK. ' + \
+                                        'Most likely manipulator direction is aligned with the rotation axis')
         
         self.Tfinal[0:3,3] = Tallmult[0:3,0:3]*manippos+Tallmult[0:3,3]
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars,self.Tfinal,numsolutions=4)
@@ -2590,7 +2615,12 @@ class IKFastSolver(AutoReloader):
         Tmanipposinv[0:3,3] = -manippos
         T1links = [Tmanipposinv]+LinksInv[::-1]+[self.Tee]
         T1linksinv = [self.affineInverse(Tmanipposinv)]+Links[::-1]+[self.Teeinv]
-        AllEquations = self.buildEquationsFromPositions(T1links,T1linksinv,solvejointvars,self.freejointvars,uselength=True, ignoreaxis=ignoreaxis)
+        AllEquations = self.buildEquationsFromPositions(T1links, \
+                                                        T1linksinv,\
+                                                        solvejointvars, \
+                                                        self.freejointvars, \
+                                                        uselength = True, \
+                                                        ignoreaxis = ignoreaxis)
         
         if not all([abs(eq.subs(self.testconsistentvalues[0]).evalf())<=1e-10 for eq in AllEquations]):
             raise self.CannotSolveError('some equations are not consistent with the IK, double check if using correct IK type')
@@ -2669,20 +2699,33 @@ class IKFastSolver(AutoReloader):
         self.sortComplexity(AllEquations)
         endbranchtree = [AST.SolverStoreSolution (jointvars,isHinge=[self.IsHinge(var.name) for var in jointvars])]
         if extravar is not None:
-            solution=AST.SolverSolution(extravar[0].name, jointeval=[extravar[1]],isHinge=self.IsHinge(extravar[0].name))
+            solution = AST.SolverSolution(extravar[0].name, \
+                                          jointeval = [extravar[1]], \
+                                          isHinge = self.IsHinge(extravar[0].name))
             endbranchtree.insert(0,solution)
         
         try:
-            tree = self.SolveAllEquations(AllEquations,curvars=solvejointvars[:],othersolvedvars=self.freejointvars,solsubs=self.freevarsubs[:],endbranchtree=endbranchtree)
+            tree = self.SolveAllEquations(AllEquations, \
+                                          curvars = solvejointvars[:], \
+                                          othersolvedvars = self.freejointvars, \
+                                          solsubs = self.freevarsubs[:], \
+                                          endbranchtree = endbranchtree)
             tree = self.verifyAllEquations(AllEquations,solvejointvars,self.freevarsubs,tree)
+            
         except self.CannotSolveError, e:
             log.debug('failed to solve using SolveAllEquations: %s', e)
             if 0:
                 solvejointvar0sols = solve(AllEquations[4], solvejointvars[0])
                 NewEquations = [eq.subs(solvejointvars[0], solvejointvar0sols[0]) for eq in AllEquations]
-                newsolution=AST.SolverSolution(solvejointvars[0].name, jointeval=solvejointvar0sols,isHinge=self.IsHinge(solvejointvars[0].name))
+                newsolution=AST.SolverSolution(solvejointvars[0].name, \
+                                               jointeval = solvejointvar0sols, \
+                                               isHinge = self.IsHinge(solvejointvars[0].name))
                 endbranchtree.insert(0,newsolution)
-                tree = self.SolveAllEquations(NewEquations,curvars=solvejointvars[1:],othersolvedvars=self.freejointvars,solsubs=self.freevarsubs[:],endbranchtree=endbranchtree)
+                tree = self.SolveAllEquations(NewEquations, \
+                                              curvars = solvejointvars[1:], \
+                                              othersolvedvars = self.freejointvars, \
+                                              solsubs = self.freevarsubs[:], \
+                                              endbranchtree = endbranchtree)
             else:
                 othersolvedvars = self.freejointvars[:]
                 solsubs = self.freevarsubs[:]
@@ -2697,13 +2740,17 @@ class IKFastSolver(AutoReloader):
                     curvarsym = self.Variable(curvar)
                     raweqns = []
                     for e in AllEquations:
-                        if (len(othervars) == 0 or not e.has(*othervars)) and e.has(curvar,curvarsym.htvar,curvarsym.cvar,curvarsym.svar):
+                        if (len(othervars) == 0 or not e.has(*othervars)) \
+                           and e.has(curvar, curvarsym.htvar, curvarsym.cvar, curvarsym.svar):
                             eq = e.subs(self.freevarsubs+solsubs)
                             if self.CheckExpressionUnique(raweqns,eq):
                                 raweqns.append(eq)
                     if len(raweqns) > 0:
                         try:
-                            rawsolutions=self.solveSingleVariable(self.sortComplexity(raweqns),curvar,othersolvedvars,unknownvars=solvejointvars)
+                            rawsolutions = self.solveSingleVariable(self.sortComplexity(raweqns), \
+                                                                    curvar, \
+                                                                    othersolvedvars, \
+                                                                    unknownvars = solvejointvars)
                             for solution in rawsolutions:
                                 self.ComputeSolutionComplexity(solution,othersolvedvars,solvejointvars)
                                 solutions.append((solution,curvar))
@@ -2733,7 +2780,8 @@ class IKFastSolver(AutoReloader):
                     else:
                         polyvars.append(v)
                 polysubsinv = [(b,a) for a,b in polysubs]
-                rawpolyeqs = [Poly(Poly(eq.subs(polysubs),*polyvars).subs(trigsubs),*polyvars) for eq in AllEquations if eq.has(*curvars)]
+                rawpolyeqs = [Poly(Poly(eq.subs(polysubs),*polyvars).subs(trigsubs),*polyvars) \
+                              for eq in AllEquations if eq.has(*curvars)]
 
                 dummys = []
                 dummysubs = []
@@ -2743,7 +2791,8 @@ class IKFastSolver(AutoReloader):
                     dummy = Symbol('ht%s'%polyvars[i].name[1:])
                     # [0] - cos, [1] - sin
                     dummys.append(dummy)
-                    dummysubs += [(polyvars[i],(1-dummy**2)/(1+dummy**2)),(polyvars[i+1],2*dummy/(1+dummy**2))]
+                    dummysubs += [(polyvars[i],(1-dummy**2)/(1+dummy**2)),\
+                                  (polyvars[i+1],2*dummy/(1+dummy**2))]
                     var = polyvars[i].subs(self.invsubs).args[0]
                     dummysubs2.append((var,2*atan(dummy)))
                     dummyvars.append((dummy,tan(0.5*var)))
@@ -2782,12 +2831,31 @@ class IKFastSolver(AutoReloader):
                 if exportcoeffeqs is None:
                     raise self.CannotSolveError('failed to solveDialytically')
 
-                coupledsolution = AST.SolverCoeffFunction(jointnames=[v.name for v in curvars],jointeval=[v[1] for v in dummysubs2],jointevalcos=[dummysubs[2*i][1] for i in range(len(curvars))],jointevalsin=[dummysubs[2*i+1][1] for i in range(len(curvars))],isHinges=[self.IsHinge(v.name) for v in curvars],exportvar=[v.name for v in dummys],exportcoeffeqs=exportcoeffeqs,exportfnname='solvedialyticpoly12qep',rootmaxdim=16)
+                coupledsolution = AST.SolverCoeffFunction(jointnames = [v.name for v in curvars], \
+                                                          jointeval = [v[1] for v in dummysubs2], \
+                                                          jointevalcos = [dummysubs[2*i][1] \
+                                                                          for i in range(len(curvars))], \
+                                                          jointevalsin = [dummysubs[2*i+1][1] \
+                                                                          for i in range(len(curvars))], \
+                                                          isHinges = [self.IsHinge(v.name) \
+                                                                      for v in curvars], \
+                                                          exportvar = [v.name for v in dummys], \
+                                                          exportcoeffeqs = exportcoeffeqs, \
+                                                          exportfnname = 'solvedialyticpoly12qep', \
+                                                          rootmaxdim = 16)
                 self.usinglapack = True
-                tree = [firstsolution,coupledsolution]+ endbranchtree
+                tree = [firstsolution, coupledsolution]+ endbranchtree
 
         # package final solution
-        chaintree = AST.SolverIKChainAxisAngle([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], [(v,i) for v,i in izip(self.freejointvars,self.ifreejointvars)], Pee=self.Tee[0:3,3].subs(self.freevarsubs), angleee=self.Tee[0,0].subs(self.freevarsubs),jointtree=tree,Pfk=self.Tfinal[0:3,3],anglefk=self.Tfinal[0,0],iktype=iktype)
+        chaintree = AST.SolverIKChainAxisAngle([(jointvars[ijoint],ijoint) \
+                                                for ijoint in isolvejointvars], \
+                                               [(v,i) for v,i in izip(self.freejointvars,self.ifreejointvars)], \
+                                               Pee = self.Tee[0:3,3].subs(self.freevarsubs), \
+                                               angleee = self.Tee[0,0].subs(self.freevarsubs), \
+                                               jointtree = tree, \
+                                               Pfk = self.Tfinal[0:3,3], \
+                                               anglefk = self.Tfinal[0,0], \
+                                               iktype = iktype)
         chaintree.dictequations += self.ppsubs
         return chaintree
 
@@ -2842,7 +2910,10 @@ class IKFastSolver(AutoReloader):
         self.sortComplexity(AllEquations)
         return AllEquations
         
-    def buildEquationsFromPositions(self,T1links,T1linksinv,transvars,othersolvedvars,uselength=True,removesmallnumbers=True, ignoreaxis=None):
+    def buildEquationsFromPositions(self, T1links, T1linksinv, transvars, othersolvedvars, \
+                                    uselength = True, \
+                                    removesmallnumbers = True, \
+                                    ignoreaxis = None):
         """multiplies out all the matrices and builds up the equations
         :param ignoreaxis: if not None, can be 0, 1, 2 to specify the axes which should be ignored
         """
@@ -2871,7 +2942,9 @@ class IKFastSolver(AutoReloader):
                 for j in range(len(indices)):
                     Positions[i][j] = self.RoundEquationTerms(Positions[i][j].expand())
                     Positionsee[i][j] = self.RoundEquationTerms(Positionsee[i][j].expand())
-        return self.buildEquationsFromTwoSides(Positions,Positionsee,transvars+othersolvedvars,uselength=uselength)
+        return self.buildEquationsFromTwoSides(Positions, Positionsee, \
+                                               transvars+othersolvedvars, \
+                                               uselength = uselength)
 
     def buildEquationsFromRotation(self,T0links,Ree,rotvars,othersolvedvars):
         """Ree is a 3x3 matrix
@@ -2905,7 +2978,9 @@ class IKFastSolver(AutoReloader):
         self.sortComplexity(AllEquations)
         return AllEquations
 
-    def buildRaghavanRothEquationsFromMatrix(self,T0,T1,solvejointvars, simplify=True, currentcasesubs=None):
+    def buildRaghavanRothEquationsFromMatrix(self, T0, T1, solvejointvars, \
+                                             simplify = True, \
+                                             currentcasesubs = None):
         """Builds the 14 equations using only 5 unknowns. Method explained in [Raghavan1993]_. Basically take the position and one column/row so that the least number of variables are used.
 
         .. [Raghavan1993] M Raghavan and B Roth, "Inverse Kinematics of the General 6R Manipulator and related Linkages",  Journal of Mechanical Design, Volume 115, Issue 3, 1993.
@@ -2956,7 +3031,9 @@ class IKFastSolver(AutoReloader):
         eqs.append([p0.dot(p0),p1.dot(p1)])
         eqs.append([l0.dot(p0),l1.dot(p1)])
         # prune any that have varying symbols
-        eqs = [(eq0,eq1) for eq0,eq1 in eqs if not self.CheckEquationForVarying(eq0) and not self.CheckEquationForVarying(eq1)]
+        eqs = [(eq0,eq1) for eq0,eq1 in eqs \
+               if not self.CheckEquationForVarying(eq0) \
+               and not self.CheckEquationForVarying(eq1)]
         trigsubs = []
         polysubs = []
         polyvars = []
@@ -2976,7 +3053,8 @@ class IKFastSolver(AutoReloader):
         polysubsinv = [(b,a) for a,b in polysubs]
         usedvars = []
         for j in range(2):
-            usedvars.append([var for var in polyvars if any([eq[j].subs(polysubs).has(var) for eq in eqs])])
+            usedvars.append([var for var in polyvars \
+                             if any([eq[j].subs(polysubs).has(var) for eq in eqs])])
         polyeqs = []
         for i in range(len(eqs)):
             polyeqs.append([None,None])        
@@ -2992,7 +3070,8 @@ class IKFastSolver(AutoReloader):
         # remove all fractions? having big integers could blow things up...
         return polyeqs
     
-    def buildRaghavanRothEquations(self,p0,p1,l0,l1,solvejointvars,simplify=True,currentcasesubs=None):
+    def buildRaghavanRothEquations(self,p0, p1, l0, l1, solvejointvars, \
+                                   simplify = True, currentcasesubs = None):
         trigsubs = []
         polysubs = []
         polyvars = []

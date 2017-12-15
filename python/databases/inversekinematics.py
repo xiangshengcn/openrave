@@ -436,32 +436,37 @@ class InverseKinematicsModel(DatabaseGenerator):
                         log.warn('cannot set increment for joint type %s'%joint.GetType())
             return freeinc
         
-    def GetDefaultIndices(self,avoidPrismaticAsFree=False):
-        """Returns a default set of free indices if the robot has more joints than required by the IK.
-        In the futrue, this function will contain heuristics in order to select the best indices candidates.
+    def GetDefaultIndices(self, avoidPrismaticAsFree = False):
+        """
+        Returns a default set of free indices if the robot has more joints than required by the IK.
+        In the future, this function will contain heuristics to select the best candidate(s) of indices.
         
-        :param avoidPrismaticAsFree: if True for redundant manipulators, will attempt to avoid setting prismatic joints as free joints unless the IK gets really complicated (and usually cannot be solved)
+        If avoidPrismaticAsFree is True for redundant manipulators, then we will attempt to avoid setting 
+        prismatic joints as free joints, unless the IK gets really complicated (and usually unsolvable)
         """
         if self.iktype is None:
-            raise InverseKinematicsError(u'ik type is not set')
+            raise InverseKinematicsError(u'iktype is not set')
         
         freeindices = []
         dofexpected = IkParameterization.GetDOFFromType(self.iktype)
         remainingindices = list(self.manip.GetArmIndices())
         if len(remainingindices) > dofexpected:
             N = len(remainingindices)
-            # need to choose a free index so that
-            # 1. the IK can be computed
-            # 2. the IK has the most success rate (ie choose joint with least impact on performance)
-            #
-            # the compatiblity of the IK depends a lot on what axes are intersecting, and whether they are orthogonal with each other
-            # In general, take from the top or the bottom depending on the complexity of the arm.
-            robot=self.manip.GetRobot()
+            """
+            Need to choose a free index so that
+            1. the IK can be computed
+            2. the IK has the most success rate (i.e. choose joint with least impact on performance)
+            
+            The compatiblity of the IK depends a lot on what axes are intersecting, and whether they are 
+            orthogonal with each other.
+            In general, take from the top or the bottom depending on the complexity of the arm.
+            """
+            robot = self.manip.GetRobot()
             jointanchors = []
             jointaxes = []
             jointtypes = []
-            for i,index in enumerate(self.manip.GetArmIndices()):
-                joint=robot.GetJointFromDOFIndex(index)
+            for i, index in enumerate(self.manip.GetArmIndices()):
+                joint = robot.GetJointFromDOFIndex(index)
                 jointanchors.append(joint.GetAnchor())
                 jointaxes.append(joint.GetAxis(index-joint.GetDOFIndex()))
                 jointtypes.append(joint.GetType())
@@ -483,19 +488,24 @@ class InverseKinematicsModel(DatabaseGenerator):
             intersecting3axes = [0]*N
             num3intersecting = 0
             for i in range(1,N-1):
-                if jointtypes[i-1] == KinBody.JointType.Revolute and jointtypes[i] == KinBody.JointType.Revolute and jointtypes[i+1] == KinBody.JointType.Revolute:
-                    if intersectingaxes[i-1,i] and intersectingaxes[i,i+1] and intersectingaxes[i-1,i+1]:
+                if jointtypes[i-1] == KinBody.JointType.Revolute \
+                   and jointtypes[i] == KinBody.JointType.Revolute \
+                   and jointtypes[i+1] == KinBody.JointType.Revolute:
+                    if intersectingaxes[i-1,i] \
+                    and intersectingaxes[i,i+1] \
+                    and intersectingaxes[i-1,i+1]:
                         # have to check if they intersect at a common point
-                        intersection = jointanchors[i] + jointaxes[i] * dot(jointaxes[i], jointanchors[i-1]-jointanchors[i])
+                        intersection = jointanchors[i] + \
+                                       jointaxes[i] * dot(jointaxes[i], jointanchors[i-1]-jointanchors[i])
                         distfromintersection = sum(cross(jointaxes[i+1],intersection - jointanchors[i+1])**2)
                         if distfromintersection < 1e-10:
                             intersecting3axes[i-1] |= 1 << num3intersecting
-                            intersecting3axes[i] |= 1 << num3intersecting
+                            intersecting3axes[i]   |= 1 << num3intersecting
                             intersecting3axes[i+1] |= 1 << num3intersecting
                             log.info('found 3-intersection centered on index %d', remainingindices[i])
                             num3intersecting += 1
             for i in range(N - dofexpected):
-                # by default always choose first
+                # by default always choose the first
                 indextopop = 0
                 if self.iktype == IkParameterizationType.Transform6D:
                     if num3intersecting > 0:
@@ -505,7 +515,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                             indextopop = len(intersecting3axes)-1
                         else:
                             hasother = False
-                            # prioritize 2 by checking if there exists other intersecting axes
+                            # prioritize 2 by checking if other intersecting axes exist
                             for j in range(len(intersecting3axes)-1,-1,-1):
                                 if (intersecting3axes[j] & ~intersecting3axes[2]) > 0:
                                     hasother = True
@@ -518,7 +528,8 @@ class InverseKinematicsModel(DatabaseGenerator):
                                         indextopop = j
                                         break
                     else:
-                        # already complicated enough, so take from the bottom in order to avoid variables coming inside the kinematics
+                        # already complicated enough
+                        # so take from the bottom in order to avoid variables coming inside the kinematics
                         indextopop = 0
                         if avoidPrismaticAsFree and jointtypes[indextopop] == KinBody.JointType.Prismatic:
                             # it's either one or the other
@@ -533,12 +544,17 @@ class InverseKinematicsModel(DatabaseGenerator):
                 elif self.iktype == IkParameterizationType.TranslationDirection5D:
                     # check if ray aligns with furthest axis
                     dirfromanchor = self.manip.GetTransform()[0:3,3]-jointanchors[-1]
-                    if abs(dot(jointaxes[-1],dot(self.manip.GetTransform()[0:3,0:3],self.manip.GetLocalToolDirection()))) > 0.99999 and linalg.norm(cross(jointaxes[-1],dirfromanchor)) <= 1e-5:
+                    if abs(dot(jointaxes[-1], \
+                               dot(self.manip.GetTransform()[0:3,0:3],\
+                                   self.manip.GetLocalToolDirection())\
+                    )) > 0.99999 \
+                    and linalg.norm(cross(jointaxes[-1],dirfromanchor)) <= 1e-5:
                         # have to take the last index since last axis aligns and is useless anyway
                         indextopop = len(remainingindices)-1
                     else:
                         for indextopop in range(len(remainingindices)):
-                            if not avoidPrismaticAsFree or jointtypes[indextopop] != KinBody.JointType.Prismatic:
+                            if not avoidPrismaticAsFree \
+                               or jointtypes[indextopop] != KinBody.JointType.Prismatic:
                                 # done
                                 break
                 else:
@@ -546,7 +562,8 @@ class InverseKinematicsModel(DatabaseGenerator):
                     # if not 6D, then don't need to worry about intersecting joints
                     # so remove the least important joints
                     for indextopop in range(len(remainingindices)-1,-1,-1):
-                        if not avoidPrismaticAsFree or jointtypes[indextopop] != KinBody.JointType.Prismatic:
+                        if not avoidPrismaticAsFree \
+                           or jointtypes[indextopop] != KinBody.JointType.Prismatic:
                             # done
                             break
                 freeindices.append(remainingindices.pop(indextopop))
@@ -562,9 +579,10 @@ class InverseKinematicsModel(DatabaseGenerator):
     
     def getfilename(self,read=False):
         if self.iktype is None:
-            raise InverseKinematicsError(u'ik type is not set')
+            raise InverseKinematicsError(u'iktype is not set')
 
-        if self.solveindices is None or self.freeindices is None:
+        if self.solveindices is None \
+           or self.freeindices is None:
             solveindices, freeindices = self.GetDefaultIndices()
         else:
             solveindices, freeindices = self.solveindices, self.freeindices
@@ -572,18 +590,27 @@ class InverseKinematicsModel(DatabaseGenerator):
         index = -1
         allfreeindices = None
         while True:
-            basename = 'ikfast%s.%s.%s.'%(self.ikfast.__version__,self.iktype,platform.machine()) + '_'.join(str(ind) for ind in sorted(solveindices))
+            basename = 'ikfast%s.%s.%s.' % \
+                       (self.ikfast.__version__, \
+                        self.iktype,platform.machine()) + '_'.join(str(ind) \
+                                                                   for ind in sorted(solveindices))
             if len(freeindices)>0:
                 basename += '_f'+'_'.join(str(ind) for ind in sorted(freeindices))
-            filename = RaveFindDatabaseFile(os.path.join('kinematics.'+self.manip.GetInverseKinematicsStructureHash(self.iktype),ccompiler.new_compiler().shared_object_filename(basename=basename)),read)
-            if not read or len(filename) > 0 or self.freeindices is not None:
+            filename = RaveFindDatabaseFile(os.path.join('kinematics.' + \
+                                                         self.manip.GetInverseKinematicsStructureHash(self.iktype), \
+                                                         ccompiler.new_compiler().shared_object_filename(basename=basename)),\
+                                            read)
+            if not read \
+               or len(filename) > 0 \
+               or self.freeindices is not None:
                 break
             # user did not specify a set of freeindices, so the expected behavior is to search for the next loadable one
             index += 1
             dofexpected = IkParameterization.GetDOFFromType(self.iktype)
             if allfreeindices is None:
                 if self.manip.GetArmDOF() > dofexpected:
-                    allfreeindices = [f for f in self.ikfast.permutations(self.manip.GetArmIndices(),self.manip.GetArmDOF()-dofexpected)]
+                    allfreeindices = [f for f in self.ikfast.permutations(self.manip.GetArmIndices(),\
+                                                                          self.manip.GetArmDOF()-dofexpected)]
                 else:
                     allfreeindices = []
             if index >= len(allfreeindices):
@@ -592,9 +619,9 @@ class InverseKinematicsModel(DatabaseGenerator):
             solveindices = [i for i in self.manip.GetArmIndices() if not i in freeindices]
         return filename
 
-    def getsourcefilename(self,read=False,outputlang='cpp'):
+    def getsourcefilename(self,read = False,outputlang = 'cpp'):
         if self.iktype is None:
-            raise InverseKinematicsError(u'ik type is not set')
+            raise InverseKinematicsError(u'iktype is not set')
         
         if self.solveindices is None or self.freeindices is None:
             solveindices, freeindices = self.GetDefaultIndices()
@@ -605,13 +632,17 @@ class InverseKinematicsModel(DatabaseGenerator):
         if len(freeindices)>0:
             basename += '_f'+'_'.join(str(ind) for ind in sorted(freeindices))
         basename += '.' + outputlang
-        return RaveFindDatabaseFile(os.path.join('kinematics.'+self.manip.GetInverseKinematicsStructureHash(self.iktype),basename),read)
+        return RaveFindDatabaseFile(os.path.join('kinematics.' + \
+                                                 self.manip.GetInverseKinematicsStructureHash(self.iktype), \
+                                                 basename), \
+                                    read)
 
     def getstatsfilename(self,read=False):
         if self.iktype is None:
-            raise InverseKinematicsError(u'ik type is not set')
+            raise InverseKinematicsError(u'iktype is not set')
         
-        if self.solveindices is None or self.freeindices is None:
+        if self.solveindices is None \
+           or self.freeindices is None:
             solveindices, freeindices = self.GetDefaultIndices()
         else:
             solveindices, freeindices = self.solveindices, self.freeindices
@@ -621,16 +652,20 @@ class InverseKinematicsModel(DatabaseGenerator):
             freeindicesstrings = []
             if len(freeindices)>0:
                 for _freeindices in self.ikfast.permutations(freeindices):
-                    freeindicesstrings.append(['_f'+'_'.join(str(ind) for ind in sorted(_freeindices)),_freeindices])
+                    freeindicesstrings.append(['_f'+'_'.join(str(ind) \
+                                                             for ind in sorted(_freeindices)),_freeindices])
             else:
                 freeindicesstrings.append(['',[]])
 
             for freeindicesstring, fi in freeindicesstrings:
-                basename = 'ikfast%s.%s.'%(self.ikfast.__version__,self.iktype)
+                basename = 'ikfast%s.%s.'%(self.ikfast.__version__, self.iktype)
                 basename += '_'.join(str(ind) for ind in sorted(solveindices))
                 basename += freeindicesstring
                 basename += '.pp'
-                filename = RaveFindDatabaseFile(os.path.join('kinematics.'+self.manip.GetInverseKinematicsStructureHash(self.iktype),basename),read)
+                filename = RaveFindDatabaseFile(os.path.join('kinematics.' + \
+                                                             self.manip.GetInverseKinematicsStructureHash(self.iktype), \
+                                                             basename), \
+                                                read)
                 if not read or len(filename) > 0 or self.freeindices is not None:
                     self.freeindices = fi
                     return filename
@@ -638,14 +673,15 @@ class InverseKinematicsModel(DatabaseGenerator):
             # user did not specify a set of freeindices, so the expected behavior is to search for the next loadable one
             index += 1
             dofexpected = IkParameterization.GetDOFFromType(self.iktype)
-            allfreeindices = [f for f in self.ikfast.combinations(self.manip.GetArmIndices(),len(self.manip.GetArmIndices())-dofexpected)]
+            allfreeindices = [f for f in self.ikfast.combinations(self.manip.GetArmIndices(), \
+                                                                  len(self.manip.GetArmIndices())-dofexpected)]
             if index >= len(allfreeindices):
                 break
             freeindices = allfreeindices[index]
             solveindices = [i for i in self.manip.GetArmIndices() if not i in freeindices]
         return filename
 
-    def autogenerate(self,options=None):
+    def autogenerate(self,options = None):
         freejoints = None
         iktype = self.iktype
         precision = None
@@ -672,27 +708,38 @@ class InverseKinematicsModel(DatabaseGenerator):
         elif self.manip.GetKinematicsStructureHash() == 'bfc61bd497e9993b85f1ab511ee7bdbc': # stage
             if iktype is None:
                 iktype=IkParameterizationType.Rotation3D
-        elif self.manip.GetKinematicsStructureHash() == 'c363859a2d7a151a22dc1e251d6d8669' or self.manip.GetKinematicsStructureHash() == '12ceb0aaa06143fe305efa6e48faae0b': # pr2
+        elif self.manip.GetKinematicsStructureHash() == 'c363859a2d7a151a22dc1e251d6d8669' \
+             or self.manip.GetKinematicsStructureHash() == '12ceb0aaa06143fe305efa6e48faae0b': # pr2
             if iktype == None:
                 iktype=IkParameterizationType.Transform6D
             if iktype == IkParameterizationType.Transform6D and freejoints is None:
                 # take the torso and roll joint
                 freejoints=[self.robot.GetJoints()[self.manip.GetArmIndices()[ind]].GetName() for ind in [0,3]]
-        elif self.manip.GetKinematicsStructureHash()=='a1e9aea0dc0fda631ca376c03d500927' or self.manip.GetKinematicsStructureHash()=='ceb6be51bd14f345e22997cc0bca9f2f': # pr2 cameras
+        elif self.manip.GetKinematicsStructureHash()=='a1e9aea0dc0fda631ca376c03d500927' \
+             or self.manip.GetKinematicsStructureHash()=='ceb6be51bd14f345e22997cc0bca9f2f': # pr2 cameras
             if iktype is None:
                 iktype=IkParameterizationType.Ray4D
                 if freejoints is None:
                     # take the torso joint
                     freejoints=[self.robot.GetJoints()[self.manip.GetArmIndices()[0]].GetName()]
-        elif self.manip.GetKinematicsStructureHash()=='2640ae411e0c87b03f56bf289296f9d8' and iktype == IkParameterizationType.Lookat3D: # pr2 head_torso
+        elif self.manip.GetKinematicsStructureHash()=='2640ae411e0c87b03f56bf289296f9d8' \
+             and iktype == IkParameterizationType.Lookat3D: # pr2 head_torso
             if freejoints is None:
                 freejoints=[self.robot.GetJoints()[self.manip.GetArmIndices()[0]].GetName()]
-        elif self.manip.GetKinematicsStructureHash()=='ab9d03903279e44bc692e896791bcd05' or self.manip.GetKinematicsStructureHash()=='afe50514bf09aff5f2a84beb078bafbd': # katana
-            if iktype==IkParameterizationType.Translation3D or (iktype==None and self.iktype==IkParameterizationType.Translation3D):
+        elif self.manip.GetKinematicsStructureHash()=='ab9d03903279e44bc692e896791bcd05' \
+             or self.manip.GetKinematicsStructureHash()=='afe50514bf09aff5f2a84beb078bafbd': # katana
+            if iktype==IkParameterizationType.Translation3D \
+               or (iktype==None and self.iktype==IkParameterizationType.Translation3D):
                 freejoints = [self.robot.GetJoints()[ind].GetName() for ind in self.manip.GetArmIndices()[3:]]
             if iktype==None:
                 iktype == IkParameterizationType.TranslationDirection5D
-        self.generate(iktype=iktype,freejoints=freejoints,precision=precision,forceikbuild=forceikbuild,outputlang=outputlang,ipython=ipython,ikfastmaxcasedepth=ikfastmaxcasedepth)
+        self.generate(iktype = iktype, \
+                      freejoints = freejoints, \
+                      precision = precision, \
+                      forceikbuild = forceikbuild, \
+                      outputlang = outputlang, \
+                      ipython = ipython, \
+                      ikfastmaxcasedepth = ikfastmaxcasedepth)
         self.save()
 
     def getIndicesFromJointNames(self,freejoints):
@@ -702,16 +749,29 @@ class InverseKinematicsModel(DatabaseGenerator):
                 freeindices.append(jointname)
             else:
                 # find the correct joint index
-                dofindices = [joint.GetDOFIndex() for joint in self.robot.GetJoints() if joint.GetName()==jointname]
+                dofindices = [joint.GetDOFIndex() \
+                              for joint in self.robot.GetJoints() if joint.GetName()==jointname]
                 if len(dofindices) == 0:
-                    raise LookupError("cannot find '%s' joint in %s robot"%(jointname,self.robot.GetName()))
+                    raise LookupError("cannot find '%s' joint in %s robot" % \
+                                      (jointname,self.robot.GetName()))
                 if not dofindices[0] in self.manip.GetArmIndices():
-                    raise LookupError("cannot find joint '%s(%d)' in solve joints: %s"%(jointname,dofindices[0],self.manip.GetArmIndices()))
+                    raise LookupError("cannot find joint '%s(%d)' in solve joints: %s" % \
+                                      (jointname,dofindices[0],self.manip.GetArmIndices()))
                 freeindices.append(dofindices[0])
         print 'getIndicesFromJointNames',freeindices,freejoints
         return freeindices
 
-    def generate(self,iktype=None, freejoints=None, freeinc=None, freeindices=None, precision=None, forceikbuild=True, outputlang=None, avoidPrismaticAsFree=False, ipython=False, ikfastoptions=0, ikfastmaxcasedepth=3):
+    def generate(self, iktype = None, \
+                 freejoints = None, \
+                 freeinc = None, \
+                 freeindices = None, \
+                 precision = None, \
+                 forceikbuild = True, \
+                 outputlang = None, \
+                 avoidPrismaticAsFree = False, \
+                 ipython = False, \
+                 ikfastoptions = 0, \
+                 ikfastmaxcasedepth = 3):
         """
         :param ikfastoptions: see IKFastSolver.generateIkSolver
         :param ikfastmaxcasedepth: the max level of degenerate cases to solve for
@@ -727,29 +787,29 @@ class InverseKinematicsModel(DatabaseGenerator):
             def solveFullIK_Rotation3D(*args,**kwargs):
                 kwargs['Rbaseraw'] = Rbaseraw
                 return self.ikfast.IKFastSolver.solveFullIK_Rotation3D(*args,**kwargs)
-            solvefn=solveFullIK_Rotation3D
+            solvefn = solveFullIK_Rotation3D
         elif self.iktype == IkParameterizationType.Direction3D:
-            rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanipdir = dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
             def solveFullIK_Direction3D(*args,**kwargs):
                 kwargs['rawmanipdir'] = rawmanipdir
                 return self.ikfast.IKFastSolver.solveFullIK_Direction3D(*args,**kwargs)
-            solvefn=solveFullIK_Direction3D
+            solvefn = solveFullIK_Direction3D
         elif self.iktype == IkParameterizationType.Ray4D:
-            rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
+            rawmanipdir = dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanippos = self.manip.GetLocalToolTransform()[0:3,3]
             def solveFullIK_Ray4D(*args,**kwargs):
                 kwargs['rawmanipdir'] = rawmanipdir
                 kwargs['rawmanippos'] = rawmanippos
                 return self.ikfast.IKFastSolver.solveFullIK_Ray4D(*args,**kwargs)
             solvefn=solveFullIK_Ray4D
         elif self.iktype == IkParameterizationType.TranslationDirection5D:
-            rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
+            rawmanipdir = dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanippos = self.manip.GetLocalToolTransform()[0:3,3]
             def solveFullIK_TranslationDirection5D(*args,**kwargs):
                 kwargs['rawmanipdir'] = rawmanipdir
                 kwargs['rawmanippos'] = rawmanippos
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationDirection5D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationDirection5D
+            solvefn = solveFullIK_TranslationDirection5D
         elif self.iktype == IkParameterizationType.Translation3D:
             rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
             def solveFullIK_Translation3D(*args,**kwargs):
@@ -763,8 +823,8 @@ class InverseKinematicsModel(DatabaseGenerator):
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationXY2D(*args,**kwargs)
             solvefn=solveFullIK_TranslationXY2D
         elif self.iktype == IkParameterizationType.TranslationXYOrientation3D:
-            rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
+            rawmanipdir = dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanippos = self.manip.GetLocalToolTransform()[0:3,3]
             def solveFullIK_TranslationXAxisAngleZNorm4D(*args,**kwargs):
                 kwargs['rawmanipdir'] = rawmanipdir
                 kwargs['rawmanippos'] = rawmanippos
@@ -772,7 +832,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                 kwargs['rawglobalnormaldir'] = [0.0,0.0,1.0]
                 kwargs['ignoreaxis'] = 2
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationAxisAngle4D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationXAxisAngleZNorm4D
+            solvefn = solveFullIK_TranslationXAxisAngleZNorm4D
             
 #             rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
 #             rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
@@ -788,19 +848,19 @@ class InverseKinematicsModel(DatabaseGenerator):
                 return self.ikfast.IKFastSolver.solveFullIK_6D(*args,**kwargs)
             solvefn=solveFullIK_6D
         elif self.iktype == IkParameterizationType.Lookat3D:
-            rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
+            rawmanipdir = dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanippos = self.manip.GetLocalToolTransform()[0:3,3]
             def solveFullIK_Lookat3D(*args,**kwargs):
                 kwargs['rawmanipdir'] = rawmanipdir
                 kwargs['rawmanippos'] = rawmanippos
                 return self.ikfast.IKFastSolver.solveFullIK_Lookat3D(*args,**kwargs)
-            solvefn=solveFullIK_Lookat3D
+            solvefn = solveFullIK_Lookat3D
         elif self.iktype == IkParameterizationType.TranslationLocalGlobal6D:
             Tmanipraw=self.manip.GetLocalToolTransform()
             def solveFullIK_TranslationLocalGlobal6D(*args,**kwargs):
                 kwargs['Tmanipraw'] = Tmanipraw
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationLocalGlobal6D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationLocalGlobal6D
+            solvefn = solveFullIK_TranslationLocalGlobal6D
         elif self.iktype == IkParameterizationType.TranslationXAxisAngle4D:
             rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
             rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
@@ -809,10 +869,10 @@ class InverseKinematicsModel(DatabaseGenerator):
                 kwargs['rawmanippos'] = rawmanippos
                 kwargs['rawglobaldir'] = [1.0,0.0,0.0]
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationAxisAngle4D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationXAxisAngle4D
+            solvefn = solveFullIK_TranslationXAxisAngle4D
         elif self.iktype == IkParameterizationType.TranslationYAxisAngle4D:
-            rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
+            rawmanipdir = dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanippos = self.manip.GetLocalToolTransform()[0:3,3]
             def solveFullIK_TranslationYAxisAngle4D(*args,**kwargs):
                 kwargs['rawmanipdir'] = rawmanipdir
                 kwargs['rawmanippos'] = rawmanippos
@@ -827,15 +887,15 @@ class InverseKinematicsModel(DatabaseGenerator):
                 kwargs['rawmanippos'] = rawmanippos
                 kwargs['rawglobaldir'] = [0.0,0.0,1.0]
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationAxisAngle4D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationZAxisAngle4D
+            solvefn = solveFullIK_TranslationZAxisAngle4D
         elif self.iktype == IkParameterizationType.TranslationXAxisAngleZNorm4D:
             #rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetLocalToolDirection())
             #rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
 
-            rawmanipdir=self.manip.GetLocalToolDirection()#dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetLocalToolDirection())
+            rawmanipdir = self.manip.GetLocalToolDirection()#dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetLocalToolDirection())
             #rawmanipdir=self.manip.GetLocalToolDirection()#dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=[0.0, 0.0, 0.0]#self.manip.GetLocalToolTransform()[0:3,3]
-            Tmanipraw=self.manip.GetLocalToolTransform()
+            rawmanippos = [0.0, 0.0, 0.0]#self.manip.GetLocalToolTransform()[0:3,3]
+            Tmanipraw = self.manip.GetLocalToolTransform()
             rawglobaldir = [1.0,0.0,0.0]
             rawglobalnormaldir = [0.0,0.0,1.0]
             rawmanipnormaldir = dot(linalg.inv(self.manip.GetTransform()[:3,:3]), rawglobalnormaldir)
@@ -848,11 +908,11 @@ class InverseKinematicsModel(DatabaseGenerator):
                 kwargs['rawmanipnormaldir'] = rawmanipnormaldir
                 kwargs['Tmanipraw'] = Tmanipraw
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationAxisAngle4D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationXAxisAngleZNorm4D
+            solvefn = solveFullIK_TranslationXAxisAngleZNorm4D
         elif self.iktype == IkParameterizationType.TranslationYAxisAngleXNorm4D:
-            rawmanipdir=self.manip.GetDirection()#dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=[0.0, 0.0, 0.0]#self.manip.GetLocalToolTransform()[0:3,3]
-            Tmanipraw=self.manip.GetLocalToolTransform()
+            rawmanipdir = self.manip.GetDirection()#dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanippos = [0.0, 0.0, 0.0]#self.manip.GetLocalToolTransform()[0:3,3]
+            Tmanipraw = self.manip.GetLocalToolTransform()
             rawglobalnormaldir = [1.0,0.0,0.0]
             rawmanipnormaldir = dot(linalg.inv(self.manip.GetTransform()[:3,:3]), rawglobalnormaldir)
             def solveFullIK_TranslationYAxisAngleXNorm4D(*args,**kwargs):
@@ -863,17 +923,17 @@ class InverseKinematicsModel(DatabaseGenerator):
                 kwargs['rawmanipnormaldir'] = rawmanipnormaldir
                 kwargs['Tmanipraw'] = Tmanipraw
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationAxisAngle4D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationYAxisAngleXNorm4D
+            solvefn = solveFullIK_TranslationYAxisAngleXNorm4D
         elif self.iktype == IkParameterizationType.TranslationZAxisAngleYNorm4D:
-            rawmanipdir=dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
-            rawmanippos=self.manip.GetLocalToolTransform()[0:3,3]
+            rawmanipdir = dot(self.manip.GetLocalToolTransform()[0:3,0:3],self.manip.GetDirection())
+            rawmanippos = self.manip.GetLocalToolTransform()[0:3,3]
             def solveFullIK_TranslationZAxisAngleYNorm4D(*args,**kwargs):
                 kwargs['rawmanipdir'] = rawmanipdir
                 kwargs['rawmanippos'] = rawmanippos
                 kwargs['rawglobaldir'] = [0.0,0.0,1.0]
                 kwargs['rawglobalnormaldir'] = [0.0,1.0,0.0]
                 return self.ikfast.IKFastSolver.solveFullIK_TranslationAxisAngle4D(*args,**kwargs)
-            solvefn=solveFullIK_TranslationZAxisAngleYNorm4D
+            solvefn = solveFullIK_TranslationZAxisAngleYNorm4D
         else:
             raise InverseKinematicsError(u'bad type 0x%x'%self.iktype)
         
@@ -884,7 +944,7 @@ class InverseKinematicsModel(DatabaseGenerator):
             if freejoints is not None:
                 self.freeindices = self.getIndicesFromJointNames(freejoints)
             else:
-                self.solveindices,self.freeindices = self.GetDefaultIndices(avoidPrismaticAsFree=avoidPrismaticAsFree)
+                self.solveindices, self.freeindices = self.GetDefaultIndices(avoidPrismaticAsFree=avoidPrismaticAsFree)
         self.solveindices = [i for i in self.manip.GetArmIndices() if not i in self.freeindices]
         if len(self.solveindices) != dofexpected:
             raise InverseKinematicsError(u'Manipulator %(manip)s (indices=%(manipindices)r) joint indices to solve for (%(solveindices)r) is not equal to number of expected joints (%(dofexpected)d) for IK type %(iktype)s. Perhaps the manipulator base link %(baselink)s or end link %(endlink)s are not correct.'%{'manip':self.manip.GetName(),'manipindices':list(self.manip.GetArmIndices()), 'solveindices':list(self.solveindices), 'dofexpected':dofexpected, 'iktype':self.iktype.name, 'baselink':self.manip.GetBase().GetName(), 'endlink':self.manip.GetEndEffector().GetName()})
@@ -894,7 +954,10 @@ class InverseKinematicsModel(DatabaseGenerator):
         if self.freeinc is None:
             self.freeinc = self.getDefaultFreeIncrements(0.1,0.01)
         
-        log.info('Generating inverse kinematics for manip %s: %s %s, precision=%s, maxcasedepth=%d (this might take up to 10 min)',self.manip.GetName(),self.iktype,self.solveindices, precision, ikfastmaxcasedepth)
+        log.info('Generating inverse kinematics for manip %s: %s %s, ' + \
+                 'precision = %s, maxcasedepth = %d (this might take up to 10 min)', \
+                 self.manip.GetName(), self.iktype, self.solveindices, \
+                 precision, ikfastmaxcasedepth)
         if outputlang is None:
             outputlang = 'cpp'
         sourcefilename = self.getsourcefilename(False,outputlang)
@@ -908,9 +971,18 @@ class InverseKinematicsModel(DatabaseGenerator):
             except OSError:
                 pass
             
-            solver = self.ikfast.IKFastSolver(kinbody=self.robot,kinematicshash=self.manip.GetInverseKinematicsStructureHash(self.iktype),precision=precision, checkpreemptfn=self._checkpreemptfn)
+            solver = self.ikfast.IKFastSolver(kinbody = self.robot, \
+                                              kinematicshash = self.manip.GetInverseKinematicsStructureHash(self.iktype),\
+                                              precision = precision, \
+                                              checkpreemptfn = self._checkpreemptfn)
             solver.maxcasedepth = ikfastmaxcasedepth
-            if self.iktype == IkParameterizationType.TranslationXAxisAngle4D or self.iktype == IkParameterizationType.TranslationYAxisAngle4D or self.iktype == IkParameterizationType.TranslationZAxisAngle4D or self.iktype == IkParameterizationType.TranslationXAxisAngleZNorm4D or self.iktype == IkParameterizationType.TranslationYAxisAngleXNorm4D or self.iktype == IkParameterizationType.TranslationZAxisAngleYNorm4D or self.iktype == IkParameterizationType.TranslationXYOrientation3D:
+            if self.iktype == IkParameterizationType.TranslationXAxisAngle4D \
+               or self.iktype == IkParameterizationType.TranslationYAxisAngle4D \
+               or self.iktype == IkParameterizationType.TranslationZAxisAngle4D \
+               or self.iktype == IkParameterizationType.TranslationXAxisAngleZNorm4D \
+               or self.iktype == IkParameterizationType.TranslationYAxisAngleXNorm4D \
+               or self.iktype == IkParameterizationType.TranslationZAxisAngleYNorm4D \
+               or self.iktype == IkParameterizationType.TranslationXYOrientation3D:
                 solver.useleftmultiply = False
             baselink=self.manip.GetBase().GetIndex()
             eelink=self.manip.GetEndEffector().GetIndex()
@@ -918,10 +990,13 @@ class InverseKinematicsModel(DatabaseGenerator):
                 # requires ipython v0.11+
                 IPython = __import__('IPython')
                 if IPython.__version__.startswith("0.10"):
-                    ipshell = IPython.Shell.IPShellEmbed(argv='',banner = 'inversekinematics dropping into ipython',exit_msg = 'Leaving Interpreter and continuing solver.')
+                    ipshell = IPython.Shell.IPShellEmbed(argv='', \
+                                                         banner = 'inversekinematics dropping into ipython', \
+                                                         exit_msg = 'Leaving Interpreter and continuing solver.')
                     ipshell(local_ns=locals())
                 else:
-                    from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
+                    from IPython.terminal import embed;
+                    ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
 #                     m=__import__('IPython.config.loader',fromlist=['Config'])
 #                     Config = getattr(m,'Config')
 #                     cfg = Config()
@@ -934,11 +1009,14 @@ class InverseKinematicsModel(DatabaseGenerator):
                 
             try:
                 generationstart = time.time()
-                chaintree = solver.generateIkSolver(baselink=baselink,eelink=eelink,freeindices=self.freeindices,solvefn=solvefn)
+                chaintree = solver.generateIkSolver(baselink = baselink, \
+                                                    eelink = eelink, \
+                                                    freeindices = self.freeindices,solvefn=solvefn)
                 self.ikfeasibility = None
                 code = solver.writeIkSolver(chaintree,lang=outputlang)
                 if len(code) == 0:
-                    raise InverseKinematicsError(u'failed to generate ik solver for robot %s:%s'%(self.robot.GetName(),self.manip.GetName()))
+                    raise InverseKinematicsError(u'failed to generate ik solver for robot %s:%s' % \
+                                                 (self.robot.GetName(), self.manip.GetName()))
                 
                 self.statistics['generationtime'] = time.time()-generationstart
                 self.statistics['usinglapack'] = solver.usinglapack
@@ -946,11 +1024,13 @@ class InverseKinematicsModel(DatabaseGenerator):
                     f.write(code)
                 try:
                     from pkg_resources import resource_filename
-                    shutil.copyfile(resource_filename('openravepy','ikfast.h'), os.path.join(sourcedir,'ikfast.h'))
+                    shutil.copyfile(resource_filename('openravepy','ikfast.h'), \
+                                    os.path.join(sourcedir,'ikfast.h'))
                 except ImportError,e:
                     log.warn(e)
                     
-                log.info(u'successfully generated c++ ik in %fs, file=%s', self.statistics['generationtime'], sourcefilename)
+                log.info(u'successfully generated c++ ik in %fs, file=%s', \
+                         self.statistics['generationtime'], sourcefilename)
             except self.ikfast.IKFastSolver.IKFeasibilityError, e:
                 self.ikfeasibility = str(e)
                 log.warn(e)
@@ -969,14 +1049,19 @@ class InverseKinematicsModel(DatabaseGenerator):
                 shutil.copyfile(sourcefilename, platformsourcefilename)
                 objectfiles=[]
                 try:
-                    objectfiles = compiler.compile(sources=[platformsourcefilename],macros=[('IKFAST_CLIBRARY',1),('IKFAST_NO_MAIN',1)],extra_postargs=compile_flags,output_dir=output_dir)
+                    objectfiles = compiler.compile(sources = [platformsourcefilename], \
+                                                   macros = [('IKFAST_CLIBRARY',1),('IKFAST_NO_MAIN',1)], \
+                                                   extra_postargs = compile_flags, \
+                                                   output_dir = output_dir)
                     # because some parts of ikfast require lapack, always try to link with it
                     try:
                         iswindows = sys.platform.startswith('win') or platform.system().lower() == 'windows'
                         libraries = None
                         if self.statistics.get('usinglapack',False) or not iswindows:
                             libraries = ['lapack']
-                        compiler.link_shared_object(objectfiles,output_filename=output_filename, libraries=libraries)
+                        compiler.link_shared_object(objectfiles, \
+                                                    output_filename = output_filename, \
+                                                    libraries = libraries)
                     except distutils.errors.LinkError,e:
                         log.warn(e)
                         if libraries is not None and 'lapack' in libraries:
@@ -984,7 +1069,9 @@ class InverseKinematicsModel(DatabaseGenerator):
                             if len(libraries) == 0:
                                 libraries = None
                         log.info('linking again with %r... (MSVC bug?)',libraries)
-                        compiler.link_shared_object(objectfiles,output_filename=output_filename, libraries=libraries)
+                        compiler.link_shared_object(objectfiles, \
+                                                    output_filename = output_filename, \
+                                                    libraries = libraries)
                         
                     if not self.setrobot():
                         return ValueError('failed to generate ik solver')
@@ -1018,7 +1105,8 @@ class InverseKinematicsModel(DatabaseGenerator):
         with self.robot:
             self.robot.SetActiveManipulator(self.manip)
             # set base to identity to avoid complications when reporting errors
-            self.robot.SetTransform(dot(linalg.inv(self.manip.GetBase().GetTransform()),self.robot.GetTransform()))
+            self.robot.SetTransform(dot(linalg.inv(self.manip.GetBase().GetTransform()),\
+                                        self.robot.GetTransform()))
             cmd = 'DebugIK sampledegeneratecases 0.2 robot %s '%self.robot.GetName()
             if iktests.isdigit():
                 assert(int(iktests) > 0)
@@ -1046,20 +1134,17 @@ class InverseKinematicsModel(DatabaseGenerator):
             # calculate stats
             num_test    = float(res[0])
             num_success = float(res[1])
-            num_failure = float(res[0])-float(res[1])
+            num_failure = len(solutionresults[0])
             num_no_soln = len(solutionresults[1])
             num_ms_soln = len(solutionresults[2])
+
+            assert( num_test == num_success+num_failure+num_no_soln )
             
             success_rate = num_success/num_test
             failure_rate = num_failure/num_test
             no_soln_rate = num_no_soln/num_test
             ms_soln_rate = num_ms_soln/num_test
             
-            if num_failure != len(solutionresults[0]):
-                print 'They are different?!: ', num_failure, len(solutionresults[0])
-                log.info('num_failure = %d, len(solutionresults[0] = %d' %
-                         (num_failure, len(solutionresults[0])) )
-                
             log.info('\n' + \
                      '  STATISTICS          #  \n'        + \
                      '-----------------------------\n'    + \
@@ -1111,9 +1196,10 @@ class InverseKinematicsModel(DatabaseGenerator):
                 while True:
                     with self.env:
                         lower,upper = self.robot.GetDOFLimits(self.manip.GetArmIndices())
-                        self.robot.SetDOFValues(lower+random.rand(len(lower))*(upper-lower),self.manip.GetArmIndices())
+                        self.robot.SetDOFValues(lower+random.rand(len(lower))*(upper-lower), \
+                                                self.manip.GetArmIndices())
                         ikparam = self.manip.GetIkParameterization(self.iktype)
-                        sols = self.manip.FindIKSolutions(ikparam,IkFilterOptions.CheckEnvCollisions)
+                        sols = self.manip.FindIKSolutions(ikparam, IkFilterOptions.CheckEnvCollisions)
                         weights = self.robot.GetDOFWeights(self.manip.GetArmIndices())
                         log.info('found %d solutions'%len(sols))
                         sols = TSP(sols,lambda x,y: sum(weights*(x-y)**2))
@@ -1136,7 +1222,9 @@ class InverseKinematicsModel(DatabaseGenerator):
                     majorVersion = int(cver)/100-6
                     minorVersion = mod(int(cver),100)/10.0
                     if abs(compiler._MSVCCompiler__version - majorVersion+minorVersion) > 0.001:
-                        log.warn('default compiler v %s the same version as openrave compiler v %f, look for a different compiler',compiler._MSVCCompiler__version, majorVersion+minorVersion);
+                        log.warn('default compiler v %s the same version as openrave compiler v %f, ' + \
+                                 'look for a different compiler', \
+                                 compiler._MSVCCompiler__version, majorVersion+minorVersion);
                         distutils.msvc9compiler.VERSION = majorVersion + minorVersion
                         newcompiler = ccompiler.new_compiler()
                         if newcompiler is not None:
@@ -1153,30 +1241,55 @@ class InverseKinematicsModel(DatabaseGenerator):
     @staticmethod
     def CreateOptionParser():
         parser = DatabaseGenerator.CreateOptionParser()
-        parser.description='Uses ikfast to compute the closed-form inverse kinematics equations of a robot manipulator, generates a C++ file, and compiles this file into a shared object which can then be loaded by OpenRAVE.'
+
+        parser.description='Uses ikfast to compute the closed-form inverse kinematics equations of a robot manipulator, ' + \
+                            'generates a C++ file, ' + \
+                            'and compiles this file into a shared object which can then be loaded by OpenRAVE.'
+        
         parser.usage='openrave.py --database inversekinematics [options]'
+        
         parser.add_option('--freejoint', action='append', type='string', dest='freejoints',default=None,
-                          help='Optional joint name specifying a free parameter of the manipulator. The value of a free joint is known at runtime, but not known at IK generation time. If nothing specified, assumes all joints not solving for are free parameters. Can be specified multiple times for multiple free parameters.')
+                          help='Optional joint name specifying a free parameter of the manipulator. ' + \
+                          'The value of a free joint is known at runtime, but not known at IK generation time. ' + \
+                          'If nothing specified, assumes all joints not solving for are free parameters. ' + \
+                          'Can be specified multiple times for multiple free parameters.')
+        
         parser.add_option('--precision', action='store', type='int', dest='precision',default=8,
                           help='The precision to compute the inverse kinematics in, (default=%default).')
+        
         parser.add_option('--maxcasedepth', action='store', type='int', dest='maxcasedepth',default=3,
-                          help='The max depth to go into degenerate cases. If ikfast file is too big, try reducing this, (default=%default).')
+                          help='The max depth to go into degenerate cases. ' + \
+                          'If ikfast file is too big, try reducing this, (default = %default).')
+        
         parser.add_option('--usecached', action='store_false', dest='force',default=True,
                           help='If set, will always try to use the cached ik c++ file, instead of generating a new one.')
+        
         parser.add_option('--freeinc', action='append', type='float', dest='freeinc',default=None,
                           help='The discretization value of freejoints.')
+        
         parser.add_option('--numiktests','--iktests',action='store',type='string',dest='iktests',default=None,
-                          help='Will test the ik solver and return the success rate. IKTESTS can be an integer to specify number of random tests, it can also be a filename to specify the joint values of the manipulator to test. The formst of the filename is #numiktests [dof values]*')
+                          help='Will test the ik solver and return the success rate. ' + \
+                          'IKTESTS can be an integer to specify number of random tests, ' + \
+                          'it can also be a filename to specify the joint values of the manipulator to test. ' + \
+                          'The format of the filename is #numiktests [dof values]*')
+        
         parser.add_option('--iktestjthresh',action='store',type='float',dest='iktestjthresh',default=None,
-                          help='When testing configurations, the eigenvalues of the jacobian all have to be greater than this value')
+                          help='When testing configurations, ' + \
+                          'the eigenvalues of the jacobian all have to be greater than this value')
+        
         parser.add_option('--perftiming', action='store',type='int',dest='perftiming',default=None,
                           help='Number of IK calls for measuring the internal ikfast solver.')
+        
         parser.add_option('--outputlang', action='store',type='string',dest='outputlang',default=None,
                           help='If specified, will output the generated code in that language (ie --outputlang=cpp).')
+        
         parser.add_option('--ipython', '-i',action="store_true",dest='ipython',default=False,
                           help='if true will drop into the ipython interpreter right before ikfast is called')
+        
         parser.add_option('--iktype', action='store',type='string',dest='iktype',default=None,
-                          help='The ik type to build the solver current types are: %s'%(', '.join(iktype.name for iktype in IkParameterizationType.values.values() if not int(iktype) & IkParameterizationType.VelocityDataBit )))
+                          help='The ik type to build the solver current types are: %s' % \
+                          (', '.join(iktype.name for iktype in IkParameterizationType.values.values() \
+                                     if not int(iktype) & IkParameterizationType.VelocityDataBit )))
         return parser
     
     @staticmethod
@@ -1193,7 +1306,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                     break
         else:
             iktype = IkParameterizationType.Transform6D
-        Model = lambda robot: InverseKinematicsModel(robot=robot,iktype=iktype,forceikfast=True)
+        Model = lambda robot: InverseKinematicsModel(robot = robot,iktype = iktype,forceikfast = True)
         robotatts={}
         if not options.show:
             robotatts = {'skipgeometry':'1'}
@@ -1217,7 +1330,11 @@ class InverseKinematicsModel(DatabaseGenerator):
                         manip = robot.GetManipulator(options.manipname)
                         if manip is not None:
                             break
-                ikmodel = InverseKinematicsModel(robot,iktype=model.iktype,forceikfast=True,freeindices=model.freeindices,manip=manip)
+                ikmodel = InverseKinematicsModel(robot,\
+                                                 iktype = model.iktype, \
+                                                 forceikfast = True, \
+                                                 freeindices = model.freeindices, \
+                                                 manip = manip)
                 if not ikmodel.load(freeinc=options.freeinc):
                     raise InverseKinematicsError(u'failed to load ik')
                 
@@ -1231,7 +1348,8 @@ class InverseKinematicsModel(DatabaseGenerator):
                     
                 elif options.perftiming:
                     results = array(ikmodel.perftiming(num=options.perftiming))
-                    log.info('running time mean: %fs, median: %fs, min: %fs, max: %fs', mean(results),median(results),min(results),max(results))
+                    log.info('running time mean: %fs, median: %fs, min: %fs, max: %fs', \
+                             mean(results), median(results), min(results), max(results))
             finally:
                 env.Destroy()
                 RaveDestroy()
