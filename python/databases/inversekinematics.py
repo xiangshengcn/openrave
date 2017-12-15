@@ -200,6 +200,8 @@ formatter = logging.Formatter(LOGGING_FORMAT)
 hdlr.setFormatter(formatter)
 log.addHandler(hdlr)
 
+# TGN writes statistics into a file
+import datetime
 # ========== End of TGN's tools  ==============
 
 class InverseKinematicsError(Exception):
@@ -1005,7 +1007,7 @@ class InverseKinematicsModel(DatabaseGenerator):
             results = self.ikfastproblem.SendCommand('PerfTiming num %d %s'%(num,self.getfilename(True)))
             return [double(s)*1e-9 for s in results.split()]
         
-    def testik(self,iktests,jacobianthreshold=None):
+    def testik( self,iktests, jacobianthreshold=None, filename=None):
         """Tests the iksolver.
         :param iktests: the number of tests, or a filename that describes the tests
         :param jacobianthreshold: When testing configurations, the eigenvalues of the jacobian all have to be greater than this value
@@ -1026,35 +1028,77 @@ class InverseKinematicsModel(DatabaseGenerator):
             if jacobianthreshold is not None:
                 cmd += 'jacobianthreshold %s '%jacobianthreshold
             res = self.ikfastproblem.SendCommand(cmd).split()
-            numtested = float(res[0])
-            successrate = float(res[1])/numtested
+
+            # collect solution results
             solutionresults = []
             index = 2
-            numvalues=1+IkParameterization.GetNumberOfValuesFromType(self.iktype)+self.manip.GetIkSolver().GetNumFreeParameters()
+            numvalues = 1 + IkParameterization.GetNumberOfValuesFromType(self.iktype) + \
+                        self.manip.GetIkSolver().GetNumFreeParameters()
+        
             for iresults in range(3):
                 num = int(res[index])
                 index += 1
-                samples = reshape(array([float64(s) for s in res[index:(index+num*numvalues)]]),(num,numvalues))
+                samples = reshape(array([float64(s) for s in res[index:(index+num*numvalues)]]), \
+                                  (num,numvalues))
                 solutionresults.append(samples)
-                index += num*numvalues
-            wrongrate = len(solutionresults[0])/numtested
+                index += num * numvalues
+
+            # calculate stats
+            num_test    = float(res[0])
+            num_success = float(res[1])
+            num_failure = float(res[0])-float(res[1])
+            num_no_soln = len(solutionresults[1])
+            num_ms_soln = len(solutionresults[2])
+            
+            success_rate = num_success/num_test
+            failure_rate = num_failure/num_test
+            no_soln_rate = num_no_soln/num_test
+            ms_soln_rate = num_ms_soln/num_test
+            
+            if num_failure != len(solutionresults[0]):
+                print 'They are different?!: ', num_failure, len(solutionresults[0])
+                log.info('num_failure = %d, len(solutionresults[0] = %d' %
+                         (num_failure, len(solutionresults[0])) )
+                
             log.info('\n' + \
-                     '  STATISTICS          %%  \n'       + \
+                     '  STATISTICS          #  \n'        + \
                      '-----------------------------\n'    + \
-                     '        #    TEST %d\n'             + \
-                     '        # SUCCESS %d\n'             + \
-                     '        # FAILURE %d\n'             + \
-                     '     SUCCESS RATE %5.1f\n'          + \
-                     '     FAILURE RATE %5.1f\n'          + \
-                     '     NO SOLN RATE %5.1f\n'          + \
-                     'MISSING SOLN RATE %5.1f'            , \
-                     numtested, float(res[1])             , \
-                     len(solutionresults[0])              , \
-                     float(res[1])/numtested*100          , \
-                     wrongrate*100                        , \
-                     len(solutionresults[1])/numtested*100, \
-                     len(solutionresults[2])/numtested*100)
-        return successrate, wrongrate
+                     '             TEST %5d\n'            + \
+                     '          SUCCESS %5d\n'            + \
+                     '          FAILURE %5d\n'            + \
+                     '                      %%  \n'       + \
+                     '-----------------------------\n'    + \
+                     '          SUCCESS %5.1f\n'          + \
+                     '          FAILURE %5.1f\n'          + \
+                     '          NO SOLN %5.1f\n'          + \
+                     '     MISSING SOLN %5.1f'            , \
+                     num_test, num_success, num_failure   , \
+                     success_rate*100, failure_rate*100   , \
+                     no_soln_rate*100, ms_soln_rate*100 )
+
+            if filename is None:
+                filename = self.robot.GetXMLFilename();
+                filename = filename.rsplit('/', 1)[-1]
+
+            # append stats into log file
+            log_filename = "test_all.log"
+            file_handler = open(log_filename, "a")
+            now = datetime.datetime.now()
+            file_handler.write('%s, %s, ' % (  \
+                               now.strftime("%y/%m/%d-%H:%M:%S") \
+                                , filename \
+                               ))
+            file_handler.write(('%d, '*3   + \
+                                '%.1f, '   + \
+                                '%.3f, '*3 + \
+                                'runtime = %.1fs\n') % \
+                               ( num_test, num_success, num_failure   , \
+                                 success_rate*100, \
+                                 failure_rate*100, no_soln_rate*100, ms_soln_rate*100   , \
+                                 self.statistics['generationtime']) )
+            file_handler.close()
+            
+            return success_rate, failure_rate
     
     def show(self,delay=0.1,options=None,forceclosure=True):
         if self.env.GetViewer() is None:
@@ -1137,6 +1181,7 @@ class InverseKinematicsModel(DatabaseGenerator):
     
     @staticmethod
     def RunFromParser(Model=None,parser=None,args=None,**kwargs):
+
         if parser is None:
             parser = InverseKinematicsModel.CreateOptionParser()
         (options, leftargs) = parser.parse_args(args=args)
@@ -1152,7 +1197,11 @@ class InverseKinematicsModel(DatabaseGenerator):
         robotatts={}
         if not options.show:
             robotatts = {'skipgeometry':'1'}
-        model = DatabaseGenerator.RunFromParser(Model=Model,parser=parser,robotatts=robotatts,args=args,**kwargs)
+
+        model = DatabaseGenerator.RunFromParser(Model = Model,\
+                                                parser = parser,\
+                                                robotatts = robotatts,\
+                                                args = args,**kwargs)
         if options.iktests is not None or options.perftiming is not None:
             log.info('testing the success rate of robot %s ',options.robot)
             env = Environment()
@@ -1173,7 +1222,10 @@ class InverseKinematicsModel(DatabaseGenerator):
                     raise InverseKinematicsError(u'failed to load ik')
                 
                 if options.iktests is not None:
-                    successrate, wrongrate = ikmodel.testik(iktests=options.iktests,jacobianthreshold=options.iktestjthresh)
+                    filename = [ zae for zae in args if 'zae' in zae ]
+                    successrate, wrongrate = ikmodel.testik( iktests = options.iktests,\
+                                                            jacobianthreshold = options.iktestjthresh, \
+                                                            filename = filename[0] )
                     if wrongrate > 0:
                         raise InverseKinematicsError(u'wrong rate %f > 0!'%wrongrate)
                     
