@@ -2083,7 +2083,9 @@ class IKFastSolver(AutoReloader):
         """
 
         # this is doing shallow copy, so redundant???
-        # NewLinks = list(Links)
+        NewLinks = list(Links)
+        assert(id(NewLinks)!=id(Links))
+        assert(id(NewLinks[0])!=id(Links[1]))
 
         # deep copy their values before they get modified
         a = Links[1][:,:]
@@ -5993,22 +5995,52 @@ class IKFastSolver(AutoReloader):
         listterms = list(p.terms())
         usedindices = set()
         for dg in groups:
-            for i,j,k in [(0,1,2),(0,2,1),(1,2,0)]:
+            for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
+
+                dgi0 = dg[i][0]
+                dgi1 = dg[i][1]
+                dgj0 = dg[j][0]
+                dgj1 = dg[j][1]
+                dgk0 = dg[k][0]
+                dgk1 = dg[k][1]
+                
                 for index0, index1 in combinations(range(len(listterms)),2):
+                    
                     if index0 in usedindices or index1 in usedindices:
                         continue
-                    if self.equal(listterms[index0][1], listterms[index1][1]):
-                        for (m0,c0),(m1,c1) in [[listterms[index0], listterms[index1]], [listterms[index1], listterms[index0]]]:
-                            if m0[dg[i][0]] == 1 and m0[dg[i][1]] == 1 and m1[dg[j][0]] == 1 and m1[dg[j][1]] == 1:
+
+                    listterms0 = listterms[index0]
+                    listterms1 = listterms[index1]    
+                    
+                    if self.equal(listterms0[1], listterms1[1]):
+                        for (m0,c0),(m1,c1) in [[listterms0, listterms1], [listterms1, listterms0]]:
+                            # TGN: this for-loop is weird
+                            # perhaps should replace combinations by permutations up there
+                            if m0[dgi0] == 1 and m0[dgi1] == 1 and m1[dgj0] == 1 and m1[dgj1] == 1:
+
+                                exec(ipython_str)
                                 # make sure the left over terms are also the same
-                                m0l = list(m0); m0l[dg[i][0]] = 0; m0l[dg[i][1]] = 0
-                                m1l = list(m1); m1l[dg[j][0]] = 0; m1l[dg[j][1]] = 0
-                                if tuple(m0l) == tuple(m1l):
-                                    m2 = list(m0l); m2[dg[k][0]] += 1; m2[dg[k][1]] += 1
+                                m0l = list(m0); m0l[dgi0] = 0; m0l[dgi1] = 0
+                                m1l = list(m1); m1l[dgj0] = 0; m1l[dgj1] = 0
+                                
+                                if m0l == m1l:
+                                    # why += 1, not = 1?
+                                    # m2l = list(m0l); m2l[dgk0] += 1; m2l[dgk1] += 1
+                                    # deep copy list
+                                    m2l = m0l[:]; m2l[dgk0] = 1; m2l[dgk1] = 1
+                                    
                                     # there is a bug in sympy v0.6.7 polynomial adding here!
-                                    p = p.sub(Poly.from_dict({m0:c0},*p.gens)).sub(Poly.from_dict({m1:c1},*p.gens)).sub(Poly.from_dict({tuple(m2):c0},*p.gens))
+                                    # TGN: Now > 0.7, so no problem now?
+                                    p = p.\
+                                        sub(Poly.from_dict({m0:c0}            , *p.gens)). \
+                                        sub(Poly.from_dict({m1:c1}            , *p.gens)). \
+                                        sub(Poly.from_dict({tuple(m2l):c0}    , *p.gens))
+
                                     if dg[3] != S.Zero:
-                                        p = p.add(Poly(dg[3],*p.gens)*Poly.from_dict({tuple(m0l):c0},*p.gens))
+                                        p = p.\
+                                            add(Poly(dg[3]                    , *p.gens) * \
+                                                Poly.from_dict({tuple(m0l):c0}, *p.gens))
+                                        
                                     changed = True
                                     usedindices.add(index0)
                                     usedindices.add(index1)
