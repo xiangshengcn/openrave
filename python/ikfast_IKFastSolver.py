@@ -606,9 +606,6 @@ class IKFastSolver(AutoReloader):
         """
         NEW: recursively subs sin**2 for 1-cos**2 for every trig var
         """
-
-        exec(ipython_str)
-        
         eq = expand(eq)
         curcount = eq.count_ops()
         while True:
@@ -2182,7 +2179,7 @@ class IKFastSolver(AutoReloader):
             endindex   = ilinks[i+2]+1
 
             T0links    = TestLinks[startindex:endindex]
-            # There are exectly three joint variables in T0links, one in the first matrix, on in the last.
+            # There are exactly three joint variables in T0links, one in the first matrix, on in the last.
             # To isolate the left and right translation parts that are independent of solvejointvars,
             # we examine the 2nd and 2nd last matrices in T0links, respectively.
 
@@ -2976,7 +2973,7 @@ class IKFastSolver(AutoReloader):
                     AllEquations.append(eq)
                     
             if uselength:
-                # here length means ||.||^2_2, square of the 2-norm
+                # here length means ||.||**2_2, square of the 2-norm
                 p2  = S.Zero
                 pe2 = S.Zero
                 
@@ -5741,8 +5738,9 @@ class IKFastSolver(AutoReloader):
             retvalues.append((var,newvalue))
         return retvalues
     
-    def SimplifyTransformPoly(self,peq):
-        """simplifies the coefficients of the polynomial with simplifyTransform and returns the new polynomial
+    def SimplifyTransformPoly(self, peq):
+        """
+        Simplifies the coefficients of the polynomial with simplifyTransform and returns the new polynomial
         """
         if peq == S.Zero:
             return peq
@@ -5772,9 +5770,12 @@ class IKFastSolver(AutoReloader):
         # get those that do not start with gconst
         transformsubstitutions = [(var,value) for var, value in self.globalsymbols \
                                   if var.is_Symbol and not var.name.startswith('gconst')]
+
+#        exec(ipython_str) in globals(), locals()
         
         if self._iktype == 'translationdirection5d':
-            # since this IK type includes direction, we only call _SimplifyRotationNorm
+            # since this IK type includes direction, we use the first row only,
+            # i.e., r00**2 + r01**2 + r02**2 = 1
             simpiter = 0
             origeq = eq
 
@@ -5786,7 +5787,7 @@ class IKFastSolver(AutoReloader):
                 #          self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
                 simpiter += 1
                 changed = False
-                neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups[0:1])
+                neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups[0:1]) # first row
                 if neweq is not None:
                     eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
                     if not self.equal(eq, eq2):
@@ -5794,91 +5795,97 @@ class IKFastSolver(AutoReloader):
                         changed = True
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
-            return eq
         
-        elif self._iktype != 'transform6d':
-            return eq
+        elif self._iktype == 'transform6d':
 
-        # TO-DO: if there is a divide by self._rotsymbols, then cannot proceed since cannot make Polynomials from them
-        if fraction(eq)[1].has(*self._rotsymbols):
-            log.info('equation %s has _rotsymbols in its denom; skip', eq)
-            return eq
+            # TO-DO: if there is a divide by self._rotsymbols, then cannot proceed since cannot make Polynomials from them
+            if eq.is_Add:
+                for arg in eq.args:
+                    if fraction(arg)[1].has(*self._rotsymbols):
+                        log.info('argument in equation %s has _rotsymbols in its denom; skip', arg)
+                        return eq
+            elif fraction(eq)[1].has(*self._rotsymbols):
+                log.info('equation %s has _rotsymbols in its denom; skip', eq)
+                return eq
         
-        if eq.is_Add:
-            for arg in eq.args:
-                if fraction(arg)[1].has(*self._rotsymbols):
-                    log.info('argument in equation %s has _rotsymbols in its denom; skip...', arg)
-                    return eq
+            simpiter = 0
+            origeq = eq
         
-        simpiter = 0
-        origeq = eq
-        assert(self._iktype == 'transform6d')
-        
-        # first simplify just rotations since they don't introduce new symbols
-        changed = True
-        while changed and eq.has(*self._rotsymbols):
-            # log.info('simpiter = %d, complexity = %d', \
-            #          simpiter, \
-            #          self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
-            simpiter += 1
-            changed = False
-            
-            neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups)
-            if neweq is not None:
-                eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                if not self.equal(eq,eq2):
-                    eq = eq2
-                    changed = True
-                    
-            neweq = self._SimplifyRotationDot(eq, self._rotsymbols, self._rotdotgroups)
-            if neweq is not None:
-                eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                if not self.equal(eq,eq2):
-                    eq = eq2
-                    changed = True
-                    
-            neweq = self._SimplifyRotationCross(eq, self._rotsymbols, self._rotcrossgroups)
-            if neweq is not None:
-                eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                if not self.equal(eq,eq2):
-                    eq = eq2
-                    changed = True
-                
-        # check if full 3D position is available
-        if self.pp is not None:
+            # first simplify just rotations since they don't introduce new symbols
             changed = True
-            while changed and eq.has(*self._rotpossymbols):
+            while changed and eq.has(*self._rotsymbols):
+                # log.info('simpiter = %d, complexity = %d', \
+                #          simpiter, \
+                #          self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
+                simpiter += 1
                 changed = False
+            
+                neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups)
+                if neweq is not None:
+                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                    if not self.equal(eq,eq2):
+                        eq = eq2
+                        changed = True
+                    
+                neweq = self._SimplifyRotationDot(eq, self._rotsymbols, self._rotdotgroups)
+                if neweq is not None:
+                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                    if not self.equal(eq,eq2):
+                        eq = eq2
+                        changed = True
+                    
+                neweq = self._SimplifyRotationCross(eq, self._rotsymbols, self._rotcrossgroups)
+                if neweq is not None:
+                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                    if not self.equal(eq,eq2):
+                        eq = eq2
+                        changed = True
                 
-                neweq = self._SimplifyRotationNorm(eq, self._rotposnormgroups)
-                if neweq is not None:
-                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq,eq2):
-                        eq = eq2
-                        changed = True
+            # check if full 3D position is available
+            if self.pp is not None:
+                changed = True
+                while changed and eq.has(*self._rotpossymbols):
+                    changed = False
+                
+                    neweq = self._SimplifyRotationNorm(eq, self._rotposnormgroups)
+                    if neweq is not None:
+                        eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                        if not self.equal(eq,eq2):
+                            eq = eq2
+                            changed = True
                         
-                neweq = self._SimplifyRotationDot(eq, self._rotpossymbols, self._rotposdotgroups)
-                if neweq is not None:
-                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq,eq2):
-                        eq = eq2
-                        changed = True
+                    neweq = self._SimplifyRotationDot(eq, self._rotpossymbols, self._rotposdotgroups)
+                    if neweq is not None:
+                        eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                        if not self.equal(eq,eq2):
+                            eq = eq2
+                            changed = True
                         
-                neweq = self._SimplifyRotationCross(eq, self._rotpossymbols, self._rotposcrossgroups)
-                if neweq is not None:
-                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq,eq2):
-                        eq = eq2
-                        changed = True
-                        
-        if isinstance(eq, Poly):
-            eq = eq.as_expr()
-        #log.info("simplify eq:\n%r\n->new eq:\n%r", origeq, eq)
+                    neweq = self._SimplifyRotationCross(eq, self._rotpossymbols, self._rotposcrossgroups)
+                    if neweq is not None:
+                        eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                        if not self.equal(eq,eq2):
+                            eq = eq2
+                            changed = True
+                         
+            if isinstance(eq, Poly):
+                eq = eq.as_expr()
+            #log.info("simplify eq:\n%r\n->new eq:\n%r", origeq, eq)
+        else:
+            pass
+
         return eq
+
     
     def _SimplifyRotationNorm(self, eq, groups):
-        """simplify equation using self._rotnormgroups
         """
+        Simplify eq based on 2-norm of each row/column being 1
+
+        groups is self._rotnormgroups or self._rotposnormgroups
+
+        Called by SimplifyTransform only.
+        """
+
         neweq = None
         for group in groups:
             try:
@@ -5886,61 +5893,96 @@ class IKFastSolver(AutoReloader):
                 if self.codeComplexity(eq) > 300:
                     log.warn(u'equation too complex to simplify for rot norm: %s', eq)
                     continue
+
+                # exec(ipython_str)
                 
                 # need to do 1234*group[3] hack in order to get the Poly domain to recognize group[3] (sympy 0.7.1)
-                p = Poly(eq+1234*group[3],group[0],group[1],group[2])
-                p -= Poly(1234*group[3], *p.gens, domain=p.domain)
+                p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
+                p -= Poly(1234*group[3], *p.gens, domain = p.domain)
+                
             except (PolynomialError, CoercionFailed, ZeroDivisionError), e:
                 continue
+            
             changed = False
             listterms = list(p.terms())
             if len(listterms) == 1:
                 continue
             usedindices = set()
+
+            equiv_zero_term = group[3]-group[0]**2-group[1]**2-group[2]**2
+            
             for index0, index1 in combinations(range(len(listterms)),2):
                 if index0 in usedindices or index1 in usedindices:
                     continue
-                m0,c0 = listterms[index0]
-                m1,c1 = listterms[index1]
-                if self.equal(c0,c1):
-                    for i,j,k in [(0,1,2),(0,2,1),(1,2,0)]:
-                        if m0[k]==m1[k]:
-                            if m0[i] >= 2 and m1[j] >= 2 and m0[i] == m1[i]+2 and m0[j]+2 == m1[j]:
-                                p = p + Poly(c0*(group[3]-group[0]**2-group[1]**2-group[2]**2)*(group[k]**m0[k])*(group[i]**(m0[i]-2))*(group[j]**(m0[j])), group[0],group[1],group[2])
+
+                # In the following assignment,
+                # the first  return value m contains powers of a power product
+                # the second return value c is the coefficient
+                m0, c0 = listterms[index0]
+                m1, c1 = listterms[index1]
+                
+                if self.equal(c0, c1):
+                    # replace x0**2+x1**2 by x3-x2**2
+                    #         x1**2+x2**2 by x3-x0**2
+                    #         x2**2+x0**2 by x3-x1**2
+                    for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
+                        if m0[k] == m1[k]:
+                            
+                            assert(m1[i] >= 0 and m0[j] >= 0)
+                            if m0[i] == m1[i]+2 and m0[j]+2 == m1[j]:
+                                p += Poly(c0* \
+                                          equiv_zero_term* \
+                                          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j]), \
+                                          group[0], group[1], group[2])
                                 changed = True
-                            if m1[i] >= 2 and m0[j] >= 2 and m1[i] == m0[i]+2 and m1[j]+2 == m0[j]:
-                                p = p + Poly(c0*(group[3]-group[0]**2-group[1]**2-group[2]**2)*(group[k]**m1[k])*(group[i]**(m1[i]-2))*(group[j]**(m1[j])), group[0],group[1],group[2])
+
+                            assert(m0[i] >= 0 and m1[j] >= 0)
+                            if m1[i] == m0[i]+2 and m1[j]+2 == m0[j]:
+                                p += Poly(c0* \
+                                          equiv_zero_term * \
+                                          (group[k]**m1[k])*(group[i]**m0[i])*(group[j]**m1[j]), \
+                                          group[0], group[1], group[2])
                                 changed = True
-                            #if ((m0[i] == 2 and m1[j] == 2) or (m0[j]==2 and m1[i]==2)) and m0[k]==m1[k]:
-                            #p = p + c0*(group[3]-group[0]**2-group[1]**2-group[2]**2)*group[k]**(m0[k])*group[i]**(m0[i]
-                            if changed:
-                                neweq = p#.as_expr()
-                                eq = neweq
-                                changed = True
-                                usedindices.add(index0)
-                                usedindices.add(index1)
-                                break
-                elif self.equal(c0,-c1):
-                    # x0**4 - x1**4 = (x0**2-x1**2)*(x0**2+x1**2) = (x0**2 - x1**2)*(x3-x2**2)
-                    for i,j,k in [(0,1,2),(0,2,1),(1,2,0)]:
-                        if m0[k]==m1[k]:
+                            
+                elif self.equal(c0, -c1):
+                    # As x3 = x0**2 + x1**2 + x2**2
+                    # x0**4 - x1**4 = (x0**2-x1**2)*(x0**2+x1**2) = (x0**2-x1**2)*(x3-x2**2)
+                    for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
+                        if m0[k] == m1[k]:
                             if m0[i] == 4 and m1[j] == 4:
-                                p = p + Poly(c0*group[k]**m0[k]*((group[3]-group[k]**2)*(group[i]**2-group[j]**2) - group[i]**4 + group[j]**4), group[0],group[1],group[2])
+                                p += Poly(c0* \
+                                          group[k]**m0[k]* \
+                                          ((group[3]-group[k]**2)*(group[i]**2-group[j]**2) \
+                                           -group[i]**4 + group[j]**4), \
+                                          group[0], group[1], group[2])
                                 changed = True
-                            if m0[j]==4 and m1[i]==4:
-                                p = p + Poly(c0*group[k]**m0[k]*((group[3]-group[k]**2)*(group[j]**2-group[i]**2) - group[j]**4 + group[i]**4), group[0],group[1],group[2])
+                                
+                            if m0[j] == 4 and m1[i] == 4:
+                                p += Poly(c0* \
+                                          group[k]**m0[k]* \
+                                          ((group[3]-group[k]**2)*(group[j]**2-group[i]**2) \
+                                           -group[j]**4 + group[i]**4), \
+                                          group[0], group[1], group[2])
                                 changed = True
-                            if changed:
-                                neweq = p#.as_expr()
-                                eq = neweq
-                                changed = True
-                                usedindices.add(index0)
-                                usedindices.add(index1)
-                                break
+                                
+                if changed:
+                    neweq = p #.as_expr()
+                    eq = neweq
+                    changed = True
+                    usedindices.add(index0)
+                    usedindices.add(index1)
+                    break
+                
         return neweq
     
     def _SimplifyRotationDot(self, eq, symbols, groups):
-        """check for dot products between rows and columns
+        """
+        Simplify eq based on dot product being 0
+
+        symbols is self._rotsymbols   or self._rotpossymbols
+        groups  is self._rotdotgroups or self._rotposdotgroups
+
+        Called by SimplifyTransform only.
         """
         try:
             p = Poly(eq,*symbols)
@@ -5974,7 +6016,13 @@ class IKFastSolver(AutoReloader):
         return p if changed else None
     
     def _SimplifyRotationCross(self, eq, symbols, groups):
-        """simplify rotations using cross products
+        """
+        Simplify eq based on cross product being the remaining row/column
+
+        symbols is self._rotsymbols     or self._rotpossymbols
+        groups  is self._rotcrossgroups or self._rotposcrossgroups
+
+        Called by SimplifyTransform only.
         """
         changed = False
         try:

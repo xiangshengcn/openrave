@@ -3,7 +3,7 @@
 DIRNAME=$1
 ZAEFILES=`sudo ls $DIRNAME/*.zae`
 
-rm -f *.log /var/*.log
+rm -f *.log /var/*.log *.out
 
 for f in $ZAEFILES
 do
