@@ -606,7 +606,9 @@ class IKFastSolver(AutoReloader):
         """
         NEW: recursively subs sin**2 for 1-cos**2 for every trig var
         """
-                
+
+        exec(ipython_str)
+        
         eq = expand(eq)
         curcount = eq.count_ops()
         while True:
@@ -1948,7 +1950,7 @@ class IKFastSolver(AutoReloader):
 
         # check if some set of three consecutive axes intersect at one point
         # if so, the IK solution will be easier to derive
-        tree = self.TestIntersectingAxes(solvejointvars,Links, LinksInv,endbranchtree)
+        tree = self.TestIntersectingAxes(solvejointvars, Links, LinksInv, endbranchtree)
         if tree is None:
             sliderjointvars = [var for var in solvejointvars if not self.IsHinge(var.name)]
             if len(sliderjointvars) > 0:
@@ -2018,7 +2020,8 @@ class IKFastSolver(AutoReloader):
                 for ilinklist, (T0links, T1links) in enumerate(linklist):
                     log.info('try second group %d/%d', ilinklist, len(linklist))
                     try:
-                        # if T1links[-1] doesn't have any symbols, put it over to T0links. Since T1links has the position unknowns, putting over the coefficients to T0links makes things simpler
+                        # If T1links[-1] has no symbols, then we put it over to T0links.
+                        # Since T1links has the position unknowns, doing so simplifies computations.
                         if not self.has(T1links[-1], *solvejointvars):
                             T0links.append(self.affineInverse(T1links.pop(-1)))
                         tree = self.solveFullIK_6DGeneral(T0links, T1links, solvejointvars, endbranchtree, usesolvers=6)
@@ -2029,7 +2032,11 @@ class IKFastSolver(AutoReloader):
         if tree is None:
             raise self.CannotSolveError('cannot solve 6D mechanism!')
         
-        chaintree = AST.SolverIKChainTransform6D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], [(v,i) for v,i in izip(self.freejointvars,self.ifreejointvars)], (self.Tee * self.affineInverse(Tfirstright)).subs(self.freevarsubs), tree,Tfk=self.Tfinal*Tfirstright)
+        chaintree = AST.SolverIKChainTransform6D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
+                                                 [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
+                                                 (self.Tee*self.affineInverse(Tfirstright)).subs(self.freevarsubs), \
+                                                 tree, \
+                                                 Tfk = self.Tfinal*Tfirstright)
         chaintree.dictequations += self.ppsubs+self.npxyzsubs+self.rxpsubs
         return chaintree
     
@@ -2157,7 +2164,8 @@ class IKFastSolver(AutoReloader):
         """
         This generator searches for 3 consecutive intersecting axes. 
         If a robot has this condition, it makes IK computations much simpler.
-        Called only by TestIntersectingAxes.
+
+        Called by TestIntersectingAxes only.
         """
         TestLinks=Links
         TestLinksInv=LinksInv
@@ -2367,9 +2375,11 @@ class IKFastSolver(AutoReloader):
 
     def solve6DIntersectingAxes(self, T0links, T1links, transvars, rotvars, solveRotationFirst, endbranchtree):
         """
-        Solve 6D equations using fact that 3 axes are intersecting. 
-        The 3 intersecting axes are all part of T0links and will be used to compute the rotation of the robot. 
-        The other 3 axes are part of T1links and will be used to first compute the position.
+        Solve 6D equations where 3 axes intersect at a point.
+        These axes correspond to T0links; we use them to compute the orientation.
+        The remaining 3 axes correspond to T1links; we use them to compute the position first.
+
+        Called by TestIntersectingAxes only.
         """
         from ikfast_AST import AST
         
@@ -2385,11 +2395,13 @@ class IKFastSolver(AutoReloader):
         # TGN: getting into this function means solveRotationFirst is True?
         assert(solveRotationFirst)
         
-        #othersolvedvars = rotvars + self.freejointvars if solveRotationFirst else self.freejointvars[:]
+        # othersolvedvars = rotvars + self.freejointvars if solveRotationFirst else self.freejointvars[:]
         # in original code, solveRotationFirst is either None or False
         othersolvedvars = self.freejointvars[:]
         T1linksinv = [self.affineInverse(T) for T in T1links]
-        AllEquations = self.buildEquationsFromPositions(T1links, T1linksinv, transvars, othersolvedvars, uselength=True)
+        AllEquations = self.buildEquationsFromPositions(T1links, T1linksinv, \
+                                                        transvars, othersolvedvars, \
+                                                        uselength = True)
         self.checkSolvability(AllEquations, transvars, self.freejointvars)
         rottree = []
         #if solveRotationFirst:
@@ -2399,22 +2411,21 @@ class IKFastSolver(AutoReloader):
         #else:
         newendbranchtree = [AST.SolverSequence([rottree])]
         curvars = transvars[:]
-        solsubs=self.freevarsubs[:]
+        solsubs = self.freevarsubs[:]
 
         transtree = self.SolveAllEquations(AllEquations, \
                                            curvars = curvars, \
                                            othersolvedvars = othersolvedvars[:], \
                                            solsubs = solsubs, \
                                            endbranchtree = newendbranchtree)
-        #transtree = self.verifyAllEquations(AllEquations, \
-        #                                    rotvars if solveRotationFirst \
-        #                                    else transvars+rotvars, \
-        #                                    self.freevarsubs[:], transtree)
+
         transtree = self.verifyAllEquations(AllEquations, \
                                             transvars+rotvars, \
+                                            # rotvars if solveRotationFirst \
+                                            # else transvars+rotvars, \
                                             self.freevarsubs[:], transtree)
 
-        solvertree= []
+        solvertree = []
         solvedvarsubs = self.freevarsubs[:]
         #if solveRotationFirst:
         #    # can even get here?? it is either None or False
@@ -2901,6 +2912,22 @@ class IKFastSolver(AutoReloader):
         return chaintree
 
     def buildEquationsFromTwoSides(self, leftside, rightside, usedvars, uselength = True):
+        """
+
+        uselength indicates whether to use the 2-norm of both sides.
+        
+        Called by 
+
+        solveFullIK_Direction3D
+        solveFullIK_Lookat3D
+        solveFullIK_TranslationXY2D
+        solveFullIK_TranslationXYOrientation3D
+        solveFullIK_Ray4D
+        solve5DIntersectingAxes
+        buildEquationsFromPositions
+
+        """
+        
         # try to shift all the constants of each Position expression to one side
         for i in range(len(leftside)):
             for j in range(leftside[i].shape[0]):
@@ -2909,7 +2936,7 @@ class IKFastSolver(AutoReloader):
                 pconstterm   = None
                 peeconstterm = None
 
-                # pconstterm consists of all constant terms in p
+                # pconstterm consists of all constants in p
                 if p.is_Add:
                     pconstterm = [term for term in p.args if term.is_number]
                 elif p.is_number:
@@ -2917,7 +2944,7 @@ class IKFastSolver(AutoReloader):
                 else:
                     continue
 
-                # peeconstterm consists of all constant terms in pee
+                # peeconstterm consists of all constants in pee
                 if pee.is_Add:
                     peeconstterm = [term for term in pee.args if term.is_number]
                 elif pee.is_number:
@@ -2926,44 +2953,48 @@ class IKFastSolver(AutoReloader):
                     continue
 
                 if len(pconstterm) > 0 and len(peeconstterm) > 0:
-                    # shift it to the one that has the least terms
+                    # shift it to the one that has the fewer constants
                     for term in peeconstterm if len(p.args) < len(pee.args) else pconstterm:
                         leftside[i][j]  -= term
                         rightside[i][j] -= term
 
         AllEquations = []
+        self.gen_trigsubs(usedvars)
+                        
         for i in range(len(leftside)):
             for j in range(leftside[i].shape[0]):
-                self.gen_trigsubs(usedvars)
-                e = self.trigsimp_new(leftside[i][j]-rightside[i][j])
+                eq = self.trigsimp_new(leftside[i][j]-rightside[i][j])
                 # old function
                 # e2 = self.trigsimp(leftside[i][j]-rightside[i][j], usedvars)
                 # print "e  = ", e
                 # print "e2 = ", e2
                 # assert(e==e2)
 
-                if self.codeComplexity(e) < 1500:
-                    e = self.SimplifyTransform(e)
-                if self.CheckExpressionUnique(AllEquations,e):
-                    AllEquations.append(e)
+                if self.codeComplexity(eq) < 1500:
+                    eq = self.SimplifyTransform(eq)
+                if self.CheckExpressionUnique(AllEquations, eq):
+                    AllEquations.append(eq)
                     
             if uselength:
                 # here length means ||.||^2_2, square of the 2-norm
                 p2  = S.Zero
                 pe2 = S.Zero
+                
                 for j in range(leftside[i].shape[0]):
                     p2  += leftside[i][j]**2
                     pe2 += rightside[i][j]**2
+                    
                 if self.codeComplexity(p2) < 1200 and self.codeComplexity(pe2) < 1200:
                     # sympy's trigsimp/customtrigsimp give up too easily
-                    e = self.SimplifyTransform(self.trigsimp_new(p2)-self.trigsimp_new(pe2))
+                    eq = self.SimplifyTransform(self.trigsimp_new(p2)-self.trigsimp_new(pe2))
 
                     # if this length equation is not in our equation set, then add it into the set  
-                    if self.CheckExpressionUnique(AllEquations, e):
-                        AllEquations.append(e.expand())
+                    if self.CheckExpressionUnique(AllEquations, eq):
+                        AllEquations.append(eq.expand())
                 else:
                     log.info('length of equation too big, skip %d, %d', \
-                             self.codeComplexity(p2),self.codeComplexity(pe2))
+                             self.codeComplexity(p2), self.codeComplexity(pe2))
+                    
         self.sortComplexity(AllEquations)
         return AllEquations
         
@@ -2971,21 +3002,33 @@ class IKFastSolver(AutoReloader):
                                     uselength = True, \
                                     removesmallnumbers = True, \
                                     ignoreaxis = None):
-        """multiplies out all the matrices and builds up the equations
-        :param ignoreaxis: if not None, can be 0, 1, 2 to specify the axes which should be ignored
+        """
+        Computes the product of all homogeneous matrices in T1links and that of matrices in T1linksinv, resp.
+
+        Then constructs equations for their translation vectors, i.e. positions [0:3,3].
+
+        uselength indicates whether to use the 2-norm of these vectors.
+
+        ignoreaxis specifies the ONE axe that is ignored; it can be None, 0, 1, 2.
         """
         Taccum = eye(4)
         numvarsdone = 1
         Positions = []
         Positionsee = []
         indices = [0,1,2]
+
+        # remove the ONE ignored axis; can be >1?
         if ignoreaxis is not None:
             indices.remove(ignoreaxis)
+            
         for i in range(len(T1links)-1):
             Taccum = T1linksinv[i]*Taccum
             hasvars = [self.has(Taccum,v) for v in transvars]
             if __builtin__.sum(hasvars) == numvarsdone:
+                # __builtin__.sum() is used to sum boolean vector
                 Positions.append(Taccum.extract(indices,[3]))
+                # TGN: this multiplyMatrix call can be improved in a cumulative manner
+                # to do in future
                 Positionsee.append(self.multiplyMatrix(T1links[(i+1):]).extract(indices,[3]))
                 numvarsdone += 1
             if numvarsdone > 2:
@@ -5706,77 +5749,94 @@ class IKFastSolver(AutoReloader):
         
         return peq.termwise(lambda m,c: self.SimplifyTransform(c))
     
-    def SimplifyTransform(self,eq,othervars=None):
-        """Attemps to simplify an equation given that variables from a rotation matrix have been used. There are 12 constraints that are tested:
-        - lengths of rows and colums are 1
-        - dot products of combinations of rows/columns are 0
-        - cross products of combinations of rows/columns yield the left over row/column
-        :param othervars: optional list of the unknown variables inside the equations. Help simplify depending on the terms of these variables
+    def SimplifyTransform(self, eq, othervars = None):
+        """
+        Attemps to simplify eq using properties of a 3D rotation matrix, i.e., 18 constraints:
+
+        - 2-norm of each row/column is 1
+        - dot product of every pair of rows/columns is 0
+        - cross product of every pair (1,2),(2,3),(3,1) of rows/columns is the remaining row/column
+        
+        othervars (optional list) contains unknown variables with respect to which we simplify eq
+
         """
         if othervars is not None:
-            peq = Poly(eq,*othervars)
+            peq = Poly(eq, *othervars)
             if peq == S.Zero:
                 return S.Zero
             
             peqnew = peq.termwise(lambda m,c: self.SimplifyTransform(c))
             return peqnew.as_expr()
         
-        # there can be gobal substitutions like pz=0. get all of them that do not start with gconst
-        transformsubstitutions = [(var,value) for var, value in self.globalsymbols if var.is_Symbol and not var.name.startswith('gconst')]
+        # there can be global substitutions like pz = 0.
+        # get those that do not start with gconst
+        transformsubstitutions = [(var,value) for var, value in self.globalsymbols \
+                                  if var.is_Symbol and not var.name.startswith('gconst')]
         
         if self._iktype == 'translationdirection5d':
-            # since includes direction, only try to simplify r00**2+r01**2+r02**2=1
+            # since this IK type includes direction, we only call _SimplifyRotationNorm
             simpiter = 0
             origeq = eq
+
             # first simplify just rotations since they don't add any new variables
             changed = True
             while changed and eq.has(*self._rotsymbols):
-                #log.info('simpiter=%d, complexity=%d', simpiter, self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
+                # log.info('simpiter = %d, complexity = %d', \
+                #          simpiter, \
+                #          self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
                 simpiter += 1
                 changed = False
                 neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups[0:1])
                 if neweq is not None:
                     eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq,eq2):
+                    if not self.equal(eq, eq2):
                         eq = eq2
                         changed = True
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
             return eq
         
-        if self._iktype != 'transform6d':
+        elif self._iktype != 'transform6d':
             return eq
 
-        # TODO if there is a divide by self._rotsymbols, then cannot proceed since cannot make Polynomials from them
+        # TO-DO: if there is a divide by self._rotsymbols, then cannot proceed since cannot make Polynomials from them
         if fraction(eq)[1].has(*self._rotsymbols):
-            log.info('equation %s has rot symbols in denom, so skip', eq)
+            log.info('equation %s has _rotsymbols in its denom; skip', eq)
             return eq
+        
         if eq.is_Add:
             for arg in eq.args:
                 if fraction(arg)[1].has(*self._rotsymbols):
-                    log.info('equation %s has rot symbols in denom, so skip...', arg)
+                    log.info('argument in equation %s has _rotsymbols in its denom; skip...', arg)
                     return eq
         
         simpiter = 0
         origeq = eq
-        # first simplify just rotations since they don't add any new variables
+        assert(self._iktype == 'transform6d')
+        
+        # first simplify just rotations since they don't introduce new symbols
         changed = True
         while changed and eq.has(*self._rotsymbols):
-            #log.info('simpiter=%d, complexity=%d', simpiter, self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
+            # log.info('simpiter = %d, complexity = %d', \
+            #          simpiter, \
+            #          self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
             simpiter += 1
             changed = False
+            
             neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups)
             if neweq is not None:
                 eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
                 if not self.equal(eq,eq2):
                     eq = eq2
                     changed = True
+                    
             neweq = self._SimplifyRotationDot(eq, self._rotsymbols, self._rotdotgroups)
             if neweq is not None:
                 eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
                 if not self.equal(eq,eq2):
                     eq = eq2
                     changed = True
+                    
             neweq = self._SimplifyRotationCross(eq, self._rotsymbols, self._rotcrossgroups)
             if neweq is not None:
                 eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
@@ -5789,18 +5849,21 @@ class IKFastSolver(AutoReloader):
             changed = True
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
+                
                 neweq = self._SimplifyRotationNorm(eq, self._rotposnormgroups)
                 if neweq is not None:
                     eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
                     if not self.equal(eq,eq2):
                         eq = eq2
                         changed = True
+                        
                 neweq = self._SimplifyRotationDot(eq, self._rotpossymbols, self._rotposdotgroups)
                 if neweq is not None:
                     eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
                     if not self.equal(eq,eq2):
                         eq = eq2
                         changed = True
+                        
                 neweq = self._SimplifyRotationCross(eq, self._rotpossymbols, self._rotposcrossgroups)
                 if neweq is not None:
                     eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
