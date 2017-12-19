@@ -1168,6 +1168,20 @@ class IKFastSolver(AutoReloader):
         self._rotcrossgroups = []
 
         """
+
+Numbering of entries in A and inv(A):
+
+         [ r00  r01  r02   px ]    [ 0  1  2   9 ]
+         [ r10  r11  r12   py ]    [ 3  4  5  10 ]
+     A = [ r20  r21  r22   pz ]    [ 6  7  8  11 ]
+         [                  1 ]    
+
+         [ r00  r10  r20  npx ]    [ 0  3  6  12 ]
+         [ r01  r11  r21  npy ]    [ 1  4  7  13 ]
+inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
+         [                  1 ]    
+
+
 [[[0, 3], [1, 4], [2, 5], 0],
  [[0, 1], [3, 4], [6, 7], 0],
  [[0, 6], [1, 7], [2, 8], 0],
@@ -5979,12 +5993,31 @@ class IKFastSolver(AutoReloader):
     
     def _SimplifyRotationDot(self, eq, symbols, groups):
         """
-        Simplify eq based on dot product being 0
+        Simplify eq based on dot product being 0 
+        or translation vector of the inverse of homogeneous matrix
 
         symbols is self._rotsymbols   or self._rotpossymbols
         groups  is self._rotdotgroups or self._rotposdotgroups
 
         Called by SimplifyTransform only.
+
+        Recall
+
+[[[0, 3], [1, 4], [2, 5], 0],
+ [[0, 1], [3, 4], [6, 7], 0],
+ [[0, 6], [1, 7], [2, 8], 0],
+ [[0, 2], [3, 5], [6, 8], 0],
+ [[3, 6], [4, 7], [5, 8], 0],
+ [[1, 2], [4, 5], [7, 8], 0],
+------------------------- Above are _rotdotgroups
+------------------------- Below are _rotposdotgroups
+ [[0, 9], [3, 10], [6, 11], npx],
+ [[0, 12], [1, 13], [2, 14], px],
+ [[1, 9], [4, 10], [7, 11], npy],
+ [[3, 12], [4, 13], [5, 14], py],
+ [[2, 9], [5, 10], [8, 11], npz],
+ [[6, 12], [7, 13], [8, 14], pz]]
+
         """
         try:
             p = Poly(eq,*symbols)
@@ -5994,57 +6027,65 @@ class IKFastSolver(AutoReloader):
         changed = False
         listterms = list(p.terms())
         usedindices = set()
-        for dg in groups:
+        perm_len_listterms = permutations(range(len(listterms)),2)
+        
+        for g in groups:
             for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
 
-                dgi0 = dg[i][0]
-                dgi1 = dg[i][1]
-                dgj0 = dg[j][0]
-                dgj1 = dg[j][1]
-                dgk0 = dg[k][0]
-                dgk1 = dg[k][1]
+                gi0 = g[i][0]
+                gi1 = g[i][1]
+                gj0 = g[j][0]
+                gj1 = g[j][1]
                 
-                for index0, index1 in combinations(range(len(listterms)),2):
+                for index0, index1 in perm_len_listterms:
                     
                     if index0 in usedindices or index1 in usedindices:
                         continue
 
-                    listterms0 = listterms[index0]
-                    listterms1 = listterms[index1]    
+                    m0, c0 = listterms[index0]
+                    m1, c1 = listterms[index1]    
                     
-                    if self.equal(listterms0[1], listterms1[1]):
-                        for (m0,c0),(m1,c1) in [[listterms0, listterms1], [listterms1, listterms0]]:
-                            # TGN: this for-loop is weird
-                            # perhaps should replace combinations by permutations up there
-                            if m0[dgi0] == 1 and m0[dgi1] == 1 and m1[dgj0] == 1 and m1[dgj1] == 1:
+                    if self.equal(c0, c1):
+                        # TGN: not necessarily equal
+                        # consider (a+b)*r00*r10 + (b+c)*r01*r11 + (c+a)*r02*r12
+                        # one good result is (c-a)*r01*r11 + (c-b)*r02*r12
 
-                                exec(ipython_str)
-                                # make sure the left over terms are also the same
-                                m0l = list(m0); m0l[dgi0] = 0; m0l[dgi1] = 0
-                                m1l = list(m1); m1l[dgj0] = 0; m1l[dgj1] = 0
-                                
-                                if m0l == m1l:
-                                    # why += 1, not = 1?
-                                    # m2l = list(m0l); m2l[dgk0] += 1; m2l[dgk1] += 1
-                                    # deep copy list
-                                    m2l = m0l[:]; m2l[dgk0] = 1; m2l[dgk1] = 1
-                                    
-                                    # there is a bug in sympy v0.6.7 polynomial adding here!
-                                    # TGN: Now > 0.7, so no problem now?
-                                    p = p.\
-                                        sub(Poly.from_dict({m0:c0}            , *p.gens)). \
-                                        sub(Poly.from_dict({m1:c1}            , *p.gens)). \
-                                        sub(Poly.from_dict({tuple(m2l):c0}    , *p.gens))
+                        if   m0[gi0] == 1 and m0[gi1] == 1 and m1[gj0] == 1 and m1[gj1] == 1:
+                            m0l = list(m0); m0l[gi0] = 0; m0l[gi1] = 0
+                            m1l = list(m1); m1l[gj0] = 0; m1l[gj1] = 0
+                            
+                        elif m0[gj0] == 1 and m0[gj1] == 1 and m1[gi0] == 1 and m1[gi1] == 1:
+                            m0l = list(m0); m0l[gj0] = 0; m0l[gj1] = 0
+                            m1l = list(m1); m1l[gi0] = 0; m1l[gi1] = 0
+                            
+                        else:
+                            continue
+                            
+                        # make sure the left over terms are also the same
+                        if m0l == m1l:
+                            gk0 = g[k][0]
+                            gk1 = g[k][1]
+                            m2l = m0l[:]; m2l[gk0] += 1; m2l[gk1] += 1
+                            m2 = tuple(m2l)
+                            
+                            # there is a bug in sympy v0.6.7 polynomial adding here!
+                            # TGN: Now > 0.7, so no problem now?
+                            p = p.\
+                                sub(Poly.from_dict({m0:c0}, *p.gens)). \
+                                sub(Poly.from_dict({m1:c0}, *p.gens)). \
+                                sub(Poly.from_dict({m2:c0}, *p.gens))
 
-                                    if dg[3] != S.Zero:
-                                        p = p.\
-                                            add(Poly(dg[3]                    , *p.gens) * \
-                                                Poly.from_dict({tuple(m0l):c0}, *p.gens))
+                            g3 = g[3]
+                            if g3 != S.Zero:
+                                # when g3 = npx, px, npy, py, npz, or pz
+                                new_m0 = tuple(m0l)
+                                p = p.add(Poly(g3, *p.gens)*Poly.from_dict({new_m0:c0}, *p.gens))
                                         
-                                    changed = True
-                                    usedindices.add(index0)
-                                    usedindices.add(index1)
-                                    break
+                            changed = True
+                            usedindices.add(index0)
+                            usedindices.add(index1)
+                            break
+
         return p if changed else None
     
     def _SimplifyRotationCross(self, eq, symbols, groups):
