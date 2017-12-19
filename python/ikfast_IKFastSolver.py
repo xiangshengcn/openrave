@@ -6046,9 +6046,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     m1, c1 = listterms[index1]    
                     
                     if self.equal(c0, c1):
-                        # TGN: not necessarily equal
-                        # consider (a+b)*r00*r10 + (b+c)*r01*r11 + (c+a)*r02*r12
-                        # one good result is (c-a)*r01*r11 + (c-b)*r02*r12
+                        # TGN: sufficient condition of simplification may not be necessarily equal
+                        #
+                        # In the non-equal case, consider (a+b)*r00*r10 + (b+c)*r01*r11 + (c+a)*r02*r12
+                        # where a,b,c are distinct.
+                        # One of the acceptable results may be (c-a)*r01*r11 + (c-b)*r02*r12
+                        # INSTEAD of (-c)*r00*r10 + (-a)*r01*r11 + (-b)*r02*r12
+                        #
+                        # E.g. 5*r00*r10 + 3*r01*r11 + 4*r02*r12 = (-2)*r01*r11 + (-1)*r02*r12
+                        #
+                        # This observation only applies to DOT case, not to CROSS case
 
                         if   m0[gi0] == 1 and m0[gi1] == 1 and m1[gj0] == 1 and m1[gj1] == 1:
                             m0l = list(m0); m0l[gi0] = 0; m0l[gi1] = 0
@@ -6105,26 +6112,57 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         listterms = list(p.terms())
         usedindices = set()
+        perm_len_listterms = permutations(range(len(listterms)),2)
+        
         for cg in groups:
-            for index0, index1 in combinations(range(len(listterms)),2):
+
+            cg00 = cg[0][0]
+            cg01 = cg[0][1]
+            cg10 = cg[1][0]
+            cg11 = cg[1][1]
+            
+            for index0, index1 in perm_len_listterms:
+                
                 if index0 in usedindices or index1 in usedindices:
                     continue
-                if self.equal(listterms[index0][1],-listterms[index1][1]):
-                    for (m0,c0),(m1,c1) in [[listterms[index0], listterms[index1]],[listterms[index1], listterms[index0]]]:
-                        if m0[cg[0][0]] == 1 and m0[cg[0][1]] == 1 and m1[cg[1][0]] == 1 and m1[cg[1][1]] == 1:
-                            # make sure the left over terms are also the same
-                            m0l = list(m0); m0l[cg[0][0]] = 0; m0l[cg[0][1]] = 0
-                            m1l = list(m1); m1l[cg[1][0]] = 0; m1l[cg[1][1]] = 0
-                            if tuple(m0l) == tuple(m1l):
-                                m2 = m0l; m2[cg[2]] += 1
-                                # there is a bug in sympy polynomial caching here! (0.6.7)
-                                p = p.sub(Poly.from_dict({m0:c0},*p.gens)).sub(Poly.from_dict({m1:c1},*p.gens)).add(Poly.from_dict({tuple(m2):c0},*p.gens))
-                                changed = True
-                                usedindices.add(index0)
-                                usedindices.add(index1)
-                                break
+
+                m0, c0 = listterms[index0]
+                m1, c1 = listterms[index1]
+                
+                if self.equal(c0, -c1):
+
+                    if   m0[cg00] == 1 and m0[cg01] == 1 and m1[cg10] == 1 and m1[cg11] == 1:
+                        # make sure the left over terms are also the same
+                        m0l = list(m0); m0l[cg00] = 0; m0l[cg01] = 0
+                        m1l = list(m1); m1l[cg10] = 0; m1l[cg11] = 0
+                        
+                    elif m0[cg10] == 1 and m0[cg11] == 1 and m1[cg00] == 1 and m1[cg01] == 1:
+                        # make sure the left over terms are also the same
+                        m0l = list(m0); m0l[cg10] = 0; m0l[cg11] = 0
+                        m1l = list(m1); m1l[cg00] = 0; m1l[cg01] = 0
+                        c0 = -c0
+                        assert(self.equal(c0,c1))
+                        
+                    else:
+                        continue
+                        
+                    if tuple(m0l) == tuple(m1l):
+                        m2l = m0l[:]; m2l[cg[2]] += 1
+                        m2 = tuple(m2l)
+                        
+                        # there is a bug in sympy polynomial caching here! (0.6.7)
+                        # TGN: Now > 0.7, so no problem now?
+                        p = p.\
+                            sub(Poly.from_dict({m0:c0}, *p.gens)).\
+                            add(Poly.from_dict({m1:c0}, *p.gens)).\
+                            add(Poly.from_dict({m2:c0}, *p.gens))
+                        changed = True
+                        usedindices.add(index0)
+                        usedindices.add(index1)
+                        break
+                        
         return p if changed else None
-    
+
     def CheckExpressionUnique(self, exprs, expr, checknegative=True, removecommoncoeff=False):
         """checks if expr is inside exprs.
         :param checknegative: if True, then also check if -expr is inside exprs
