@@ -5888,6 +5888,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 eq = eq.as_expr()
             #log.info("simplify eq:\n%r\n->new eq:\n%r", origeq, eq)
         else:
+            # not translationdirection5d nor transform6d
             pass
 
         return eq
@@ -6163,10 +6164,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         
         return p if changed else None
 
-    def CheckExpressionUnique(self, exprs, expr, checknegative=True, removecommoncoeff=False):
-        """checks if expr is inside exprs.
-        :param checknegative: if True, then also check if -expr is inside exprs
-        :param removecommoncoeff: if True, removes any coefficients so that self.CheckExpressionUnique can work
+    def CheckExpressionUnique(self, exprs, expr, \
+                              checknegative = True, \
+                              removecommoncoeff = False):
+        """
+        Checks if expr is in exprs.        
+        If checknegative is True, then we also check if -expr is in exprs
+        If removecommoncoeff is True, then we call self.removecommonexprs on expr first
         """
         if removecommoncoeff:
             expr = self.removecommonexprs(expr)
@@ -8949,11 +8953,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return False
     
     @staticmethod
-    def removecommonexprs(eq,returncommon=False,onlygcd=False,onlynumbers=True):
-        """removes common expressions from a sum. Assumes all the coefficients are rationals. For example:
-        a*c_0 + a*c_1 + a*c_2 = 0
-        will return in
-        c_0 + c_1 + c_2 = 0
+    def removecommonexprs(eq, \
+                          returncommon = False, \
+                          onlygcd = False, \
+                          onlynumbers = True):
+        """
+        Factors out common expressions from a sum assuming all coefficients are rational.
+ 
+        E.g. from a*c_0 + a*c_1 + a*c_2 = 0 we obtain c_0 + c_1 + c_2 = 0
         """
         eq = eq.expand() # doesn't work otherwise
         if eq.is_Add:
@@ -9024,11 +9031,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             return eq,S.One
         return eq
 
-#     def det_bareis(M,*vars,**kwargs):
-#         return M.det_bareis()
-
     @staticmethod
-    def det_bareis(M,*vars,**kwargs):
+    def det_bareis(M, *vars, **kwargs):
         """Function from sympy with a couple of improvements.
            Compute matrix determinant using Bareis' fraction-free
            algorithm which is an extension of the well known Gaussian
@@ -9188,18 +9192,18 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     @staticmethod
     def GetSolvers():
         """Returns a dictionary of all the supported solvers and their official identifier names"""
-        return {'transform6d':IKFastSolver.solveFullIK_6D,
-                'rotation3d':IKFastSolver.solveFullIK_Rotation3D,
-                'translation3d':IKFastSolver.solveFullIK_Translation3D,
-                'direction3d':IKFastSolver.solveFullIK_Direction3D,
-                'ray4d':IKFastSolver.solveFullIK_Ray4D,
-                'lookat3d':IKFastSolver.solveFullIK_Lookat3D,
-                'translationdirection5d':IKFastSolver.solveFullIK_TranslationDirection5D,
-                'translationxy2d':IKFastSolver.solveFullIK_TranslationXY2D,
-                'translationxyorientation3d':IKFastSolver.solveFullIK_TranslationXYOrientation3D,
-                'translationxaxisangle4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D,
-                'translationyaxisangle4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D,
-                'translationzaxisangle4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D,
+        return {'transform6d'                 :IKFastSolver.solveFullIK_6D,
+                'rotation3d'                  :IKFastSolver.solveFullIK_Rotation3D,
+                'translation3d'               :IKFastSolver.solveFullIK_Translation3D,
+                'direction3d'                 :IKFastSolver.solveFullIK_Direction3D,
+                'ray4d'                       :IKFastSolver.solveFullIK_Ray4D,
+                'lookat3d'                    :IKFastSolver.solveFullIK_Lookat3D,
+                'translationdirection5d'      :IKFastSolver.solveFullIK_TranslationDirection5D,
+                'translationxy2d'             :IKFastSolver.solveFullIK_TranslationXY2D,
+                'translationxyorientation3d'  :IKFastSolver.solveFullIK_TranslationXYOrientation3D,
+                'translationxaxisangle4d'     :IKFastSolver.solveFullIK_TranslationAxisAngle4D,
+                'translationyaxisangle4d'     :IKFastSolver.solveFullIK_TranslationAxisAngle4D,
+                'translationzaxisangle4d'     :IKFastSolver.solveFullIK_TranslationAxisAngle4D,
                 'translationxaxisangleznorm4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D,
                 'translationyaxisanglexnorm4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D,
                 'translationzaxisangleynorm4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D
