@@ -6188,31 +6188,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if expr.is_Function != exprtest.is_Function:
                 continue
             if expr.is_Function:
-                if not expr.is_Function:
-                    return False
-                if exprtest.func == sign: # infinite loop for some reason if checking for this
-                    return False
-                if expr.func == sign: # infinite loop for some reason if checking for this
+                if exprtest.func == sign or expr.func == sign: # infinite loop for some reason if checking for this
                     return False
                 
-            if self.equal(expr,exprtest):
+            if self.equal(expr,exprtest) or (checknegative and self.equal(-expr,exprtest)):
                 return False
             
-        if checknegative:
-            for exprtest in exprs:
-                if expr.is_Function != exprtest.is_Function:
-                    continue
-                if expr.is_Function:
-                    if not expr.is_Function:
-                        return False
-                    if exprtest.func == sign: # infinite loop for some reason if checking for this
-                        return False
-                    if expr.func == sign: # infinite loop for some reason if checking for this
-                        return False
-                
-                if self.equal(-expr,exprtest):
-                    return False
-                
         return True
 
     def getCommonExpression(self, exprs, expr):
@@ -8975,6 +8956,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         # use with "from operator import mul"
         assert(reduce(mul,[],1) == S.One)
+        assert(sum([]) == S.Zero)
         
         if eq.is_Add:
             exprs = eq.args
