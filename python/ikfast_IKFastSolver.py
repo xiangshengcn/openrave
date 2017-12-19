@@ -6185,13 +6185,21 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             expr = self.removecommonexprs(expr)
         
         for exprtest in exprs:
-            if expr.is_Function != exprtest.is_Function:
-                continue
-            if expr.is_Function:
-                if exprtest.func == sign or expr.func == sign: # infinite loop for some reason if checking for this
-                    return False
-                
-            if self.equal(expr,exprtest) or (checknegative and self.equal(-expr,exprtest)):
+
+            if (\
+                # (T,T)
+                expr.is_Function and exprtest.is_Function \
+                # infinite loop for some reason if checking for this
+                and (exprtest.func == sign \
+                     or expr.func == sign) \
+            ) \
+                or \
+                (\
+                 # (T,T) or (F,F)
+                 expr.is_Function == exprtest.is_Function \
+                 and (self.equal(expr, exprtest) or (checknegative \
+                                                    and self.equal(-expr, exprtest)))
+                ):
                 return False
             
         return True
