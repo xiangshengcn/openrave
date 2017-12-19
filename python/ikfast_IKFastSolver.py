@@ -6346,8 +6346,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         from ikfast_AST import AST
 
-        # range of progress is [0.15,0.45]. Usually scopecounters can go to several hundred
-        progress = 0.45-0.3/(1+self._scopecounter/100)
+        # range of progress is [0.15, 0.45].
+        # Usually scopecounters can go to several hundred
+        progress = 0.45 - 0.3/(1+self._scopecounter/100)
         self._CheckPreemptFn(progress = progress)
         
         if len(curvars) == 0:
@@ -6373,14 +6374,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             othervars = unknownvars + [var for var in curvars if var != curvar]
             curvarsym = self.Variable(curvar)
             raweqns = []
-            for e in AllEquations:
+            for eq in AllEquations:
                 if (len(othervars) == 0 or \
-                    not e.has(*othervars)) and \
-                    e.has(curvar,curvarsym.htvar,curvarsym.cvar,curvarsym.svar):
-                    eq = e.subs(self.freevarsubs+solsubs)
+                    not eq.has(*othervars)) and \
+                    eq.has(curvar, curvarsym.htvar, curvarsym.cvar, curvarsym.svar):
+                    eq = eq.subs(self.freevarsubs + solsubs)
 
-                    if self.CheckExpressionUnique(raweqns,eq):
+                    if self.CheckExpressionUnique(raweqns, eq):
                         raweqns.append(eq)
+                        
             if len(raweqns) > 0:
                 try:
                     rawsolutions = self.solveSingleVariable(self.sortComplexity(raweqns), \
@@ -6403,8 +6405,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # Sometimes an equation like atan2(y,x) evaluates to atan2(0,0) during runtime.
         # This cannot be known at compile time, so the equation is selected and any other possibilities are rejected.
         # In the bertold robot case, the next possibility is a pair-wise solution involving two variables
+        #
+        # TGN: don't we check Abs(y)+Abs(x) for atan2?
         
-        if any([s[0].numsolutions()==1 for s in solutions]):
+        if any([s[0].numsolutions() == 1 for s in solutions]):
             return self.AddSolution(solutions, \
                                     AllEquations, \
                                     curvars, \
@@ -6416,19 +6420,22 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     unknownvars = unknownvars)
         
         curvarsubssol = []
-        for var0,var1 in combinations(curvars,2):
-            othervars = unknownvars + [var for var in curvars if var != var0 and var != var1]
+        for var0, var1 in combinations(curvars,2):
+            othervars = unknownvars + \
+                        [var for var in curvars if var != var0 and var != var1]
             raweqns = []
             complexity = 0
-            for e in AllEquations:
-                if (len(othervars) == 0 or not e.has(*othervars)) and e.has(var0,var1):
-                    eq = e.subs(self.freevarsubs+solsubs)
-                    if self.CheckExpressionUnique(raweqns,eq):
+            for eq in AllEquations:
+                if (len(othervars) == 0 or not eq.has(*othervars)) \
+                   and eq.has(var0, var1):
+                    
+                    eq = eq.subs(self.freevarsubs + solsubs)
+                    if self.CheckExpressionUnique(raweqns, eq):
                         raweqns.append(eq)
                         complexity += self.codeComplexity(eq)
                         
             if len(raweqns) > 1:
-                curvarsubssol.append((var0,var1,raweqns,complexity))
+                curvarsubssol.append((var0, var1, raweqns, complexity))
                 
         curvarsubssol.sort(lambda x, y: x[3]-y[3])
         
@@ -6454,8 +6461,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 assert(len([z for z in curvars if z in self.trigvars_subs]) == len(curvars))
                 # equivalent?
                 assert(not any([(z not in self.trigvars_subs) for z in curvars]))
-                       
-                neweq = self.trigsimp_new(eq.subs(var0,dummyvar-var1).expand(trig=True))
+
+                # try dummyvar = var0 + var1
+                neweq = self.trigsimp_new(eq.subs(var0, dummyvar-var1).expand(trig=True))
                 eq = neweq.subs(self.freevarsubs+solsubs)
                 if self.CheckExpressionUnique(NewEquationsAll, eq):
                     NewEquationsAll.append(eq)
@@ -6472,13 +6480,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             NewEquations.append(eq)
                             
             if len(NewEquations) < 2 and hasExtraConstraints:
-                # try subtracting
+                # try dummyvar = var0 - var1
                 NewEquations = []
                 NewEquationsAll = []
                 hasExtraConstraints = False
                 dummyvalue = var0 - var1
+                
                 for eq in raweqns:
-
                     # TGN: ensure curvars is a subset of self.trigvars_subs
                     assert(len([z for z in curvars if z in self.trigvars_subs]) == len(curvars))
                     # equivalent?
@@ -6487,11 +6495,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     neweq = self.trigsimp_new(eq.subs(var0, dummyvar + var1).expand(trig = True))
                     eq = neweq.subs(self.freevarsubs + solsubs)
                     
-                    if self.CheckExpressionUnique(NewEquationsAll,eq):
+                    if self.CheckExpressionUnique(NewEquationsAll, eq):
                         NewEquationsAll.append(eq)
                         
                     if neweq.has(dummyvar):
-                        if neweq.has(*(othervars+curvars)):
+                        if neweq.has(*(othervars + curvars)):
                             hasExtraConstraints = True
                             # break
                             # don't know why breaking here ...
@@ -6532,7 +6540,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             sols = solve(eq, cos(dummyvar))
                             cosdummyvarsols += sols
                         
-                        # double check with NewEquationsAll that everything evluates to 0
+                        # double check with NewEquationsAll that everything evaluates to 0
                         newsubs = [( value,  sin(dummyvar)) for value in sindummyvarsols] + \
                                   [( value,  cos(dummyvar)) for value in cosdummyvarsols] + \
                                   [(-value, -sin(dummyvar)) for value in sindummyvarsols] + \
@@ -6550,7 +6558,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
                             solutions.append((solution, curvars[0]))
                         else:
-                            log.warn('not all equations zero, so %s vars are not collinear', curvars)
+                            log.warn('not all equations evaluate to zero, so %s vars are not collinear', curvars)
                             
                     if len(solutions) > 0:
                         tree = self.AddSolution(solutions, raweqns, curvars[0:1], \
@@ -6572,11 +6580,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                                      othersolvedvars, \
                                                                      unknownvars = curvars + unknownvars)
                 for solution in rawsolutions:
-                    #solution.subs(freevarinvsubs)
+                    # solution.subs(freevarinvsubs)
                     self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
                     solutions.append((solution, Symbol(solution.jointname)))
                     
                 if len(rawsolutions) > 0: # solving a pair is rare, so any solution will do
+                    # TGN: so we don't try others in the for-loop?
                     break
             except self.CannotSolveError:
                 pass
@@ -6601,6 +6610,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 except self.CannotSolveError, e:
                     log.warn(u'equation failed to compute solution complexity: %s', solution.jointeval)
             if len(rawsolutions) > 0: # solving a pair is rare, so any solution will do
+                # TGN: so we don't try others in the for-loop?
                 break
                         
         # take the least complex solution and go on
@@ -6617,11 +6627,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for curvar in curvars:
             othervars = unknownvars + [var for var in curvars if var != curvar]
             raweqns = []
-            for e in AllEquations:
-                if (len(othervars) == 0 or not e.has(*othervars)) and e.has(curvar):
-                    eq = e.subs(self.freevarsubs + solsubs)
-                    if self.CheckExpressionUnique(raweqns,eq):
+            for eq in AllEquations:
+                if (len(othervars) == 0 or not eq.has(*othervars)) and eq.has(curvar):
+                    eq = eq.subs(self.freevarsubs + solsubs)
+                    if self.CheckExpressionUnique(raweqns, eq):
                         raweqns.append(eq)
+                        
             for raweqn in raweqns:
                 try:
                     log.debug('testing with higher degrees')
@@ -6651,7 +6662,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 # 
 
         # only guess if final joint to be solved, or there exists current cases and at least one joint has been solved already.
-        # don't want to start guessing when no joints have been solved yet, this is an indication of bad equations
+        # don't want to start guessing when no joints have been solved yet, this indicates bad equations
         if canguessvars and \
            len(othersolvedvars) + len(curvars) == len(self.freejointvars) + len(self._solvejointvars) and \
            (len(curvars) == 1 or (len(curvars) < len(self._solvejointvars) and \
@@ -6668,6 +6679,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                      currentcasesubs)
         
         # have got this far, so perhaps two axes are aligned?
+        #
+        # TGN: so we cannot detect such aligning before?
+        #
         raise self.CannotSolveError('SolveAllEquations failed to find a variable to solve')
     
     def _SubstituteGlobalSymbols(self, eq, globalsymbols = None):
