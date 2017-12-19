@@ -49,7 +49,8 @@ except ImportError:
     def isinf(x): return _isinf(float(x))
     def isnan(x): return _isnan(float(x))
 
-from operator import itemgetter
+from operator import itemgetter, mul
+# mul for reduce(mul, [...], 1), same as prod([...]) in Matlab
 
 from itertools import izip, chain, product
 try:
@@ -2992,6 +2993,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
                 if self.codeComplexity(eq) < 1500:
                     eq = self.SimplifyTransform(eq)
+                    
                 if self.CheckExpressionUnique(AllEquations, eq):
                     AllEquations.append(eq)
                     
@@ -8965,29 +8967,30 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                           onlygcd = False, \
                           onlynumbers = True):
         """
-        Factors out common expressions from a sum assuming all coefficients are rational.
+        Factors out common expressions from a sum, assuming all coefficients are rational.
  
         E.g. from a*c_0 + a*c_1 + a*c_2 = 0 we obtain c_0 + c_1 + c_2 = 0
         """
         eq = eq.expand() # doesn't work otherwise
+
+        # use with "from operator import mul"
+        assert(reduce(mul,[],1) == S.One)
+        
         if eq.is_Add:
             exprs = eq.args
             totaldenom = S.One
             common = S.One
+            len_exprs = len(exprs)
             if onlynumbers:
-                for i in range(len(exprs)):
-                    denom = S.One
-                    for d in IKFastSolver.frontnumbers(fraction(exprs[i])[1]):
-                        denom *= d
+                for i in range(len_exprs):
+                    denom = reduce(mul, IKFastSolver.frontnumbers(fraction(exprs[i])[1]), 1)
                     if denom != S.One:
                         exprs = [expr*denom for expr in exprs]
                         totaldenom *= denom
                 if onlygcd:
                     common = None
-                    for i in range(len(exprs)):
-                        coeff = S.One
-                        for n in IKFastSolver.frontnumbers(exprs[i]):
-                            coeff *= n
+                    for i in range(len_exprs):
+                        coeff = reduce(mul, IKFastSolver.frontnumbers(exprs[i]), 1)
                         if common == None:
                             common = coeff
                         else:
@@ -8995,47 +8998,49 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         if common == S.One:
                             break
             else:
-                for i in range(len(exprs)):
+                for i in range(len_exprs):
                     denom = fraction(exprs[i])[1]
                     if denom != S.One:
                         exprs = [expr*denom for expr in exprs]
                         totaldenom *= denom
-                # there are no fractions, so can start simplifying
+                        
+                # there are no fractions, so we can start simplifying
                 common = exprs[0]/fraction(cancel(exprs[0]/exprs[1]))[0]
-                for i in range(2,len(exprs)):
+                for i in range(2, len_exprs):
                     common = common/fraction(cancel(common/exprs[i]))[0]
                     if common.is_number:
-                        common=S.One
+                        common = S.One
+                        
             # find the smallest number and divide by it
             if not onlygcd:
                 smallestnumber = None
                 for expr in exprs:
-                    if expr.is_number:
-                        if smallestnumber is None or smallestnumber > Abs(expr):
+                    if expr.is_number \
+                       and (smallestnumber is None or smallestnumber > Abs(expr)):
                             smallestnumber = Abs(expr)
+
                     elif expr.is_Mul:
-                        n = S.One
-                        for arg in expr.args:
-                            if arg.is_number:
-                                n *= arg
+                        n = reduce(mul, [arg for arg in expr.args if arg.is_number], 1)
                         if smallestnumber is None or smallestnumber > Abs(n):
                             smallestnumber = Abs(n)
+                            
                 if smallestnumber is not None:
                     common = common*smallestnumber
-            eq = S.Zero
-            for expr in exprs:
-                eq += expr/common
+                    
+            eq = sum(expr/common for expr in exprs)
             if returncommon:
-                return eq,common/totaldenom
+                return eq, common/totaldenom
+            
         elif eq.is_Mul:
-            coeff = S.One
-            for d in IKFastSolver.frontnumbers(eq):
-                coeff *= d
+            coeff = reduce(mul, IKFastSolver.frontnumbers(eq), 1)
+
             if returncommon:
-                return eq/coeff,coeff
+                return eq/coeff, coeff
             return eq/coeff
+        
         if returncommon:
-            return eq,S.One
+            return eq, S.One
+        
         return eq
 
     @staticmethod
