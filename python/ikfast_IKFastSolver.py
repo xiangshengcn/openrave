@@ -642,30 +642,49 @@ class IKFastSolver(AutoReloader):
     """
     
     def SimplifyAtan2(self, eq, incos=False, insin=False, epsilon=None):
-        """simplifies equations like sin(atan2(y,x)) to y/sqrt(x**2+y**2)
+        """
+        Simplifies equations involving atan2 and sin/cos/tan
+
+        E.g., sin(atan2(y,x)) <-- y/sqrt(x**2+y**2)
+              cos(atan2(y,x)) <-- x/sqrt(x**2+y**2)
+              tan(atan2(y,x)) <-- y/x
         
-        Sometimes can get equations like
+        Sometimes input equations may be like
+
         sin(-atan2(-r21, -r20))
         cos(-atan2(-r21, -r20) + 3.14159265358979)
         
-        which means the operations internally have to be carried over
+        Then the internal operations have to be carried over.
+
+        TGN: Can we somehow resolve this problem?
         """
-        processed = False # if incos or insin set to True, then this flag specifies whether the function was already taking into account or not.
+        processed = False
+        # incos and insin indicate whether we should take cos/sin into account
         if eq.is_Add:
             if incos:
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
                         lefteq += eq.args[ieq]
-                neweq = self.SimplifyAtan2(eq.args[0], incos=True) * self.SimplifyAtan2(lefteq, incos=True) - self.SimplifyAtan2(eq.args[0], insin=True) * self.SimplifyAtan2(lefteq, insin=True)
+                neweq = \
+                        self.SimplifyAtan2(eq.args[0], incos = True) * \
+                        self.SimplifyAtan2(lefteq, incos = True) - \
+                        self.SimplifyAtan2(eq.args[0], insin = True) * \
+                        self.SimplifyAtan2(lefteq, insin = True)
                 processed = True
+                
             elif insin:
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
                         lefteq += eq.args[ieq]
-                neweq = self.SimplifyAtan2(eq.args[0], incos=True) * self.SimplifyAtan2(lefteq, insin=True) + self.SimplifyAtan2(eq.args[0], insin=True) * self.SimplifyAtan2(lefteq, incos=True)
+                neweq = \
+                        self.SimplifyAtan2(eq.args[0], incos = True) * \
+                        self.SimplifyAtan2(lefteq, insin = True) + \
+                        self.SimplifyAtan2(eq.args[0], insin = True) * \
+                        self.SimplifyAtan2(lefteq, incos = True)
                 processed = True
+                
             else:
                 neweq = S.Zero
                 for subeq in eq.args:
@@ -685,6 +704,7 @@ class IKFastSolver(AutoReloader):
                     except PolynomialError:
                         # ok if neweq is too complicated
                         pass
+                    
         elif eq.is_Mul:
             if incos and len(eq.args) == 2:
                 num = None
@@ -696,11 +716,12 @@ class IKFastSolver(AutoReloader):
                     eq2 = eq.args[0]
                 if num is not None:
                     if num == S.One:
-                        neweq = self.SimplifyAtan2(eq2,incos=True)
+                        neweq = self.SimplifyAtan2(eq2, incos = True)
                         processed = True
                     if num == -S.One:
-                        neweq = self.SimplifyAtan2(eq2,incos=True)
+                        neweq = self.SimplifyAtan2(eq2, incos = True)
                         processed = True
+                        
             elif insin and len(eq.args) == 2:
                 num = None
                 if eq.args[0].is_integer:
@@ -711,41 +732,50 @@ class IKFastSolver(AutoReloader):
                     eq2 = eq.args[0]
                 if num is not None:
                     if num == S.One:
-                        neweq = self.SimplifyAtan2(eq2,insin=True)
+                        neweq = self.SimplifyAtan2(eq2, insin = True)
                         processed = True
                     if num == -S.One:
-                        neweq = -self.SimplifyAtan2(eq2,insin=True)
+                        neweq = -self.SimplifyAtan2(eq2, insin = True)
                         processed = True
+                        
             if not processed:
                 neweq = self.SimplifyAtan2(eq.args[0])
                 for subeq in eq.args[1:]:
                     neweq *= self.SimplifyAtan2(subeq)
+                    
         elif eq.is_Function:
             if incos and eq.func == atan2:
                 yeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[0]))
                 xeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[1]))
                 neweq = xeq / sqrt(self.SimplifyTransform(yeq**2+xeq**2))
                 processed = True
+                
             elif insin and eq.func == atan2:
                 yeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[0]))
                 xeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[1]))
                 neweq = yeq / sqrt(self.SimplifyTransform(yeq**2+xeq**2))
                 processed = True
+                
             elif eq.func == cos:
-                neweq = self.SimplifyAtan2(eq.args[0], incos=True)
+                neweq = self.SimplifyAtan2(eq.args[0], incos = True)
+                
             elif eq.func == sin:
-                neweq = self.SimplifyAtan2(eq.args[0], insin=True)
+                neweq = self.SimplifyAtan2(eq.args[0], insin = True)
+                
             else:
                 newargs = [self.SimplifyAtan2(subeq) for subeq in eq.args]
                 neweq = eq.func(*newargs)
+                
         elif eq.is_Pow:
             neweq = None
             if eq.exp.is_number and eq.exp-0.5 == S.Zero:
                 if eq.base.is_Pow and eq.base.exp.is_number and eq.base.exp-2 == S.Zero:
                     # should be abs(eq.base.base), but that could make other simplifications more difficult?
                     neweq = abs(self.SimplifyAtan2(eq.base.base))
+                    
             if neweq is None:
                 neweq = self.SimplifyAtan2(eq.base)**self.SimplifyAtan2(eq.exp)
+                
         elif eq.is_number:
             if epsilon is None:
                 epsilon = 1e-15
@@ -755,15 +785,19 @@ class IKFastSolver(AutoReloader):
                 neweq = cos(eq)
             else:
                 neweq = eq
+                
             processed = True
             if abs(neweq.evalf()) <= epsilon:
                 neweq = S.Zero
+                
         else:
-            neweq=eq
+            neweq = eq
+            
         if not processed and insin:
             return sin(neweq)
         elif not processed and incos:
             return cos(neweq)
+        
         return neweq
 
     @staticmethod
@@ -804,8 +838,9 @@ class IKFastSolver(AutoReloader):
             complexity += coeffcomplexity + 1
         return complexity
     
-    def sortComplexity(self,exprs):
-        exprs.sort(lambda x, y: self.codeComplexity(x)-self.codeComplexity(y))
+    def sortComplexity(self, exprs):
+        exprs.sort(lambda x, y: \
+                   self.codeComplexity(x)-self.codeComplexity(y))
         return exprs
 
     def checkForDivideByZero(self,eq):
@@ -3013,6 +3048,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     # if this length equation is not in our equation set, then add it into the set  
                     if self.CheckExpressionUnique(AllEquations, eq):
                         AllEquations.append(eq.expand())
+                        
                 else:
                     log.info('length of equation too big, skip %d, %d', \
                              self.codeComplexity(p2), self.codeComplexity(pe2))
@@ -6177,7 +6213,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                               checknegative = True, \
                               removecommoncoeff = False):
         """
-        Checks if expr is in exprs.        
+        Returns True is expr is NOT in exprs; False otherwise.
+
         If checknegative is True, then we also check if -expr is in exprs
         If removecommoncoeff is True, then we call self.removecommonexprs on expr first
         """
@@ -6189,7 +6226,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if (\
                 # (T,T)
                 expr.is_Function and exprtest.is_Function \
-                # infinite loop for some reason if checking for this
+                # RD: infinite loop for some reason if checking for this
                 and (exprtest.func == sign \
                      or expr.func == sign) \
             ) \
