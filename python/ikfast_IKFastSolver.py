@@ -768,18 +768,25 @@ class IKFastSolver(AutoReloader):
     @staticmethod
     def codeComplexity(expr):
         complexity = 1
-        if expr.is_Add:
-            for term in expr.args:
-                complexity += IKFastSolver.codeComplexity(term)
-        elif expr.is_Mul:
-            for term in expr.args:
-                complexity += IKFastSolver.codeComplexity(term)
-        elif expr.is_Pow:
-            complexity += IKFastSolver.codeComplexity(expr.base)+IKFastSolver.codeComplexity(expr.exp)
+        if expr.is_Add or expr.is_Mul:
+            complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
+
         elif expr.is_Function:
-            complexity += 1
-            for term in expr.args:
-                complexity += IKFastSolver.codeComplexity(term)
+            complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args) + 1
+            
+        elif expr.is_Pow:
+            complexity += IKFastSolver.codeComplexity(expr.base) + \
+                          IKFastSolver.codeComplexity(expr.exp)
+
+        elif expr.is_Poly:
+            # TGN: this function does not evaluate the complexity of a Poly object???
+            # should I add the following?
+            # exec(ipython_str) in globals(), locals()
+            complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
+            
+        else: # trivial cases
+            assert(expr.is_number or expr.is_Symbol)
+            
         return complexity
     
     def ComputePolyComplexity(self, peq):
