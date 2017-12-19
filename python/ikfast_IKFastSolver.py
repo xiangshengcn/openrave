@@ -1011,11 +1011,12 @@ class IKFastSolver(AutoReloader):
         sol.checkforzeros = newcheckforzeros
         return sol.score
 
-    def checkSolvability(self,AllEquations,checkvars,othervars):
+    def checkSolvability(self, AllEquations, checkvars, othervars):
         pass
 
-    def checkSolvabilityReal(self,AllEquations,checkvars,othervars):
-        """returns true if there are enough equations to solve for checkvars
+    def checkSolvabilityReal(self, AllEquations, checkvars, othervars):
+        """
+        Returns true if there are enough equations to solve for checkvars
         """
         subs = []
         checksymbols = []
@@ -1024,9 +1025,11 @@ class IKFastSolver(AutoReloader):
             subs += self.Variable(var).subs
             checksymbols += self.Variable(var).vars
         allsymbols = checksymbols[:]
+        
         for var in othervars:
             subs += self.Variable(var).subs
             allsymbols += self.Variable(var).vars
+            
         found = False
         for testconsistentvalue in self.testconsistentvalues:
             psubvalues = [(s,v) for s,v in testconsistentvalue if not s.has(*checksymbols)]
@@ -1055,7 +1058,7 @@ class IKFastSolver(AutoReloader):
                 continue
             
             try:
-                sol=solve_poly_system(eqs)
+                sol = solve_poly_system(eqs)
                 if sol is not None and len(sol) > 0 and len(sol[0]) == len(usedsymbols):
                     found = True
                     break
@@ -2458,15 +2461,23 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         AllEquations = self.buildEquationsFromPositions(T1links, T1linksinv, \
                                                         transvars, othersolvedvars, \
                                                         uselength = True)
+
+        # TGN: This function simply passes
         self.checkSolvability(AllEquations, transvars, self.freejointvars)
+        
         rottree = []
         #if solveRotationFirst:
         #    # can even get here?? it is either None or False
         #    assert(0)
         #    newendbranchtree = endbranchtree
         #else:
+
+        # call IKFastSolver.SolverSequence constructor        
         newendbranchtree = [AST.SolverSequence([rottree])]
+
+        # current variables (translation)
         curvars = transvars[:]
+        # known values we can plug in
         solsubs = self.freevarsubs[:]
 
         transtree = self.SolveAllEquations(AllEquations, \
@@ -6327,62 +6338,72 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     
     def SolveAllEquations(self, AllEquations, curvars, othersolvedvars, solsubs, endbranchtree, \
                           currentcases = None, \
-                          unknownvars = None, \
+                          unknownvars = [], \
                           currentcasesubs = None, \
                           canguessvars = True):
         """
-        :param canguessvars: if True, can guess the variables given internal conditions are satisified
+        if canguessvars is True, then we can guess variable values prodived they satisfy required conditions
         """
         from ikfast_AST import AST
-        self._CheckPreemptFn(progress=0.15+(0.3-0.3*100/(self._scopecounter+100))) # go from 0.15 - 0.45. usually scope counters go to several hundred
+
+        # range of progress is [0.15,0.45]. Usually scopecounters can go to several hundred
+        progress = 0.45-0.3/(1+self._scopecounter/100)
+        self._CheckPreemptFn(progress = progress)
+        
         if len(curvars) == 0:
             return endbranchtree
         
-        if unknownvars is None:
-            unknownvars = []
-        
-        self._scopecounter+=1
+        self._scopecounter += 1
         scopecounter = int(self._scopecounter)
         log.info('depth = %d, c = %d\n' + \
                  '        %s, %s\n' + \
                  '        cases = %s', \
                  len(currentcases) if currentcases is not None else 0, \
-                 self._scopecounter, othersolvedvars,curvars, \
+                 self._scopecounter, othersolvedvars, curvars, \
                  None if currentcases is None or len(currentcases) is 0 else \
                  ("\n"+" "*16).join(str(x) for x in list(currentcases)))
         
         solsubs = solsubs[:]
         freevarinvsubs = [(f[1],f[0]) for f in self.freevarsubs]
         solinvsubs = [(f[1],f[0]) for f in solsubs]
+        
         # single variable solutions
         solutions = []
         for curvar in curvars:
-            othervars = unknownvars+[var for var in curvars if var != curvar]
+            othervars = unknownvars + [var for var in curvars if var != curvar]
             curvarsym = self.Variable(curvar)
             raweqns = []
             for e in AllEquations:
-                if (len(othervars) == 0 or not e.has(*othervars)) and e.has(curvar,curvarsym.htvar,curvarsym.cvar,curvarsym.svar):
+                if (len(othervars) == 0 or \
+                    not e.has(*othervars)) and \
+                    e.has(curvar,curvarsym.htvar,curvarsym.cvar,curvarsym.svar):
                     eq = e.subs(self.freevarsubs+solsubs)
+
                     if self.CheckExpressionUnique(raweqns,eq):
                         raweqns.append(eq)
             if len(raweqns) > 0:
                 try:
-                    rawsolutions=self.solveSingleVariable(self.sortComplexity(raweqns),curvar,othersolvedvars, unknownvars=curvars+unknownvars)
+                    rawsolutions = self.solveSingleVariable(self.sortComplexity(raweqns), \
+                                                            curvar, othersolvedvars, \
+                                                            unknownvars = curvars + unknownvars)
                     for solution in rawsolutions:
-                        self.ComputeSolutionComplexity(solution,othersolvedvars,curvars)
-                        if solution.numsolutions()>0:
-                            solutions.append((solution,curvar))
+                        self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
+                        if solution.numsolutions() > 0:
+                            solutions.append((solution, curvar))
                         else:
                             log.warn('solution did not have any equations')
+
                 except self.CannotSolveError:
                     pass
 
-        # only return here if a solution was found that perfectly determines the unknown
-        # otherwise, the pairwise solver could come up with something..
+        # Only return here if a solution was found that perfectly determines the unknown
+        # Otherwise, the pairwise solver could come up with something.
+        #
         # There is still a problem with this: (bertold robot)
         # Sometimes an equation like atan2(y,x) evaluates to atan2(0,0) during runtime.
         # This cannot be known at compile time, so the equation is selected and any other possibilities are rejected.
         # In the bertold robot case, the next possibility is a pair-wise solution involving two variables
+        
         if any([s[0].numsolutions()==1 for s in solutions]):
             return self.AddSolution(solutions, \
                                     AllEquations, \
@@ -6396,7 +6417,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         curvarsubssol = []
         for var0,var1 in combinations(curvars,2):
-            othervars = unknownvars+[var for var in curvars if var != var0 and var != var1]
+            othervars = unknownvars + [var for var in curvars if var != var0 and var != var1]
             raweqns = []
             complexity = 0
             for e in AllEquations:
@@ -6405,14 +6426,23 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     if self.CheckExpressionUnique(raweqns,eq):
                         raweqns.append(eq)
                         complexity += self.codeComplexity(eq)
+                        
             if len(raweqns) > 1:
                 curvarsubssol.append((var0,var1,raweqns,complexity))
+                
         curvarsubssol.sort(lambda x, y: x[3]-y[3])
         
-        if len(curvars) == 2 and self.IsHinge(curvars[0].name) and self.IsHinge(curvars[1].name) and len(curvarsubssol) > 0:
-            # there's only two variables left, it might be the case that the axes are aligning and the two variables are dependent on each other
-            # note that the axes's anchors also have to be along the direction!
-            var0,var1,raweqns,complexity = curvarsubssol[0]
+        if len(curvars) == 2 and \
+           self.IsHinge(curvars[0].name) and \
+           self.IsHinge(curvars[1].name) and \
+           len(curvarsubssol) > 0:
+            # There are only two variables left, so two possibilities:
+            #
+            # EITHER two axes are aligning, OR these two variables depend on each other.
+            #
+            # Note that the axes' anchors also have to be along the direction!
+            
+            var0, var1, raweqns, complexity = curvarsubssol[0]
             dummyvar = Symbol('dummy')
             dummyvalue = var0 + var1
             NewEquations = []
@@ -6427,17 +6457,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                        
                 neweq = self.trigsimp_new(eq.subs(var0,dummyvar-var1).expand(trig=True))
                 eq = neweq.subs(self.freevarsubs+solsubs)
-                if self.CheckExpressionUnique(NewEquationsAll,eq):
+                if self.CheckExpressionUnique(NewEquationsAll, eq):
                     NewEquationsAll.append(eq)
+                    
                 if neweq.has(dummyvar):
                     if neweq.has(*(othervars+curvars)):
                         hasExtraConstraints = True
                         # break
-                        # don't know why breaking here... sometimes equations can be too complex but that doesn't mean variables are not dependent
+                        # don't know why breaking here ...
+                        # sometimes equations can be very complex but variables can still be dependent
                     else:
-                        eq = neweq.subs(self.freevarsubs+solsubs)
-                        if self.CheckExpressionUnique(NewEquations,eq):
+                        eq = neweq.subs(self.freevarsubs + solsubs)
+                        if self.CheckExpressionUnique(NewEquations, eq):
                             NewEquations.append(eq)
+                            
             if len(NewEquations) < 2 and hasExtraConstraints:
                 # try subtracting
                 NewEquations = []
@@ -6451,35 +6484,44 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     # equivalent?
                     assert(not any([(z not in self.trigvars_subs) for z in curvars]))
                         
-                    neweq = self.trigsimp_new(eq.subs(var0,dummyvar+var1).expand(trig=True))
-                    eq = neweq.subs(self.freevarsubs+solsubs)
+                    neweq = self.trigsimp_new(eq.subs(var0, dummyvar + var1).expand(trig = True))
+                    eq = neweq.subs(self.freevarsubs + solsubs)
+                    
                     if self.CheckExpressionUnique(NewEquationsAll,eq):
                         NewEquationsAll.append(eq)
+                        
                     if neweq.has(dummyvar):
                         if neweq.has(*(othervars+curvars)):
                             hasExtraConstraints = True
-                            #break # don't know why breaking here... sometimes equations can be too complex but that doesn't mean variables are not dependent
+                            # break
+                            # don't know why breaking here ...
+                            # sometimes equations can be too complex but variables can still be dependent
                         else:
-                            eq = neweq.subs(self.freevarsubs+solsubs)
-                            if self.CheckExpressionUnique(NewEquations,eq):
-                                NewEquations.append(eq)                
+                            eq = neweq.subs(self.freevarsubs + solsubs)
+                            if self.CheckExpressionUnique(NewEquations, eq):
+                                NewEquations.append(eq)
+                                
             if len(NewEquations) >= 2:
                 dummysolutions = []
                 try:
-                    rawsolutions=self.solveSingleVariable(NewEquations,dummyvar,othersolvedvars, unknownvars=curvars+unknownvars)
+                    rawsolutions = self.solveSingleVariable(NewEquations, dummyvar, othersolvedvars, \
+                                                            unknownvars = curvars+unknownvars)
                     for solution in rawsolutions:
-                        self.ComputeSolutionComplexity(solution,othersolvedvars,curvars)
+                        self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
                         dummysolutions.append(solution)
+                        
                 except self.CannotSolveError:
                     pass
+                
                 if any([s.numsolutions()==1 for s in dummysolutions]):
                     # two axes are aligning, so modify the solutions to reflect the original variables and add a free variable
-                    log.info('found two aligning axes %s: %r',dummyvalue, NewEquations)
+                    log.info('found two aligning axes %s: %r', dummyvalue, NewEquations)
                     solutions = []
                     for dummysolution in dummysolutions:
                         if dummysolution.numsolutions() != 1:
                             continue
-                        if dummysolution.jointevalsin is not None or dummysolution.jointevalcos is not None:
+                        if dummysolution.jointevalsin is not None or \
+                           dummysolution.jointevalcos is not None:
                             log.warn('dummy solution should not have sin/cos parts!')
 
                         sindummyvarsols = []
@@ -6491,41 +6533,59 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             cosdummyvarsols += sols
                         
                         # double check with NewEquationsAll that everything evluates to 0
-                        newsubs = [(value, sin(dummyvar)) for value in sindummyvarsols] + [(value, cos(dummyvar)) for value in cosdummyvarsols] + [(-value, -sin(dummyvar)) for value in sindummyvarsols] + [(-value, -cos(dummyvar)) for value in cosdummyvarsols]
+                        newsubs = [( value,  sin(dummyvar)) for value in sindummyvarsols] + \
+                                  [( value,  cos(dummyvar)) for value in cosdummyvarsols] + \
+                                  [(-value, -sin(dummyvar)) for value in sindummyvarsols] + \
+                                  [(-value, -cos(dummyvar)) for value in cosdummyvarsols]
                         allzeros = True
                         for eq in NewEquationsAll:
                             if trigsimp(eq.subs(newsubs)) != S.Zero:
                                 allzeros = False
                                 break
+                            
                         if allzeros:
-                            solution=AST.SolverSolution(curvars[0].name, isHinge=self.IsHinge(curvars[0].name))
+                            solution = AST.SolverSolution(curvars[0].name, \
+                                                          isHinge = self.IsHinge(curvars[0].name))
                             solution.jointeval = [dummysolution.jointeval[0] - dummyvalue + curvars[0]]
-                            self.ComputeSolutionComplexity(solution,othersolvedvars,curvars)
-                            solutions.append((solution,curvars[0]))
+                            self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
+                            solutions.append((solution, curvars[0]))
                         else:
                             log.warn('not all equations zero, so %s vars are not collinear', curvars)
+                            
                     if len(solutions) > 0:
-                        tree = self.AddSolution(solutions,raweqns,curvars[0:1],othersolvedvars+curvars[1:2],solsubs+self.Variable(curvars[1]).subs,endbranchtree,currentcases=currentcases, currentcasesubs=currentcasesubs, unknownvars=unknownvars)
+                        tree = self.AddSolution(solutions, raweqns, curvars[0:1], \
+                                                othersolvedvars + curvars[1:2], \
+                                                solsubs + self.Variable(curvars[1]).subs, \
+                                                endbranchtree, \
+                                                currentcases = currentcases, \
+                                                currentcasesubs = currentcasesubs,
+                                                unknownvars = unknownvars)
                         if tree is not None:
                             return [AST.SolverFreeParameter(curvars[1].name, tree)]
                 else:
-                    log.warn('almost found two axes but num solutions was: %r', [s.numsolutions()==1 for s in dummysolutions])
+                    log.warn('almost found two axes but num solutions was: %r', \
+                             [s.numsolutions() == 1 for s in dummysolutions])
                     
-        for var0,var1,raweqns,complexity in curvarsubssol:
+        for var0, var1, raweqns, complexity in curvarsubssol:
             try:
-                rawsolutions=self.SolvePrismaticHingePairVariables(raweqns,var0,var1,othersolvedvars,unknownvars=curvars+unknownvars)
+                rawsolutions = self.SolvePrismaticHingePairVariables(raweqns, var0, var1, \
+                                                                     othersolvedvars, \
+                                                                     unknownvars = curvars + unknownvars)
                 for solution in rawsolutions:
                     #solution.subs(freevarinvsubs)
-                    self.ComputeSolutionComplexity(solution,othersolvedvars,curvars)
-                    solutions.append((solution,Symbol(solution.jointname)))
+                    self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
+                    solutions.append((solution, Symbol(solution.jointname)))
+                    
                 if len(rawsolutions) > 0: # solving a pair is rare, so any solution will do
                     break
             except self.CannotSolveError:
                 pass
             
-        for var0,var1,raweqns,complexity in curvarsubssol:
+        for var0, var1, raweqns, complexity in curvarsubssol:
             try:
-                rawsolutions=self.SolvePairVariables(raweqns,var0,var1,othersolvedvars,unknownvars=curvars+unknownvars)
+                rawsolutions = self.SolvePairVariables(raweqns, var0, var1, \
+                                                       othersolvedvars, \
+                                                       unknownvars = curvars + unknownvars)
             except self.CannotSolveError, e:
                 log.debug(e)
 #                 try:
@@ -6536,8 +6596,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             for solution in rawsolutions:
                 #solution.subs(freevarinvsubs)
                 try:
-                    self.ComputeSolutionComplexity(solution,othersolvedvars,curvars)
-                    solutions.append((solution,Symbol(solution.jointname)))
+                    self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
+                    solutions.append((solution, Symbol(solution.jointname)))
                 except self.CannotSolveError, e:
                     log.warn(u'equation failed to compute solution complexity: %s', solution.jointeval)
             if len(rawsolutions) > 0: # solving a pair is rare, so any solution will do
@@ -6545,28 +6605,41 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         
         # take the least complex solution and go on
         if len(solutions) > 0:
-            return self.AddSolution(solutions,AllEquations,curvars,othersolvedvars,solsubs,endbranchtree,currentcases=currentcases, currentcasesubs=currentcasesubs, unknownvars=unknownvars)
+            return self.AddSolution(solutions, AllEquations, \
+                                    curvars, othersolvedvars, \
+                                    solsubs, \
+                                    endbranchtree, \
+                                    currentcases = currentcases, \
+                                    currentcasesubs = currentcasesubs, \
+                                    unknownvars = unknownvars)
         
         # test with higher degrees, necessary?
         for curvar in curvars:
-            othervars = unknownvars+[var for var in curvars if var != curvar]
+            othervars = unknownvars + [var for var in curvars if var != curvar]
             raweqns = []
             for e in AllEquations:
                 if (len(othervars) == 0 or not e.has(*othervars)) and e.has(curvar):
-                    eq = e.subs(self.freevarsubs+solsubs)
+                    eq = e.subs(self.freevarsubs + solsubs)
                     if self.CheckExpressionUnique(raweqns,eq):
                         raweqns.append(eq)
             for raweqn in raweqns:
                 try:
                     log.debug('testing with higher degrees')
-                    solution=self.solveHighDegreeEquationsHalfAngle([raweqn],self.Variable(curvar))
-                    self.ComputeSolutionComplexity(solution,othersolvedvars,curvars)
-                    solutions.append((solution,curvar))
+                    solution = self.solveHighDegreeEquationsHalfAngle([raweqn], self.Variable(curvar))
+                    self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
+                    solutions.append((solution, curvar))
+                    
                 except self.CannotSolveError:
                     pass
                
         if len(solutions) > 0:
-            return self.AddSolution(solutions,AllEquations,curvars,othersolvedvars,solsubs,endbranchtree,currentcases=currentcases, currentcasesubs=currentcasesubs, unknownvars=unknownvars)
+            return self.AddSolution(solutions, AllEquations, \
+                                    curvars, othersolvedvars, \
+                                    solsubs, \
+                                    endbranchtree, \
+                                    currentcases = currentcases, \
+                                    currentcasesubs = currentcasesubs, \
+                                    unknownvars = unknownvars)
         
         # solve with all 3 variables together?
 #         htvars = [self.Variable(varsym).htvar for varsym in curvars]
@@ -6579,16 +6652,25 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         # only guess if final joint to be solved, or there exists current cases and at least one joint has been solved already.
         # don't want to start guessing when no joints have been solved yet, this is an indication of bad equations
-        if canguessvars and len(othersolvedvars)+len(curvars) == len(self.freejointvars)+len(self._solvejointvars) and (len(curvars) == 1 or (len(curvars) < len(self._solvejointvars) and currentcases is not None and len(currentcases) > 0)): # only estimate when deep in the hierarchy, do not want the guess to be executed all the time
+        if canguessvars and \
+           len(othersolvedvars) + len(curvars) == len(self.freejointvars) + len(self._solvejointvars) and \
+           (len(curvars) == 1 or (len(curvars) < len(self._solvejointvars) and \
+                                  currentcases is not None and \
+                                  len(currentcases) > 0)): # only estimate when deep in the hierarchy, do not want the guess to be executed all the time
             # perhaps there's a degree of freedom that is not trivial to compute?
             # take the highest hinge variable and set it
             log.info('trying to guess variable from %r', curvars)
-            return self.GuessValuesAndSolveEquations(AllEquations, curvars, othersolvedvars, solsubs, endbranchtree, currentcases, unknownvars, currentcasesubs)
+            return self.GuessValuesAndSolveEquations(AllEquations, \
+                                                     curvars, othersolvedvars, solsubs, \
+                                                     endbranchtree, \
+                                                     currentcases, \
+                                                     unknownvars, \
+                                                     currentcasesubs)
         
         # have got this far, so perhaps two axes are aligned?
         raise self.CannotSolveError('SolveAllEquations failed to find a variable to solve')
     
-    def _SubstituteGlobalSymbols(self, eq, globalsymbols=None):
+    def _SubstituteGlobalSymbols(self, eq, globalsymbols = None):
         if globalsymbols is None:
             globalsymbols = self.globalsymbols
         preveq = eq

@@ -472,6 +472,7 @@ class AST:
             return generator.generateSequence(self)
         def end(self, generator):
             return generator.endSequence(self)
+        
         def GetChildrenOfType(self, classinstance):
             nodes = []
             for tree in self.jointtrees:
