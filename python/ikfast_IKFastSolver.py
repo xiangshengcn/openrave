@@ -403,12 +403,6 @@ class IKFastSolver(AutoReloader):
             return eye(4)
         else:
             return reduce(mul, Ts, 1)
-#        Tfinal = Ts[0]
-#        for T in Ts[1:]:
-#        Tfinal = eye(4)
-#        for T in Ts:
-#            Tfinal = Tfinal*T
-#        return Tfinal
     
     @staticmethod
     def equal(eq0,eq1):
@@ -697,7 +691,7 @@ class IKFastSolver(AutoReloader):
         # incos and insin indicate whether we should take cos/sin into account
         if eq.is_Add:
             if incos:
-                exec(ipython_str)
+                # exec(ipython_str)
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
@@ -710,7 +704,7 @@ class IKFastSolver(AutoReloader):
                 processed = True
                 
             elif insin:
-                exec(ipython_str)
+                # exec(ipython_str)
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
@@ -856,7 +850,11 @@ class IKFastSolver(AutoReloader):
             # TGN: this function does not evaluate the complexity of a Poly object???
             # should I add the following?
             # exec(ipython_str) in globals(), locals()
-            complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
+            #
+            # complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
+            #
+            # Not sure if the effect is the same as
+            complexity += IKFastSolver.codeComplexity(expr.as_expr())
             
         else: # trivial cases
             assert(expr.is_number or expr.is_Symbol)
@@ -1035,8 +1033,8 @@ class IKFastSolver(AutoReloader):
                     sol.score += checkpow(sexpr, sexprs)
                     
         except AssertionError, e:
-            log.warn('%s',e)
-            sol.score=1e10
+            log.warn('%s', e)
+            sol.score = 1e10
 
         newcheckforzeros = []
         for eqtemp in sol.checkforzeros:
@@ -1045,8 +1043,10 @@ class IKFastSolver(AutoReloader):
                 if len(eqtemp.find(sign)) > 0:
                     newcheckforzeros.append(eqtemp)
                 else:
-                    checkeq = self.removecommonexprs(eqtemp,onlygcd=False,onlynumbers=True)
-                    if self.CheckExpressionUnique(newcheckforzeros,checkeq):
+                    checkeq = self.removecommonexprs(eqtemp, \
+                                                     onlygcd = False, \
+                                                     onlynumbers = True)
+                    if self.CheckExpressionUnique(newcheckforzeros, checkeq):
                         newcheckforzeros.append(checkeq)
             else:
                 newcheckforzeros.append(eqtemp)
@@ -6427,26 +6427,39 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                  self._scopecounter, othersolvedvars, curvars, \
                  None if currentcases is None or len(currentcases) is 0 else \
                  ("\n"+" "*16).join(str(x) for x in list(currentcases)))
-        
-        solsubs = solsubs[:]
-        freevarinvsubs = [(f[1],f[0]) for f in self.freevarsubs]
-        solinvsubs = [(f[1],f[0]) for f in solsubs]
-        
+
+        # solsubs = solsubs[:]
+
+        # inverse substitutions
+        # inv_freevarsubs = [(f[1],f[0]) for f in self.freevarsubs]
+        # inv_solsubs     = [(f[1],f[0]) for f in solsubs         ]
+
         # single variable solutions
         solutions = []
+        freevar_sol_subs = set().union(*[solsubs, self.freevarsubs])
+        # equivalent to
+        # self.freevarsubs + [solsub for solsub in solsubs if not solsub in self.freevarsubs]
+        freevar = [f[0] for f in freevar_sol_subs]
+        
         for curvar in curvars:
             othervars = unknownvars + [var for var in curvars if var != curvar]
             curvarsym = self.Variable(curvar)
             raweqns = []
             for eq in AllEquations:
+
                 if (len(othervars) == 0 or \
                     not eq.has(*othervars)) and \
                     eq.has(curvar, curvarsym.htvar, curvarsym.cvar, curvarsym.svar):
-                    eq = eq.subs(self.freevarsubs + solsubs)
+
+                    if eq.has(*freevar):
+                        # neweq = eq.subs(freevar_sol_subs)
+                        # log.info('\n        %s\n\n-->     %s', eq, neweq)
+                        # eq = neweq
+                        eq = eq.subs(freevar_sol_subs)
 
                     if self.CheckExpressionUnique(raweqns, eq):
                         raweqns.append(eq)
-                        
+
             if len(raweqns) > 0:
                 try:
                     rawsolutions = self.solveSingleVariable(self.sortComplexity(raweqns), \
@@ -6644,7 +6657,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                                      othersolvedvars, \
                                                                      unknownvars = curvars + unknownvars)
                 for solution in rawsolutions:
-                    # solution.subs(freevarinvsubs)
+                    # solution.subs(inv_freevarsubs)
                     self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
                     solutions.append((solution, Symbol(solution.jointname)))
                     
@@ -6667,7 +6680,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 #                     log.debug(e)
                 rawsolutions = []
             for solution in rawsolutions:
-                #solution.subs(freevarinvsubs)
+                #solution.subs(inv_freevarsubs)
                 try:
                     self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
                     solutions.append((solution, Symbol(solution.jointname)))
