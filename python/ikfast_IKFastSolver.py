@@ -6490,7 +6490,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         #
         # TGN: don't we check Abs(y)+Abs(x) for atan2?
 
-        exec(ipython_str) in globals(), locals()
+        # exec(ipython_str) in globals(), locals()
         
         if any([s[0].numsolutions() == 1 for s in solutions]):
             return self.AddSolution(solutions, \
@@ -8034,8 +8034,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 solution.postcheckforrange    = []
                 return solution
 
-        raise self.CannotSolveError('half-angle substitution for joint %s failed, ' + \
-                                    '%d equations examined' % (varsym.var, len(polyeqs)))
+        raise self.CannotSolveError(('half-angle substitution for joint %s failed, ' + \
+                                    '%d equations examined') % (varsym.var, len(polyeqs)))
 
     def checkFinalEquation(self, pfinal, subs = None):
         """check an equation in one variable for validity
@@ -9110,13 +9110,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
     @staticmethod
     def isValidSolution(expr):
-        """return true if solution does not contain any nan or inf terms"""
+        """
+        Returns true if solution does not contain any nan or inf terms"""
         if expr.is_number:
-            e=expr.evalf()
-            if e.has(I) or isinf(e) or isnan(e):
-                return False
-            return True
-        if expr.is_Mul:
+            e = expr.evalf()
+            return not (e.has(I) or isinf(e) or isnan(e))
+            # if e.has(I) or isinf(e) or isnan(e):
+            #     return False
+            # return True
+        
+        elif expr.is_Mul:
             # first multiply all numbers
             number = S.One
             for arg in expr.args:
@@ -9126,9 +9129,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     return False
             # finally evalute the multiplied form
             return IKFastSolver.isValidSolution(number.evalf())
-        for arg in expr.args:
-            if not IKFastSolver.isValidSolution(arg):
-                return False
+
+        else:
+            return all([IKFastSolver.isValidSolution(arg) for arg in expr.args])
+            # for arg in expr.args:
+            #     if not IKFastSolver.isValidSolution(arg):
+            #         return False
+            
         return True
 
     @staticmethod
