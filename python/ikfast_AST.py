@@ -14,39 +14,49 @@ class AST:
             return None
         
     class SolverSolution(SolverBase):
-        """Contains equations for evaluating one unknown variable. The variable can have multiple solutions, and the solution is only valid if every equation in checkforzeros is non-zero
         """
-        jointname = None
-        jointeval = None
-        jointevalcos = None
-        jointevalsin = None
-        AddPiIfNegativeEq = None
-        isHinge = True
-        checkforzeros = None
-        thresh = None
-        AddHalfTanValue = False
-        dictequations = None
-        presetcheckforzeros = None
-        equationsused = None
-        """Meaning of FeasibleIsZeros:
-        If set to false, then solution is feasible only if all of these equations evalute to non-zero.
-        If set to true, solution is feasible only if all these equations evaluate to zero.
-        """
-        FeasibleIsZeros = False
-        score = None
-        def __init__(self, jointname, jointeval=None,jointevalcos=None,jointevalsin=None,AddPiIfNegativeEq=None,isHinge=True,thresh=0.000001):
+        Contains formulas for evaluating ONE unknown variable. There can be several formulas (solutions). 
 
-            self.jointname = jointname
-            self.jointeval = jointeval
-            self.jointevalcos = jointevalcos
-            self.jointevalsin = jointevalsin
-            self.AddPiIfNegativeEq = AddPiIfNegativeEq
-            self.isHinge=isHinge
-            self.thresh = thresh
+        A solution is valid ONLY if every equation in checkforzeros evaluates to NONZERO.
+        """
+        
+        jointname           = None
+        jointeval           = None
+        jointevalcos        = None
+        jointevalsin        = None
+        AddPiIfNegativeEq   = None
+        isHinge             = True
+        checkforzeros       = None
+        thresh              = None
+        AddHalfTanValue     = False
+        dictequations       = None
+        presetcheckforzeros = None
+        equationsused       = None
+        score               = None        
+        FeasibleIsZeros     = False
+        """
+        If FeasibleIsZeros is True, then solution is feasible only when all equations evaluate to ZERO.
+
+        Otherwise solution is feasible only when all equations evaluate to NONZERO.
+        """
+
+        def __init__(self, jointname, jointeval = None, \
+                     jointevalcos = None,jointevalsin = None, \
+                     AddPiIfNegativeEq = None, isHinge = True, \
+                     thresh = 1e-6):
+
+            self.jointname           = jointname
+            self.jointeval           = jointeval
+            self.jointevalcos        = jointevalcos
+            self.jointevalsin        = jointevalsin
+            self.AddPiIfNegativeEq   = AddPiIfNegativeEq
+            self.isHinge             = isHinge
+            self.thresh              = thresh
             self.presetcheckforzeros = []
-            self.dictequations = []
-            self.equationsused = []
+            self.dictequations       = []
+            self.equationsused       = []
             assert(self.checkValidSolution())
+            
         def subs(self,solsubs):
             if self.jointeval is not None:
                 self.jointeval = [e.subs(solsubs) for e in self.jointeval]
@@ -60,15 +70,18 @@ class AST:
             self.presetcheckforzeros = [e.subs(solsubs) for e in self.presetcheckforzeros]
             self.equationsused = [e.subs(solsubs) for e in self.equationsused]
             if not self.checkValidSolution():
-                raise IKFastSolver.CannotSolveError('substitution produced invalid results')
+                raise IKFastSolver.CannotSolveError('substitutions produce invalid results')
             return self
+        
         def generate(self, generator):
             assert(self.checkValidSolution())
             return generator.generateSolution(self)
+        
         def end(self, generator):
             return generator.endSolution(self)
+        
         def numsolutions(self):
-            n=0
+            n = 0
             if self.jointeval is not None:
                 n += len(self.jointeval)
             if self.jointevalcos is not None:
@@ -76,10 +89,12 @@ class AST:
             if self.jointevalsin is not None:
                 n += 2*len(self.jointevalsin)
             return n
+        
         def checkValidSolution(self):
+            
             from ikfast_IKFastSolver import IKFastSolver
-            valid=True
-#            exec(ipython_str)
+            valid = True
+            
             if self.jointeval is not None:
                 valid &= all([IKFastSolver.isValidSolution(e) for e in self.jointeval])
             if self.jointevalsin is not None:
@@ -87,13 +102,21 @@ class AST:
             if self.jointevalcos is not None:
                 valid &= all([IKFastSolver.isValidSolution(e) for e in self.jointevalcos])
             return valid
+        
         def getPresetCheckForZeros(self):
             return self.presetcheckforzeros
+        
         def getEquationsUsed(self):
             return self.equationsused
+        
         def GetZeroThreshold(self):
             return self.thresh
-        
+
+        def printSolution(self):
+            # print jointname and jointeval for now
+            print('%s = %s' % (self.jointname, \
+                               ('\n'+' '*5).join(str(x) for x in self.jointeval)))
+            
     class SolverPolynomialRoots(SolverBase):
         """find all roots of the polynomial and plug it into jointeval. poly should be Poly
         """

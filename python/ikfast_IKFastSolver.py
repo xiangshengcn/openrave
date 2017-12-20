@@ -853,7 +853,7 @@ class IKFastSolver(AutoReloader):
             #
             # complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
             #
-            # Not sure if the effect is the same as
+            # Not sure if it has the same effect as
             complexity += IKFastSolver.codeComplexity(expr.as_expr())
             
         else: # trivial cases
@@ -876,8 +876,11 @@ class IKFastSolver(AutoReloader):
         return complexity
     
     def sortComplexity(self, exprs):
-        exprs.sort(lambda x, y: \
-                   self.codeComplexity(x)-self.codeComplexity(y))
+
+        if len(exprs)>2:
+            exprs.sort(lambda x, y: \
+                       self.codeComplexity(x) - self.codeComplexity(y))
+            
         return exprs
 
     def checkForDivideByZero(self,eq):
@@ -6462,9 +6465,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             if len(raweqns) > 0:
                 try:
-                    rawsolutions = self.solveSingleVariable(self.sortComplexity(raweqns), \
+                    rawsolutions = self.solveSingleVariable(\
+                                                            self.sortComplexity(raweqns), \
                                                             curvar, othersolvedvars, \
                                                             unknownvars = curvars + unknownvars)
+
+                    exec(ipython_str) in globals(), locals()
+
                     for solution in rawsolutions:
                         self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
                         if solution.numsolutions() > 0:
