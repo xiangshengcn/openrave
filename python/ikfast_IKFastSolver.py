@@ -9111,31 +9111,42 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     @staticmethod
     def isValidSolution(expr):
         """
-        Returns true if solution does not contain any nan or inf terms"""
+        Returns True if solution does not contain any I, nan, or oo
+        """
+        
         if expr.is_number:
             e = expr.evalf()
             return not (e.has(I) or isinf(e) or isnan(e))
+
             # if e.has(I) or isinf(e) or isnan(e):
             #     return False
             # return True
         
         elif expr.is_Mul:
-            # first multiply all numbers
-            number = S.One
-            for arg in expr.args:
-                if arg.is_number:
-                    number *= arg
-                elif not IKFastSolver.isValidSolution(arg):
-                    return False
-            # finally evalute the multiplied form
-            return IKFastSolver.isValidSolution(number.evalf())
+
+            expr_num    = sum([ num for num in expr.args if num.is_number ]) + Float(0)
+            expr_others = [ num for num in expr.args if not num.is_number ]
+
+            return (not (expr_num.has(I) or isinf(expr_num) or isnan(expr_num))) and \
+                all([IKFastSolver.isValidSolution(arg) for arg in expr_others])
+            
+            ## first multiply all numbers
+            # number = S.One
+            # for arg in expr.args:
+            #     if arg.is_number:
+            #         number *= arg
+            #     elif not IKFastSolver.isValidSolution(arg):
+            #         return False
+            ## finally evalute the multiplied form
+            # return IKFastSolver.isValidSolution(number.evalf())
 
         else:
             return all([IKFastSolver.isValidSolution(arg) for arg in expr.args])
             # for arg in expr.args:
             #     if not IKFastSolver.isValidSolution(arg):
             #         return False
-            
+
+        assert(0) # TGN: cannot reach here
         return True
 
     @staticmethod
