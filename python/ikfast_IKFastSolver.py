@@ -360,8 +360,10 @@ class IKFastSolver(AutoReloader):
     
     @staticmethod
     def GetMatrixFromQuat(quat):
-        """quaternion is [cos(angle/2), v*sin(angle/2)]
-        return 4x4 matrix with rotation component set
+        """
+        Quaternion is [cos(angle/2), v*sin(angle/2)] with unit v
+
+        Returns 4x4 matrix with rotation component set
         """
         M = eye(4)
         qq1 = 2*quat[1]*quat[1]
@@ -397,12 +399,16 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def multiplyMatrix(Ts):
-        Tfinal = Ts[0]
-        for T in Ts[1:]:
+        if len(Ts)==0:
+            return eye(4)
+        else:
+            return reduce(mul, Ts, 1)
+#        Tfinal = Ts[0]
+#        for T in Ts[1:]:
 #        Tfinal = eye(4)
 #        for T in Ts:
-            Tfinal = Tfinal*T
-        return Tfinal
+#            Tfinal = Tfinal*T
+#        return Tfinal
     
     @staticmethod
     def equal(eq0,eq1):
@@ -412,13 +418,14 @@ class IKFastSolver(AutoReloader):
             eq1 = eq1.as_expr()
         return expand(eq0-eq1) == S.Zero
 
-    def chop(self,expr,precision=None):
+    def chop(self, expr, precision = None):
         return expr
 
-    def IsHinge(self,axisname):
+    def IsHinge(self, axisname):
         if axisname[0]!='j' or not axisname in self.axismap:
             if axisname == 'j100':
                 # always revolute!
+                # TGN: what's j100?
                 return True
             
             log.info('IsHinge returns false for variable %s'% axisname)
@@ -434,26 +441,30 @@ class IKFastSolver(AutoReloader):
         return self.axismap[axisname].joint.IsPrismatic(self.axismap[axisname].iaxis)
 
     def forwardKinematicsChain(self, chainlinks, chainjoints):
-        """The first and last matrices returned are always non-symbolic
+        """
+        The first and last matrices returned are always non-symbolic
         """
         with self.kinbody:
-            assert(len(chainjoints)+1==len(chainlinks))
+            assert(len(chainjoints)+1 == len(chainlinks))
             Links = []
             Tright = eye(4)
             jointvars = []
             jointinds = []
             for i,joint in enumerate(chainjoints):
                 if len(joint.GetName()) == 0:
-                    raise self.CannotSolveError('chain %s:%s contains a joint with no name!'%(chainlinks[0].GetName(),chainlinks[-1].GetName()))
+                    raise self.CannotSolveError('chain %s:%s contains a joint with no name!' \
+                                                % (chainlinks[0].GetName(), \
+                                                  chainlinks[-1].GetName()))
                 
                 if chainjoints[i].GetHierarchyParentLink() == chainlinks[i]:
-                    TLeftjoint = self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform())
+                    TLeftjoint  = self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform())
                     TRightjoint = self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform())
                     axissign = S.One
                 else:
-                    TLeftjoint = self.affineInverse(self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform()))
+                    TLeftjoint  = self.affineInverse(self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform()))
                     TRightjoint = self.affineInverse(self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform()))
                     axissign = -S.One
+                    
                 if joint.IsStatic():
                     Tright = self.affineSimplify(Tright * TLeftjoint * TRightjoint)
                 else:
@@ -465,6 +476,7 @@ class IKFastSolver(AutoReloader):
                             cosvar = cos(var)
                             sinvar = sin(var)
                             jointvars.append(var)
+                            
                         elif joint.IsMimic(iaxis):
                             # get the mimic equation
                             var = joint.GetMimicEquation(iaxis)
@@ -473,39 +485,55 @@ class IKFastSolver(AutoReloader):
                             # this needs to be reduced!
                             cosvar = cos(var)
                             sinvar = sin(var)
+                            
                         elif joint.IsStatic():
                             # joint doesn't move so assume identity
                             pass
                         else:
-                            raise ValueError('cannot solve for mechanism when a non-mimic passive joint %s is in chain'%str(joint))
+                            raise ValueError('cannot solve for mechanism' + \
+                                             'when a non-mimic passive joint %s is in chain' % str(joint))
                         
                         Tj = eye(4)
                         if var is not None:
-                            jaxis = axissign*self.numpyVectorToSympy(joint.GetInternalHierarchyAxis(iaxis))
+                            jaxis = axissign * self.numpyVectorToSympy(joint.GetInternalHierarchyAxis(iaxis))
                             if joint.IsRevolute(iaxis):
-                                Tj[0:3,0:3] = self.rodrigues2(jaxis,cosvar,sinvar)
+                                Tj[0:3,0:3] = self.rodrigues2(jaxis, cosvar, sinvar)
                             elif joint.IsPrismatic(iaxis):
                                 Tj[0:3,3] = jaxis*(var)
                             else:
-                                raise ValueError('failed to process joint %s'%joint.GetName())
+                                raise ValueError('failed to process joint %s' % joint.GetName())
                         
                         Tjoints.append(Tj)
                     
                     if axisAngleFromRotationMatrix is not None:
-                        axisangle = axisAngleFromRotationMatrix(numpy.array(numpy.array(Tright * TLeftjoint),numpy.float64))
-                        angle = sqrt(axisangle[0]**2+axisangle[1]**2+axisangle[2]**2)
+                        axisangle = axisAngleFromRotationMatrix(\
+                                                                numpy.array(\
+                                                                            numpy.array(\
+                                                                                        Tright * TLeftjoint), \
+                                                                            numpy.float64))
+                        
+                        angle = sqrt(axisangle[0]**2 + axisangle[1]**2 + axisangle[2]**2)
+                        
                         if angle > 1e-8:
                             axisangle = axisangle/angle
-                        log.debug('rotation angle of Links[%d]: %f, axis=[%f,%f,%f]', len(Links), (angle*180/pi).evalf(),axisangle[0],axisangle[1],axisangle[2])
+
+                        log.debug('rotation angle of Links[%d]: %f, ' + \
+                                  'axis = [%f, %f, %f]', \
+                                  len(Links), (angle*180/pi).evalf(), \
+                                  axisangle[0], axisangle[1], axisangle[2])
+                            
                     Links.append(self.RoundMatrix(Tright * TLeftjoint))
+                    
                     for Tj in Tjoints:
                         jointinds.append(len(Links))
                         Links.append(Tj)
+                        
                     Tright = TRightjoint
+                    
             Links.append(self.RoundMatrix(Tright))
         
-        # before returning the final links, try to push as much translation components
-        # outwards to both ends. Sometimes these components can get in the way of detecting
+        # Before returning the final links, we try to push as much translation components
+        # outward to both ends. Sometimes these components can get in the way of detecting
         # intersecting axes
         if len(jointinds) > 0:
             iright = jointinds[-1]
