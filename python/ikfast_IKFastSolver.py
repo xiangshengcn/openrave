@@ -240,11 +240,12 @@ class IKFastSolver(AutoReloader):
         self.trigvars_subs = [];
         self.trigsubs = [];
     
-    def _CheckPreemptFn(self, msg=u'', progress=0.25):
-        """progress is a value from [0,1] where 0 is just starting and 1 is complete 
+    def _CheckPreemptFn(self, msg = u'', progress = 0.25):
+        """
+        Progress is in [0,1], when 0 means "start" and 1 means "finish"
         """
         if self._checkpreemptfn is not None:
-            self._checkpreemptfn(msg, progress=progress)
+            self._checkpreemptfn(msg, progress = progress)
     
     def convertRealToRational(self, x,precision=None):
         if precision is None:
@@ -1068,44 +1069,63 @@ class IKFastSolver(AutoReloader):
         if not found:
             raise self.IKFeasibilityError(AllEquations,checkvars)
         
-    def writeIkSolver(self,chaintree,lang=None):
-        """write the ast into a specific langauge, prioritize c++
+    def writeIkSolver(self, chaintree, lang = None):
         """
-        self._CheckPreemptFn(progress=0.5)
+        Write the AST into C++
+        """
+        self._CheckPreemptFn(progress = 0.5)
         if lang is None:
             if CodeGenerators.has_key('cpp'):
                 lang = 'cpp'
             else:
                 lang = CodeGenerators.keys()[0]
+                
         log.info('generating %s code...'%lang)
+        
         if self._checkpreemptfn is not None:
             import weakref
             weakself = weakref.proxy(self)
+            
             def _CheckPreemtCodeGen(msg, progress):
                 # put the progress in the latter half
                 weakself._checkpreemptfn(u'CodeGen %s'%msg, 0.5+0.5*progress)
+                
         else:
             _CheckPreemtCodeGen = None
-        return CodeGenerators[lang](kinematicshash=self.kinematicshash,version=__version__,iktypestr=self._iktype, checkpreemptfn=_CheckPreemtCodeGen).generate(chaintree)
+            
+        return CodeGenerators[lang](kinematicshash = self.kinematicshash, \
+                                    version = __version__, \
+                                    iktypestr = self._iktype, \
+                                    checkpreemptfn = _CheckPreemtCodeGen)\
+                                    .generate(chaintree)
     
-    def generateIkSolver(self, baselink, eelink, freeindices=None, solvefn=None, ikfastoptions=0):
+    def generateIkSolver(self, baselink, eelink, \
+                         freeindices = None, \
+                         solvefn = None, \
+                         ikfastoptions = 0):
         """
         :param ikfastoptions: options that control how ikfast.
         """
-        self._CheckPreemptFn(progress=0)
+        self._CheckPreemptFn(progress = 0)
+        
         if solvefn is None:
             solvefn = IKFastSolver.solveFullIK_6D
-        chainlinks = self.kinbody.GetChain(baselink,eelink,returnjoints=False)
-        chainjoints = self.kinbody.GetChain(baselink,eelink,returnjoints=True)
+            
+        chainlinks  = self.kinbody.GetChain(baselink,eelink,returnjoints = False)
+        chainjoints = self.kinbody.GetChain(baselink,eelink,returnjoints =  True)
         LinksRaw, jointvars = self.forwardKinematicsChain(chainlinks,chainjoints)
         
         for T in LinksRaw:
-            log.info('[' + ','.join(['[%s, %s, %s, %s]'%(T[i,0],T[i,1],T[i,2],T[i,3]) for i in range(3)]) + ']')
+            log.info('[' + ','.join(['[%s, %s, %s, %s]' % \
+                                     (T[i,0], T[i,1], T[i,2], T[i,3]) \
+                                     for i in range(3)]) + ']')
             
         self.degeneratecases = None
+        
         if freeindices is None:
             # need to iterate through all combinations of free joints
             assert(0)
+            
         isolvejointvars = []
         solvejointvars = []
         self._ikfastoptions = ikfastoptions
@@ -1188,29 +1208,30 @@ class IKFastSolver(AutoReloader):
         self._rotpossymbols = self._rotsymbols + \
                               list(self.Tee[0:3,3])+self.npxyz+[self.pp]+self.rxp[0]+self.rxp[1]+self.rxp[2]
 
-        # norm of each row/column vector in R is 1
+        # 2-norm of each row/column vector in R is 1
         # groups of rotation variables are unit vectors
         self._rotnormgroups = []
         for i in range(3):
             # row
-            self._rotnormgroups.append([self.Tee[i,0],self.Tee[i,1],self.Tee[i,2],S.One])
+            self._rotnormgroups.append([self.Tee[i,0], self.Tee[i,1], self.Tee[i,2], S.One])
             # column
-            self._rotnormgroups.append([self.Tee[0,i],self.Tee[1,i],self.Tee[2,i],S.One])
+            self._rotnormgroups.append([self.Tee[0,i], self.Tee[1,i], self.Tee[2,i], S.One])
+            
         self._rotposnormgroups = list(self._rotnormgroups)
-        self._rotposnormgroups.append([self.Tee[0,3],self.Tee[1,3],self.Tee[2,3],self.pp])
+        self._rotposnormgroups.append([self.Tee[0,3], self.Tee[1,3], self.Tee[2,3], self.pp])
         
         # dot product of each pair of rows/columns in R are 0
         self._rotdotgroups = []
         for i,j in [(0,1),(0,2),(1,2)]: #combinations(range(3),2):
             # pair of rows
-            self._rotdotgroups.append([[3*i,3*j],[3*i+1,3*j+1],[3*i+2,3*j+2],S.Zero])
+            self._rotdotgroups.append([[3*i,3*j], [3*i+1,3*j+1], [3*i+2,3*j+2], S.Zero])
             # pair of columns
-            self._rotdotgroups.append([[i,j],[i+3,j+3],[i+6,j+6],S.Zero])
+            self._rotdotgroups.append([[i,j], [i+3,j+3], [i+6,j+6], S.Zero])
 
         self._rotposdotgroups = list(self._rotdotgroups)
         for i in range(3):
-            self._rotposdotgroups.append([[i,ip],[i+3,ip+1],[i+6,ip+2],self.npxyz[i]])
-            self._rotposdotgroups.append([[3*i+0,inp],[3*i+1,inp+1],[3*i+2,inp+2],self.Tee[i,3]])
+            self._rotposdotgroups.append([[i,ip], [i+3,ip+1], [i+6,ip+2], self.npxyz[i]])
+            self._rotposdotgroups.append([[3*i+0,inp], [3*i+1,inp+1], [3*i+2,inp+2], self.Tee[i,3]])
         self._rotcrossgroups = []
 
         """
@@ -1248,20 +1269,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # cross product of each pair of rows/columns is the remaining row/column
         for i,j,k in [(0,1,2),(1,2,0),(0,2,1)]:
             # pair of columns
-            self._rotcrossgroups.append([[i+3,j+6],[i+6,j+3],k])
-            self._rotcrossgroups.append([[i+6,j],[i,j+6],k+3])
-            self._rotcrossgroups.append([[i,j+3],[i+3,j],k+6])
+            self._rotcrossgroups.append([[i+3,j+6], [i+6,j+3],k  ])
+            self._rotcrossgroups.append([[i+6,j],   [i,j+6],  k+3])
+            self._rotcrossgroups.append([[i,  j+3], [i+3,j],  k+6])
             # pair of rows
-            self._rotcrossgroups.append([[3*i+1,3*j+2],[3*i+2,3*j+1],3*k])
-            self._rotcrossgroups.append([[3*i+2,3*j],[3*i,3*j+2],3*k+1])
-            self._rotcrossgroups.append([[3*i,3*j+1],[3*i+1,3*j],3*k+2])
+            self._rotcrossgroups.append([[3*i+1,3*j+2], [3*i+2,3*j+1], 3*k  ])
+            self._rotcrossgroups.append([[3*i+2,3*j],   [3*i,3*j+2],   3*k+1])
+            self._rotcrossgroups.append([[3*i,  3*j+1], [3*i+1,3*j],   3*k+2])
             # swap if sign is negative: if j!=1+i
             # i.e. k==1, the 2nd row/column; will change into
             # if k==1:
             if j!=1+i:
                 assert(k==1)
                 for crossgroup in self._rotcrossgroups[-6:]:
-                    crossgroup[0],crossgroup[1] = crossgroup[1],crossgroup[0]
+                    crossgroup[0],crossgroup[1] = crossgroup[1], crossgroup[0]
 
         # add positions
         self._rotposcrossgroups = list(self._rotcrossgroups)
@@ -1308,7 +1329,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         LinksLeft = []
         if self.useleftmultiply:
-            while not self.has(LinksRaw[0],*solvejointvars):
+            while not self.has(LinksRaw[0], *solvejointvars):
                 LinksLeft.append(LinksRaw.pop(0))
                 LinksLeftInv = [self.affineInverse(T) for T in LinksLeft]
         self.testconsistentvalues = None
@@ -3217,7 +3238,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         polysubs = []
         polyvars = []
         for v in solvejointvars:
-            self._CheckPreemptFn(progress=0.05)
+            self._CheckPreemptFn(progress = 0.05)
             polyvars.append(v)
             if self.IsHinge(v.name):
                 var = self.Variable(v)
@@ -3238,7 +3259,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for i in range(len(eqs)):
             polyeqs.append([None,None])        
         for j in range(2):
-            self._CheckPreemptFn(progress=0.05)
+            self._CheckPreemptFn(progress = 0.05)
             for i in range(len(eqs)):
                 poly0 = Poly(eqs[i][j].subs(polysubs),*usedvars[j]).subs(trigsubs)
                 poly1 = Poly(poly0.expand().subs(trigsubs),*usedvars[j])
@@ -3289,7 +3310,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for j in range(2):
             usedvars.append([var for var in polyvars if any([eq[j].subs(polysubs).has(var) for eq in eqs])])
         for i in range(len(eqs)):
-            self._CheckPreemptFn(progress=0.05)
+            self._CheckPreemptFn(progress = 0.05)
             if not self.CheckEquationForVarying(eqs[i][0]) and not self.CheckEquationForVarying(eqs[i][1]):
                 for j in range(2):
                     if polyeqs[i][j] is not None:
@@ -3352,7 +3373,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         reducedeqs = []
         tree = []
         for j,leftsideeqs,rightsideeqs,numsymbolcoeffs, _computereducedequations in reducedelayed:
-            self._CheckPreemptFn(progress=0.06)
+            self._CheckPreemptFn(progress = 0.06)
             try:
                 reducedeqs2 = _computereducedequations()
                 if len(reducedeqs2) == 0:
@@ -3412,7 +3433,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             Asymbols.append([Symbol('gconst%d_%d'%(i,j)) for j in range(A.shape[1])])
         solution = None
         for eqindices in combinations(range(len(leftsideeqs)),len(allmonomsleft)):
-            self._CheckPreemptFn(progress=0.06)
+            self._CheckPreemptFn(progress = 0.06)
             for i,index in enumerate(eqindices):
                 for k in range(len(allmonomsleft)):
                     A[i,k] = systemcoeffs[index][2][k]
@@ -3982,7 +4003,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             
         hasreducedeqs = True
         while hasreducedeqs:
-            self._CheckPreemptFn(progress=0.08)
+            self._CheckPreemptFn(progress = 0.08)
             hasreducedeqs = False
             for ipeq,peq in enumerate(neweqs):
                 peq0dict = peq[0].as_dict()
@@ -4302,7 +4323,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 AU = A[0:1,:]
                 rows = [0]
                 for i in range(1,A.shape[0]):
-                    self._CheckPreemptFn(progress=0.09)
+                    self._CheckPreemptFn(progress = 0.09)
                     AU2 = AU.col_join(A[i:(i+1),:])
                     if AU2.shape[0] == AU2.shape[1]:
                         AUdetmat = AU2
@@ -4668,7 +4689,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         newreducedeqs = []
         hassinglevariable = False
         for eq in reducedeqs:
-            self._CheckPreemptFn(progress=0.10)
+            self._CheckPreemptFn(progress = 0.10)
             complexity = self.codeComplexity(eq)
             if complexity > 1500:
                 log.warn('equation way too complex (%d), looking for another solution', complexity)
@@ -4828,7 +4849,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if exportcoeffeqs is not None:
                 break
         
-        self._CheckPreemptFn(progress=0.11)
+        self._CheckPreemptFn(progress = 0.11)
         if exportcoeffeqs is None:
             if len(nonhtvars) > 0 and newreducedeqs[0].degree:
                 log.info('try to solve one variable in terms of the others')
@@ -5611,7 +5632,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         Method also checks if the equations are linearly dependent
         """
-        self._CheckPreemptFn(progress=0.12)
+        self._CheckPreemptFn(progress = 0.12)
         if len(dialyticeqs) == 0:
             raise self.CannotSolveError('solveDialytically given zero equations')
         
@@ -6336,13 +6357,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 NewEquations.append(eq)
         return NewEquations
     
-    def SolveAllEquations(self, AllEquations, curvars, othersolvedvars, solsubs, endbranchtree, \
+    def SolveAllEquations(self, AllEquations, \
+                          curvars, othersolvedvars, \
+                          solsubs, endbranchtree, \
                           currentcases = None, \
                           unknownvars = [], \
                           currentcasesubs = None, \
                           canguessvars = True):
         """
-        if canguessvars is True, then we can guess variable values prodived they satisfy required conditions
+        If canguessvars is True, then we can guess variable values, prodived they satisfy required conditions
         """
         from ikfast_AST import AST
 
