@@ -536,6 +536,13 @@ class IKFastSolver(AutoReloader):
         # outward to both ends. Sometimes these components can get in the way of detecting
         # intersecting axes
         if len(jointinds) > 0:
+
+            # TGN: this executes only once, so it is trivial to modify
+            #
+            # Better is to not multiply translation matrix, but to add values to a translation vector
+            # 
+            # TO-DO
+
             iright = jointinds[-1]
             Ttrans = eye(4)
             Ttrans[0:3,3] = Links[iright-1][0:3,0:3].transpose() * Links[iright-1][0:3,3]
@@ -543,7 +550,7 @@ class IKFastSolver(AutoReloader):
             separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
             for j in range(0,3):
                 if separated_trans[j].has(*jointvars):
-                    Ttrans[j,3] = Rational(0)
+                    Ttrans[j,3] = S.Zero
                 else:
                     Ttrans[j,3] = separated_trans[j]
             Links[iright+1] = Ttrans * Links[iright+1]
@@ -574,19 +581,16 @@ class IKFastSolver(AutoReloader):
             
         return Links, jointvars
     
-    def countVariables(self,expr,var):
-        """Counts number of terms variable appears in"""
-        if not expr.is_Add:
-            if expr.has(var):
-                return 1
+    def countVariables(self, expr, var):
+        """
+        Counts the number of terms in expr in which var appears
+        """
+        if expr.is_Add or expr.is_Mul: # TGN added expr.is_Mul
+            return sum([1 for term in expr.args if term.has(var)])
+        elif expr.has(var):
+            return 1
+        else:
             return 0
-        
-        num = 0
-        for term in expr.args:
-            if term.has(var):
-                num += 1
-                
-        return num
     
     @staticmethod
     def isValidPowers(expr):
@@ -594,8 +598,10 @@ class IKFastSolver(AutoReloader):
             if not expr.exp.is_number or expr.exp < 0:
                 return False
             return IKFastSolver.isValidPowers(expr.base)
+        
         elif expr.is_Add or expr.is_Mul or expr.is_Function:
             return all([IKFastSolver.isValidPowers(arg) for arg in expr.args])
+        
         else:
             return True
         
@@ -634,7 +640,7 @@ class IKFastSolver(AutoReloader):
     
     def trigsimp_new(self, eq):
         """
-        NEW: recursively subs sin**2 for 1-cos**2 for every trig var
+        TGN's rewrite version of trigsimp: recursively subs sin**2 for 1-cos**2 for every trig var
         """
         eq = expand(eq)
         curcount = eq.count_ops()
@@ -691,27 +697,29 @@ class IKFastSolver(AutoReloader):
         # incos and insin indicate whether we should take cos/sin into account
         if eq.is_Add:
             if incos:
+                exec(ipython_str)
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
                         lefteq += eq.args[ieq]
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
-                        self.SimplifyAtan2(lefteq, incos = True) - \
+                        self.SimplifyAtan2(lefteq,     incos = True) - \
                         self.SimplifyAtan2(eq.args[0], insin = True) * \
-                        self.SimplifyAtan2(lefteq, insin = True)
+                        self.SimplifyAtan2(lefteq,     insin = True)
                 processed = True
                 
             elif insin:
+                exec(ipython_str)
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
                         lefteq += eq.args[ieq]
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
-                        self.SimplifyAtan2(lefteq, insin = True) + \
+                        self.SimplifyAtan2(lefteq,     insin = True) + \
                         self.SimplifyAtan2(eq.args[0], insin = True) * \
-                        self.SimplifyAtan2(lefteq, incos = True)
+                        self.SimplifyAtan2(lefteq,     incos = True)
                 processed = True
                 
             else:
@@ -735,6 +743,7 @@ class IKFastSolver(AutoReloader):
                         pass
                     
         elif eq.is_Mul:
+            
             if incos and len(eq.args) == 2:
                 num = None
                 if eq.args[0].is_integer:
@@ -773,6 +782,7 @@ class IKFastSolver(AutoReloader):
                     neweq *= self.SimplifyAtan2(subeq)
                     
         elif eq.is_Function:
+            
             if incos and eq.func == atan2:
                 yeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[0]))
                 xeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[1]))
@@ -805,7 +815,7 @@ class IKFastSolver(AutoReloader):
             if neweq is None:
                 neweq = self.SimplifyAtan2(eq.base)**self.SimplifyAtan2(eq.exp)
                 
-        elif eq.is_number:
+        elif eq.is_number:            
             if epsilon is None:
                 epsilon = 1e-15
             if insin:
@@ -826,8 +836,8 @@ class IKFastSolver(AutoReloader):
             return sin(neweq)
         elif not processed and incos:
             return cos(neweq)
-        
-        return neweq
+        else:
+            return neweq
 
     @staticmethod
     def codeComplexity(expr):
@@ -952,13 +962,15 @@ class IKFastSolver(AutoReloader):
 
         return checkforzeros
 
-    def ComputeSolutionComplexity(self,sol,solvedvars,unsolvedvars):
+    def ComputeSolutionComplexity(self, sol, solvedvars, unsolvedvars):
         """
-        for all solutions, check if there is a divide by zero
-        fills checkforzeros for the solution
+        For all solutions, check if there is a divide by zero
+        
+        Fills checkforzeros for the solution
         """
         sol.checkforzeros = sol.getPresetCheckForZeros()
         sol.score = 20000*sol.numsolutions()
+        
         try:
             # multiby by 400 in order to prioritize equations with less solutions
             if hasattr(sol,'jointeval') and sol.jointeval is not None:
@@ -966,11 +978,13 @@ class IKFastSolver(AutoReloader):
                     sol.score += self.codeComplexity(s)
                     sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointeval
+                
             elif hasattr(sol,'jointevalsin') and sol.jointevalsin is not None:
                 for s in sol.jointevalsin:
                     sol.score += self.codeComplexity(s)
                     sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointevalsin
+                
             elif hasattr(sol,'jointevalcos') and sol.jointevalcos is not None:
                 for s in sol.jointevalcos:
                     sol.score += self.codeComplexity(s)
@@ -1005,22 +1019,21 @@ class IKFastSolver(AutoReloader):
             while len(sexprs) > 0:
                 sexpr = sexprs.pop(0)
                 if sexpr.is_Add:
-                    for arg in sexpr.args:
-                        if arg.is_Mul:
-                            for arg2 in arg.args:
-                                sol.score += checkpow(arg2,sexprs)
-                        else:
-                            sol.score += checkpow(arg,sexprs)
+                    sol.score += sum([sum([checkpow(arg2, sexprs) for arg2 in arg.args]) \
+                                      if arg.is_Mul else checkpow(arg, sexprs) \
+                                      for arg in sexpr.args])
                 elif sexpr.is_Mul:
-                    for arg in sexpr.args:
-                        sol.score += checkpow(arg,sexprs)
+                    sol.score += sum([checkpow(arg,sexprs) for arg in sexpr.args])
+                    
                 elif sexpr.is_Function:
                     sexprs += sexpr.args
+                    
                 elif not self.isValidSolution(sexpr):
-                    log.warn('not valid: %s',sexpr)
+                    log.warn('not valid: %s', sexpr)
                     sol.score = oo # infinity
                 else:
-                    sol.score += checkpow(sexpr,sexprs)
+                    sol.score += checkpow(sexpr, sexprs)
+                    
         except AssertionError, e:
             log.warn('%s',e)
             sol.score=1e10
