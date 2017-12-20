@@ -6470,8 +6470,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                             curvar, othersolvedvars, \
                                                             unknownvars = curvars + unknownvars)
 
-                    exec(ipython_str) in globals(), locals()
-
                     for solution in rawsolutions:
                         self.ComputeSolutionComplexity(solution, othersolvedvars, curvars)
                         if solution.numsolutions() > 0:
@@ -6491,6 +6489,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # In the bertold robot case, the next possibility is a pair-wise solution involving two variables
         #
         # TGN: don't we check Abs(y)+Abs(x) for atan2?
+
+        exec(ipython_str) in globals(), locals()
         
         if any([s[0].numsolutions() == 1 for s in solutions]):
             return self.AddSolution(solutions, \
@@ -7906,28 +7906,38 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return solutions
 
     def solveSingleVariableLinearly(self,raweqns,solvevar,othervars,maxnumeqs=2,douniquecheck=True):
-        """tries to linearly solve for one variable treating everything else as constant.
-
-        need at least 3 equations
         """
-        cvar = Symbol('c%s'%solvevar.name)
-        svar = Symbol('s%s'%solvevar.name)
-        varsubs = [(cos(solvevar),cvar),(sin(solvevar),svar)]
-        othervarsubs = [(sin(v)**2,1-cos(v)**2) for v in othervars]
-        eqpolys = [Poly(eq.subs(varsubs),cvar,svar) for eq in raweqns]
+        Solves a linear system for one variable, assuming everything else is constant.
+
+        Need >=3 equations.
+        """
+        cvar = Symbol('c%s' % solvevar.name)
+        svar = Symbol('s%s' % solvevar.name)
+        varsubs = [(cos(solvevar), cvar), (sin(solvevar), svar)]
+        othervarsubs = [(sin(v)**2, 1-cos(v)**2) for v in othervars]
+        eqpolys = [Poly(eq.subs(varsubs), cvar, svar) for eq in raweqns]
         eqpolys = [eq for eq in eqpolys if sum(eq.degree_list()) == 1 and not eq.TC().has(solvevar)]
         #eqpolys.sort(lambda x,y: iksolver.codeComplexity(x) - iksolver.codeComplexity(y))
         partialsolutions = []
         neweqs = []
-        for p0,p1 in combinations(eqpolys,2):
+        for p0,p1 in combinations(eqpolys, 2):
             p0dict = p0.as_dict()
             p1dict = p1.as_dict()
-            M = Matrix(2,3,[p0dict.get((1,0),S.Zero),p0dict.get((0,1),S.Zero),p0.TC(),p1dict.get((1,0),S.Zero),p1dict.get((0,1),S.Zero),p1.TC()])
+
+            M = Matrix(2, 3, \
+                       [p0dict.get((1,0), S.Zero), \
+                        p0dict.get((0,1), S.Zero), p0.TC(), \
+                        p1dict.get((1,0), S.Zero), \
+                        p1dict.get((0,1), S.Zero), p1.TC()])
             M = M.subs(othervarsubs).expand()
-            partialsolution = [-M[1,1]*M[0,2]+M[0,1]*M[1,2],M[1,0]*M[0,2]-M[0,0]*M[1,2],M[0,0]*M[1,1]-M[0,1]*M[1,0]]
+            
+            partialsolution = [-M[1,1]*M[0,2]+M[0,1]*M[1,2], \
+                               M[1,0]*M[0,2]-M[0,0]*M[1,2] , \
+                               M[0,0]*M[1,1]-M[0,1]*M[1,0]]
+            
             partialsolution = [eq.expand().subs(othervarsubs).expand() for eq in partialsolution]
             rank = [self.codeComplexity(eq) for eq in partialsolution]
-            partialsolutions.append([rank,partialsolution])
+            partialsolutions.append([rank, partialsolution])
             # cos(A)**2 + sin(A)**2 - 1 = 0, useful equation but the squares introduce wrong solutions
             #neweqs.append(partialsolution[0]**2+partialsolution[1]**2-partialsolution[2]**2)
         # try to cross
@@ -7943,46 +7953,53 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             #neweqs.append(ps0[0]*ps1[0]+ps0[1]*ps1[1]-ps0[2]*ps1[2])
             if len(neweqs) >= maxnumeqs:
                 break;
+            
         neweqs2 = [eq.expand().subs(othervarsubs).expand() for eq in neweqs]
+        
         if douniquecheck:
             reducedeqs = []
             i = 0
             while i < len(neweqs2):
                 reducedeq = self.removecommonexprs(neweqs2[i])
-                if neweqs2[i] != S.Zero and self.CheckExpressionUnique(reducedeqs,reducedeq):
+                if neweqs2[i] != S.Zero and \
+                   self.CheckExpressionUnique(reducedeqs, reducedeq):
                     reducedeqs.append(reducedeq)
                     i += 1
                 else:
-                    eq=neweqs2.pop(i)
+                    eq = neweqs2.pop(i)
         return neweqs2
 
-    def solveHighDegreeEquationsHalfAngle(self,lineareqs,varsym,subs=None):
+    def solveHighDegreeEquationsHalfAngle(self, lineareqs, varsym, subs = None):
         """solve a set of equations in one variable with half-angle substitution
         """
         from ikfast_AST import AST
         
-        dummysubs = [(varsym.cvar,(1-varsym.htvar**2)/(1+varsym.htvar**2)),(varsym.svar,2*varsym.htvar/(1+varsym.htvar**2))]
+        dummysubs = [(varsym.cvar, (1-varsym.htvar**2)/(1+varsym.htvar**2)), \
+                     (varsym.svar,      2*varsym.htvar/(1+varsym.htvar**2))]
         polyeqs = []
+        
         for eq in lineareqs:
-            trigsubs = [(varsym.svar**2,1-varsym.cvar**2), (varsym.svar**3,varsym.svar*(1-varsym.cvar**2))]
+            trigsubs = [(varsym.svar**2, 1-varsym.cvar**2), \
+                        (varsym.svar**3, varsym.svar*(1-varsym.cvar**2))]
             try:
-                peq = Poly(eq.subs(varsym.subs).subs(trigsubs),varsym.cvar,varsym.svar)
+                peq = Poly(eq.subs(varsym.subs).subs(trigsubs), varsym.cvar, varsym.svar)
+                
             except PolynomialError, e:
-                raise self.CannotSolveError('solveHighDegreeEquationsHalfAngle: poly error (%r)'%eq)
+                raise self.CannotSolveError('solveHighDegreeEquationsHalfAngle: poly error (%r)' % eq)
             
             if peq.has(varsym.var):
-                raise self.CannotSolveError('solveHighDegreeEquationsHalfAngle: expecting only sin and cos! %s'%peq)
+                raise self.CannotSolveError('solveHighDegreeEquationsHalfAngle: expecting only sin and cos! %s' % peq)
             
             if sum(peq.degree_list()) == 0:
                 continue
             
             # check if all terms are multiples of cos/sin
-            maxmonoms = [0,0]
+            maxmonoms = [0, 0]
             maxdenom = 0
             for monoms in peq.monoms():
                 for i in range(2):
-                    maxmonoms[i] = max(maxmonoms[i],monoms[i])
-                maxdenom = max(maxdenom,monoms[0]+monoms[1])
+                    maxmonoms[i] = max(maxmonoms[i], monoms[i])
+                maxdenom = max(maxdenom,monoms[0] + monoms[1])
             eqnew = S.Zero
             for monoms,c in peq.terms():
                 if c.evalf() != S.Zero: # big fractions might make this difficult to reduce to 0
@@ -7994,26 +8011,33 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     denom = fraction(dummysubs[0][1])[1]
                     term *= denom**(maxdenom-monoms[0]-monoms[1])
                     eqnew += simplify(term)
-            polyeqs.append(Poly(eqnew,varsym.htvar))
+            polyeqs.append(Poly(eqnew, varsym.htvar))
 
         for peq in polyeqs:
             # do some type of resultants, for now just choose first polynomial
             finaleq = simplify(peq.as_expr()).expand()
-            pfinal = Poly(self.removecommonexprs(finaleq,onlygcd=False,onlynumbers=True),varsym.htvar)
+            pfinal = Poly(self.removecommonexprs(finaleq, \
+                                                 onlygcd = False,\
+                                                 onlynumbers=True), \
+                          varsym.htvar)
             pfinal = self.checkFinalEquation(pfinal,subs)
             if pfinal is not None and pfinal.degree(0) > 0:
                 jointsol = 2*atan(varsym.htvar)
-                solution = AST.SolverPolynomialRoots(jointname=varsym.name,poly=pfinal,jointeval=[jointsol],isHinge=self.IsHinge(varsym.name))
-                solution.AddHalfTanValue = True
-                solution.checkforzeros = []
-                solution.postcheckforzeros = []
+                solution = AST.SolverPolynomialRoots(jointname = varsym.name, \
+                                                     poly = pfinal, \
+                                                     jointeval = [jointsol], \
+                                                     isHinge = self.IsHinge(varsym.name))
+                solution.AddHalfTanValue      = True
+                solution.checkforzeros        = []
+                solution.postcheckforzeros    = []
                 solution.postcheckfornonzeros = []
-                solution.postcheckforrange = []
+                solution.postcheckforrange    = []
                 return solution
 
-        raise self.CannotSolveError('half-angle substitution for joint %s failed, %d equations examined'%(varsym.var,len(polyeqs)))
+        raise self.CannotSolveError('half-angle substitution for joint %s failed, ' + \
+                                    '%d equations examined' % (varsym.var, len(polyeqs)))
 
-    def checkFinalEquation(self,pfinal,subs=None):
+    def checkFinalEquation(self, pfinal, subs = None):
         """check an equation in one variable for validity
         """
         assert(len(pfinal.gens)==1)
