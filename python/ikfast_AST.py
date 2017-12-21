@@ -118,20 +118,21 @@ class AST:
                                ('\n'+' '*5).join(str(x) for x in self.jointeval)))
             
     class SolverPolynomialRoots(SolverBase):
-        """find all roots of the polynomial and plug it into jointeval. poly should be Poly
         """
-        jointname = None
-        poly = None
-        polybackup = None # if poly does not yield and results, this polynomial will be solved instead
-        jointeval = None
-        jointevalcos = None # not used
-        jointevalsin = None # not used
-        checkforzeros = None
-        postcheckforzeros = None # fail if any zero
+        Find all roots of the polynomial (of Poly type) and plug it into jointeval.
+        """
+        jointname            = None
+        poly                 = None
+        polybackup           = None # if poly does not yield and results, this polynomial will be solved instead
+        jointeval            = None
+        jointevalcos         = None # not used
+        jointevalsin         = None # not used
+        checkforzeros        = None
+        postcheckforzeros    = None # fail if any zero
         postcheckfornonzeros = None # fail if any nonzero
         postcheckforNumDenom = None # list of (A,B) pairs where Ax=B was used. Fail if A==0&&B!=0
-        postcheckforrange = None # checks that value is within [-1,1]
-        dictequations = None
+        postcheckforrange    = None # checks that value is within [-1,1]
+        dictequations        = None
         postcheckforzerosThresh = 1e-8 # threshold for checking postcheckforzeros. if abs(val) <= postcheckforzerosThresh: skip
         postcheckfornonzerosThresh = 1e-8 # threshold for checking postcheckfornonzeros. if abs(val) > postcheckfornonzerosThresh: skip
         postcheckforrangeThresh = 1e-8 # threshold for checking postcheckforrange. if  val <= -1-postcheckforrangeThresh || val > 1+postcheckforrangeThresh: skip
@@ -141,14 +142,16 @@ class AST:
         AddHalfTanValue = False
         score = None
         equationsused = None
+        
         def __init__(self, jointname, poly=None, jointeval=None,isHinge=True):
             self.poly = poly
             assert(self.poly.degree(0)>0)
-            self.jointname=jointname
+            self.jointname = jointname
             self.jointeval = jointeval
             self.isHinge = isHinge
             self.dictequations = []
             self.equationsused = []
+            
         def numsolutions(self):
             if self.polybackup is None:
                 return self.poly.degree(0)
@@ -176,10 +179,13 @@ class AST:
                 self.polybackup = Poly(self.polybackup.subs(solsubs),*self.polybackup.gens)
             assert(self.checkValidSolution())
             return self
+        
         def generate(self, generator):
             return generator.generatePolynomialRoots(self)
+        
         def end(self, generator):
             return generator.endPolynomialRoots(self)
+        
         def checkValidSolution(self):
             from ikfast_IKFastSolver import IKFastSolver
             valid = True
@@ -190,6 +196,7 @@ class AST:
             if self.jointeval is not None:
                 valid &= all([IKFastSolver.isValidSolution(e) for e in self.jointeval])
             return valid
+        
         def getPresetCheckForZeros(self):
             # make sure that all the coefficients containing higher-order variables are not 0
             zeroeq = S.Zero
@@ -207,8 +214,10 @@ class AST:
                         else:
                             zeroeq += abs(coeff)
             return [zeroeq]#self.poly.LC()]
+        
         def getEquationsUsed(self):
             return self.equationsused
+        
         def GetZeroThreshold(self):
             return self.postcheckforzerosThresh # not really sure...
         
@@ -230,21 +239,32 @@ class AST:
         presetcheckforzeros = None
         dictequations = None
         equationsused = None
-        def __init__(self, jointnames, jointeval=None, exportvar=None, exportcoeffeqs=None,exportfnname=None,isHinges=None,rootmaxdim=16,jointevalcos=None,jointevalsin=None):
+        def __init__(self, jointnames, \
+                     jointeval = None, \
+                     exportvar = None, \
+                     exportcoeffeqs = None, \
+                     exportfnname = None, \
+                     isHinges = None, \
+                     rootmaxdim = 16, \
+                     jointevalcos = None, \
+                     jointevalsin = None):
+            
             self.jointnames=jointnames
             self.jointeval = jointeval
             self.isHinges = isHinges
-            self.exportvar=exportvar
-            self.exportcoeffeqs=exportcoeffeqs
-            self.exportfnname=exportfnname
-            self.rootmaxdim=rootmaxdim
-            self.jointevalsin=jointevalsin
-            self.jointevalcos=jointevalcos
+            self.exportvar = exportvar
+            self.exportcoeffeqs = exportcoeffeqs
+            self.exportfnname = exportfnname
+            self.rootmaxdim = rootmaxdim
+            self.jointevalsin = jointevalsin
+            self.jointevalcos = jointevalcos
             self.presetcheckforzeros = []
             self.dictequations = []
             self.equationsused = []
+            
         def numsolutions(self):
             return self.rootmaxdim
+        
         def subs(self,solsubs):
             if self.jointeval is not None:
                 self.jointeval = [e.subs(solsubs) for e in self.jointeval]
@@ -261,10 +281,13 @@ class AST:
             #    self.poly = Poly(self.poly.subs(solsubs)...)
             assert(self.checkValidSolution())
             return self
+        
         def generate(self, generator):
             return generator.generateCoeffFunction(self)
+        
         def end(self, generator):
             return generator.endCoeffFunction(self)
+        
         def checkValidSolution(self):
             #if self.poly is not None:
             #    valid = IKFastSolver.isValidSolution(self.poly.as_expr())
@@ -275,8 +298,10 @@ class AST:
             if self.jointevalsin is not None:
                 valid &= all([IKFastSolver.isValidSolution(e) for e in self.jointevalsin])
             return valid
+        
         def getPresetCheckForZeros(self):
             return self.presetcheckforzeros
+        
         def getEquationsUsed(self):
             return self.equationsused
 
@@ -363,14 +388,15 @@ class AST:
             return self.thresh
 
     class SolverCheckZeros(SolverBase):
-        jointname = None
+        jointname     = None
         jointcheckeqs = None # only used for evaluation
-        zerobranch = None
+        zerobranch    = None
         nonzerobranch = None
-        anycondition=None
-        dictequations=None
-        thresh=None # a threshold of 1e-6 breaks hiro ik
+        anycondition  = None
+        dictequations = None
+        thresh        = None # a threshold of 1e-6 breaks hiro ik
         equationsused = None
+        
         def __init__(self, jointname, jointcheckeqs, zerobranch, nonzerobranch,thresh=None,anycondition=True):
             self.jointname = jointname
             self.jointcheckeqs = jointcheckeqs
@@ -382,12 +408,16 @@ class AST:
                 self.thresh = thresh
             self.anycondition = anycondition
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateCheckZeros(self)
+        
         def end(self, generator):
             return generator.endCheckZeros(self)
+        
         def getPresetCheckForZeros(self):
             return []
+        
         def checkValidSolution(self):
             for branch in self.nonzerobranch:
                 if not branch.checkValidSolution():
@@ -396,8 +426,10 @@ class AST:
                 if not branch.checkValidSolution():
                     return False
             return True
+        
         def numsolutions(self):
             return 1
+        
         def subs(self,solsubs):
             for branch in self.nonzerobranch:
                 if hasattr(branch,'subs'):
@@ -406,8 +438,10 @@ class AST:
                 if hasattr(branch,'subs'):
                     branch.subs(solsubs)
             return self
+        
         def getEquationsUsed(self):
             return self.equationsused
+        
         def GetChildrenOfType(self, classinstance):
             nodes = []
             for childnode in self.nonzerobranch + self.zerobranch:
@@ -415,18 +449,24 @@ class AST:
                     nodes.append(childnode)
                 nodes += childnode.GetChildrenOfType(classinstance)
             return nodes
+        
         def GetZeroThreshold(self):
             return self.thresh
+        
     class SolverFreeParameter(SolverBase):
         jointname = None
         jointtree = None
+        
         def __init__(self, jointname, jointtree):
             self.jointname = jointname
             self.jointtree = jointtree
+            
         def generate(self, generator):
             return generator.generateFreeParameter(self)
+        
         def end(self, generator):
             return generator.endFreeParameter(self)
+        
         def GetChildrenOfType(self, classinstance):
             nodes = []
             for childnode in self.jointtree:
@@ -436,29 +476,36 @@ class AST:
             return nodes
         
     class SolverRotation(SolverBase):
-        T = None
-        jointtree = None
-        functionid=0
+        T          = None
+        jointtree  = None
+        functionid = 0
+        
         def __init__(self, T, jointtree):
             self.T = T
             self.jointtree = jointtree
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateRotation(self)
+        
         def end(self, generator):
             return generator.endRotation(self)
 
     class SolverFunction(SolverBase):
         jointtree = None
-        name='innerfn'
+        name = 'innerfn'
+        
         def __init__(self, name, jointtree):
             self.name = name
             self.jointtree = jointtree
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateFunction(self)
+        
         def end(self, generator):
             return generator.endFunction(self)
+        
         def GetChildrenOfType(self, classinstance):
             nodes = []
             for childnode in self.jointtree:
@@ -475,24 +522,30 @@ class AST:
         thresh = 0
         offsetvalues = None
         isHinge = None
-        def __init__(self, alljointvars,checkgreaterzero=None,isHinge=None):
+        
+        def __init__(self, alljointvars, checkgreaterzero = None, isHinge = None):
             self.alljointvars = alljointvars
             self.checkgreaterzero = checkgreaterzero
             self.isHinge=isHinge
             if isHinge is None:
                 log.warn('SolverStoreSolution.isHinge is not initialized')
                 self.isHinge = [True]*len(self.alljointvars)
+                
         def generate(self, generator):
             return generator.generateStoreSolution(self)
+        
         def end(self, generator):
             return generator.endStoreSolution(self)
         
     class SolverSequence(SolverBase):
         jointtrees = None
+        
         def __init__(self, jointtrees):
             self.jointtrees = jointtrees
+            
         def generate(self, generator):
             return generator.generateSequence(self)
+        
         def end(self, generator):
             return generator.endSequence(self)
         
@@ -507,21 +560,31 @@ class AST:
         
     class SolverBreak(SolverBase):
         """Terminates this scope"""
-        comment = None # a comment for the reason of the break
-        varsubs = None # variable substitutions that were valid at the break
+        comment         = None # a comment for the reason of the break
+        varsubs         = None # variable substitutions that were valid at the break
         othersolvedvars = None # the solved variables already
-        solsubs = None # the substitutions of the solved variables
-        endbranchtree = None # a node that points to the end of the tree
-        def __init__(self, comment, varsubs=list(), othersolvedvars=list(), solsubs=list(), globalsymbols=list(), endbranchtree=None):
+        solsubs         = None # the substitutions of the solved variables
+        endbranchtree   = None # a node that points to the end of the tree
+        
+        def __init__(self, comment, \
+                     varsubs = list(), \
+                     othersolvedvars = list(), \
+                     solsubs = list(), \
+                     globalsymbols = list(), \
+                     endbranchtree = None):
+            
             self.comment = comment
             self.varsubs = list(varsubs)
             self.othersolvedvars = list(othersolvedvars)
             self.solsubs = list(solsubs)
             self.endbranchtree = endbranchtree
+            
         def generate(self,generator):
             return generator.generateBreak(self)
+        
         def end(self,generator):
             return generator.endBreak(self)
+        
         def checkValidSolution(self):
             return True
         
@@ -532,121 +595,144 @@ class AST:
         Tfk = None
         Tee = None
         dictequations = None
-        def __init__(self, solvejointvars, freejointvars, Tee, jointtree,Tfk=None):
+        
+        def __init__(self, solvejointvars, freejointvars, Tee, jointtree,Tfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Tee = Tee
             self.jointtree = jointtree
             self.Tfk = Tfk
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateChain(self)
+        
         def end(self, generator):
             return generator.endChain(self)
+        
         def leftmultiply(self,Tleft,Tleftinv):
             self.Tfk = Tleft*self.Tfk
             self.Tee = Tleftinv*self.Tee
 
     class SolverIKChainRotation3D(SolverBase):
         solvejointvars = None
-        freejointvars = None
-        Rfk = None
-        Ree = None
-        jointtree = None
-        dictequations = None
-        def __init__(self, solvejointvars, freejointvars, Ree, jointtree,Rfk=None):
+        freejointvars  = None
+        Rfk            = None
+        Ree            = None
+        jointtree      = None
+        dictequations  = None
+        
+        def __init__(self, solvejointvars, freejointvars, Ree, jointtree, Rfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Ree = Ree
-            self.Rfk=Rfk
+            self.Rfk = Rfk
             self.jointtree = jointtree
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateIKChainRotation3D(self)
+        
         def end(self, generator):
             return generator.endIKChainRotation3D(self)
-        def leftmultiply(self,Tleft,Tleftinv):
-            self.Rfk = Tleft[0:3,0:3]*self.Rfk
+        
+        def leftmultiply(self, Tleft, Tleftinv):
+            self.Rfk = Tleft[0:3,0:3]   *self.Rfk
             self.Ree = Tleftinv[0:3,0:3]*self.Ree
 
     class SolverIKChainTranslation3D(SolverBase):
         solvejointvars = None
-        freejointvars = None
-        jointtree = None
-        Pfk = None
-        Pee = None
-        dictequations = None
-        uselocaltrans = False
-        def __init__(self, solvejointvars, freejointvars, Pee, jointtree,Pfk=None):
+        freejointvars  = None
+        jointtree      = None
+        Pfk            = None
+        Pee            = None
+        dictequations  = None
+        uselocaltrans  = False
+        
+        def __init__(self, solvejointvars, freejointvars, Pee, jointtree, Pfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Pee = Pee
             self.jointtree = jointtree
             self.Pfk=Pfk
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateIKChainTranslation3D(self)
+        
         def end(self, generator):
             return generator.endIKChainTranslation3D(self)
+        
         def leftmultiply(self,Tleft,Tleftinv):
-            self.Pfk = Tleft[0:3,0:3]*self.Pfk+Tleft[0:3,3]
-            self.Pee = Tleftinv[0:3,0:3]*self.Pee+Tleftinv[0:3,3]
+            self.Pfk = Tleft[0:3,0:3]    * self.Pfk+Tleft[0:3,3]
+            self.Pee = Tleftinv[0:3,0:3] * self.Pee+Tleftinv[0:3,3]
 
     class SolverIKChainTranslationXY2D(SolverBase):
         solvejointvars = None
-        freejointvars = None
-        jointtree = None
-        Pfk = None
-        Pee = None
-        dictequations = None
-        def __init__(self, solvejointvars, freejointvars, Pee, jointtree,Pfk=None):
+        freejointvars  = None
+        jointtree      = None
+        Pfk            = None
+        Pee            = None
+        dictequations  = None
+        
+        def __init__(self, solvejointvars, freejointvars, Pee, jointtree, Pfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Pee = Pee
             self.jointtree = jointtree
             self.Pfk=Pfk
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateIKChainTranslationXY2D(self)
+        
         def end(self, generator):
             return generator.endIKChainTranslationXY2D(self)
-        def leftmultiply(self,Tleft,Tleftinv):
-            self.Pfk = Tleft[0:2,0:2]*self.Pfk+Tleft[0:2,3]
+        
+        def leftmultiply(self, Tleft, Tleftinv):
+            self.Pfk = Tleft[0:2,0:2]   *self.Pfk+Tleft[0:2,3]
             self.Pee = Tleftinv[0:2,0:2]*self.Pee+Tleftinv[0:2,3]
             
     class SolverIKChainDirection3D(SolverBase):
         solvejointvars = None
-        freejointvars = None
-        jointtree = None
-        Dfk = None
-        Dee = None
-        dictequations = None
-        def __init__(self, solvejointvars, freejointvars, Dee, jointtree,Dfk=None):
+        freejointvars  = None
+        jointtree      = None
+        Dfk            = None
+        Dee            = None
+        dictequations  = None
+        
+        def __init__(self, solvejointvars, freejointvars, Dee, jointtree, Dfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Dee = Dee
             self.jointtree = jointtree
-            self.Dfk=Dfk
+            self.Dfk = Dfk
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateIKChainDirection3D(self)
+        
         def end(self, generator):
             return generator.endIKChainDirection3D(self)
-        def leftmultiply(self,Tleft,Tleftinv):
-            self.Dfk = Tleft[0:3,0:3]*self.Dfk
+        
+        def leftmultiply(self, Tleft, Tleftinv):
+            self.Dfk = Tleft[0:3,0:3]   *self.Dfk
             self.Dee = Tleftinv[0:3,0:3]*self.Dee
 
     class SolverIKChainRay(SolverBase):
         solvejointvars = None
-        freejointvars = None
-        jointtree = None
-        Pfk = None
-        Dfk = None
-        Pee = None
-        Dee = None
-        dictequations = None
+        freejointvars  = None
+        jointtree      = None
+        Pfk            = None
+        Dfk            = None
+        Pee            = None
+        Dee            = None
+        dictequations  = None
         is5dray = False # if True, then full 3D position becomes important and things shouldn't be normalized
-        def __init__(self, solvejointvars, freejointvars, Pee, Dee, jointtree,Pfk=None,Dfk=None,is5dray=False):
+        
+        def __init__(self, solvejointvars, freejointvars, Pee, Dee, jointtree, \
+                     Pfk = None, Dfk = None,is5dray = False):
+            
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Pee = Pee
@@ -655,11 +741,14 @@ class AST:
             self.Pfk = Pfk
             self.Dfk = Dfk
             self.dictequations = []
-            self.is5dray=is5dray
+            self.is5dray = is5dray
+            
         def generate(self, generator):
             return generator.generateIKChainRay(self)
+        
         def end(self, generator):
             return generator.endIKChainRay(self)
+        
         def leftmultiply(self,Tleft,Tleftinv):
             self.Pfk = Tleft[0:3,0:3]*self.Pfk+Tleft[0:3,3]
             self.Dfk = Tleft[0:3,0:3]*self.Dfk
@@ -668,24 +757,29 @@ class AST:
 
     class SolverIKChainLookat3D(SolverBase):
         solvejointvars = None
-        freejointvars = None
-        jointtree = None
-        Pfk = None
-        Dfk = None
-        Pee = None
-        dictequations = None
-        def __init__(self, solvejointvars, freejointvars, Pee, jointtree,Pfk=None,Dfk=None):
+        freejointvars  = None
+        jointtree      = None
+        Pfk            = None
+        Dfk            = None
+        Pee            = None
+        dictequations  = None
+        
+        def __init__(self, solvejointvars, freejointvars, Pee, jointtree, \
+                     Pfk = None,Dfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Pee = Pee
             self.jointtree = jointtree
-            self.Pfk=Pfk
-            self.Dfk=Dfk
+            self.Pfk = Pfk
+            self.Dfk = Dfk
             self.dictequations = []
+            
         def generate(self, generator):
             return generator.generateIKChainLookat3D(self)
+        
         def end(self, generator):
             return generator.endIKChainLookat3D(self)
+        
         def leftmultiply(self,Tleft,Tleftinv):
             self.Pfk = Tleft[0:3,0:3]*self.Pfk+Tleft[0:3,3]
             self.Dfk = Tleft[0:3,0:3]*self.Dfk
@@ -693,29 +787,35 @@ class AST:
             
     class SolverIKChainAxisAngle(SolverBase):
         solvejointvars = None
-        freejointvars = None
-        jointtree = None
-        Pfk = None
-        Pee = None
-        dictequations = None
-        angleee=None
-        anglefk=None
-        iktype=None
-        def __init__(self, solvejointvars, freejointvars, Pee, angleee,jointtree,Pfk=None,anglefk=None,iktype=None):
+        freejointvars  = None
+        jointtree      = None
+        Pfk            = None
+        Pee            = None
+        dictequations  = None
+        angleee        = None
+        anglefk        = None
+        iktype         = None
+        
+        def __init__(self, solvejointvars, freejointvars, Pee, angleee, jointtree, \
+                     Pfk = None, anglefk = None,iktype = None):
+            
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Pee = Pee
-            self.anglefk=anglefk
+            self.anglefk = anglefk
             self.jointtree = jointtree
-            self.Pfk=Pfk
-            self.angleee=angleee
+            self.Pfk = Pfk
+            self.angleee = angleee
             self.dictequations = []
-            self.iktype=iktype
+            self.iktype = iktype
+            
         def generate(self, generator):
             return generator.generateSolverIKChainAxisAngle(self)
+        
         def end(self, generator):
             return generator.endSolverIKChainAxisAngle(self)
+        
         def leftmultiply(self,Tleft,Tleftinv):
-            self.Pfk = Tleft[0:2,0:2]*self.Pfk+Tleft[0:2,3]
+            self.Pfk = Tleft[0:2,0:2]   *self.Pfk+Tleft[0:2,3]
             self.Pee = Tleftinv[0:2,0:2]*self.Pee+Tleftinv[0:2,3]
             assert(0) # need to change angle

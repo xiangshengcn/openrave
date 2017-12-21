@@ -1293,7 +1293,7 @@ class InverseKinematicsModel(DatabaseGenerator):
         return parser
     
     @staticmethod
-    def RunFromParser(Model=None,parser=None,args=None,**kwargs):
+    def RunFromParser(Model = None, parser = None, args = None, **kwargs):
 
         if parser is None:
             parser = InverseKinematicsModel.CreateOptionParser()
@@ -1311,10 +1311,26 @@ class InverseKinematicsModel(DatabaseGenerator):
         if not options.show:
             robotatts = {'skipgeometry':'1'}
 
-        model = DatabaseGenerator.RunFromParser(Model = Model,\
-                                                parser = parser,\
-                                                robotatts = robotatts,\
-                                                args = args,**kwargs)
+
+        #from IPython.terminal import embed;
+        #ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())
+
+        #import cProfile
+        #import re
+        #cProfile.run('
+        model = DatabaseGenerator.RunFromParser(Model = Model, parser = parser, robotatts = robotatts, args = args, **kwargs)
+        #')
+
+
+
+        
+
+#        model = DatabaseGenerator.RunFromParser(Model = Model,\
+#                                                parser = parser,\
+#                                                robotatts = robotatts,\
+#                                                args = args, \
+#                                                **kwargs)
+        
         if options.iktests is not None or options.perftiming is not None:
             log.info('testing the success rate of robot %s ',options.robot)
             env = Environment()

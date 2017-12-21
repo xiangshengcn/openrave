@@ -8103,6 +8103,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         othersubs = []
         for othersolvedvar in othersolvedvars:
             othersubs += self.Variable(othersolvedvar).subs
+
 #         eqns = []
 #         for eq in raweqns:
 #             if eq.has(*vars):
@@ -8539,9 +8540,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     # substitute cos
 
                     # TGN: the following condition seems weird to me
-                    if  self.countVariables(eqnew, varsym.svar) <= 1 or \
-                       (self.countVariables(eqnew, varsym.cvar) <= 2 and \
-                        self.countVariables(eqnew, varsym.svar) == 0):
+                    # if  self.countVariables(eqnew, varsym.svar) <= 1 or \
+                    #    (self.countVariables(eqnew, varsym.cvar) <= 2 and \
+                    #     self.countVariables(eqnew, varsym.svar) == 0):
+
+                    if self.countVariables(eqnew, varsym.svar) <= 1:
                         # anything more than 1 implies quartic equation
                         tempsolutions = solve(eqnew.subs(varsym.svar, sqrt(1-varsym.cvar**2)).expand(), \
                                               varsym.cvar)
@@ -8574,8 +8577,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 # substitute sin
                 try:
                     # TGN: the following condition seems weird to me
+                    # if  self.countVariables(eqnew, varsym.svar) <= 1 or \
+                    #    (self.countVariables(eqnew, varsym.svar) <= 2 and \
+                    #     self.countVariables(eqnew, varsym.cvar) == 0):
                     if  self.countVariables(eqnew, varsym.svar) <= 1 or \
-                       (self.countVariables(eqnew, varsym.svar) <= 2 and \
+                       (self.countVariables(eqnew, varsym.svar) == 2 and \
                         self.countVariables(eqnew, varsym.cvar) == 0):
                         # anything more than 1 implies quartic equation
                         tempsolutions = solve(eqnew.subs(varsym.cvar, \
@@ -9240,7 +9246,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if (c.is_number and len(str(c)) > 40) or \
                not (c.is_number or c.is_Symbol):
                 # if it is a product of a symbol and a number, then ignore
-                if not c.is_Mul or not all([e.is_number or e.is_Symbol for e in c.args]):
+                if not (c.is_Mul and all([e.is_number or e.is_Symbol for e in c.args])):
                     sym = symbolgen.next()
                     symbols.append((sym,c))
                     c = sym
@@ -9250,32 +9256,32 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 for i,degree in enumerate(m):
                     c = c*vars[i]**degree
                 newexpr += c
-        return newexpr,symbols
+        return newexpr, symbols
 
     @staticmethod
-    def replaceNumbers(expr,symbolgen = None):
+    def replaceNumbers(expr, symbolgen = None):
         """Replaces all numbers with symbols, this is to make gcd faster when fractions get too big"""
         if symbolgen is None:
             symbolgen = cse_main.numbered_symbols('const')
         symbols = []
         if expr.is_number:
             result = symbolgen.next()
-            symbols.append((result,expr))
+            symbols.append((result, expr))
         elif expr.is_Mul:
             result = S.One
             for arg in expr.args:
-                newresult, newsymbols = IKFastSolver.replaceNumbers(arg,symbolgen)
+                newresult, newsymbols = IKFastSolver.replaceNumbers(arg, symbolgen)
                 result *= newresult
                 symbols += newsymbols
         elif expr.is_Add:
             result = S.Zero
             for arg in expr.args:
-                newresult, newsymbols = IKFastSolver.replaceNumbers(arg,symbolgen)
+                newresult, newsymbols = IKFastSolver.replaceNumbers(arg, symbolgen)
                 result += newresult
                 symbols += newsymbols
         elif expr.is_Pow:
             # don't replace the exponent
-            newresult, newsymbols = IKFastSolver.replaceNumbers(expr.base,symbolgen)
+            newresult, newsymbols = IKFastSolver.replaceNumbers(expr.base, symbolgen)
             symbols += newsymbols
             result = newresult**expr.exp
         else:
