@@ -211,6 +211,10 @@ ipython_str = 'ikfast_print_stack(); ' + \
 """
 When exec(ipython_str) does not work, use
 
+exec(ipython_str) in globals(), locals()
+
+or
+
 from IPython.terminal import embed;
 ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())
 """
