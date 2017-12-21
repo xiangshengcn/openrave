@@ -6055,7 +6055,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             usedindices = set()
 
             equiv_zero_term = group[3]-group[0]**2-group[1]**2-group[2]**2
-            perm_range_3 = permutations(range(3),3) #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
             
             for index0, index1 in combinations(range(len(listterms)),2):
                 if index0 in usedindices or index1 in usedindices:
@@ -6071,7 +6070,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     # replace x0**2+x1**2 by x3-x2**2
                     #         x1**2+x2**2 by x3-x0**2
                     #         x2**2+x0**2 by x3-x1**2
-                    for i, j, k in perm_range_3:
+                    for i, j, k in permutations(range(3),3): #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
                         if m0[k] == m1[k]:
                             
                             assert(m1[i] >= 0 and m0[j] >= 0)
@@ -6091,7 +6090,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 elif self.equal(c0, -c1):
                     # As x3 = x0**2 + x1**2 + x2**2
                     # x0**4 - x1**4 = (x0**2-x1**2)*(x0**2+x1**2) = (x0**2-x1**2)*(x3-x2**2)
-                    for i, j, k in perm_range_3:
+                    for i, j, k in permutations(range(3),3): #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
                         if m0[k] == m1[k]:
                             if m0[i] == 4 and m1[j] == 4:
                                 #p += Poly(c0* \
@@ -6145,7 +6144,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
  [[6, 12], [7, 13], [8, 14], pz]]
 
         """
-
         try:
             p = Poly(eq, *symbols)
         except (PolynomialError, CoercionFailed), e:
@@ -6154,7 +6152,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         changed = False
         listterms = list(p.terms())
         usedindices = set()
-        perm_len_listterms = permutations(range(len(listterms)),2)
+
+        rng_len_listterms = range(len(listterms))
         
         for g in groups:
             for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
@@ -6163,60 +6162,63 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 gi1 = g[i][1]
                 gj0 = g[j][0]
                 gj1 = g[j][1]
-                
-                for index0, index1 in perm_len_listterms:
-                    
+
+                for index0, index1 in combinations(rng_len_listterms, 2):
+
                     if index0 in usedindices or index1 in usedindices:
                         continue
 
-                    m0, c0 = listterms[index0]
-                    m1, c1 = listterms[index1]    
+                    m0, c0 = listterms[index0] 
+                    m1, c1 = listterms[index1]
                     
                     if self.equal(c0, c1):
-                        # TGN: sufficient condition of simplification may not be necessarily equal
-                        #
-                        # In the non-equal case, consider (a+b)*r00*r10 + (b+c)*r01*r11 + (c+a)*r02*r12
-                        # where a,b,c are distinct.
-                        # One of the acceptable results may be (c-a)*r01*r11 + (c-b)*r02*r12
-                        # INSTEAD of (-c)*r00*r10 + (-a)*r01*r11 + (-b)*r02*r12
-                        #
-                        # E.g. 5*r00*r10 + 3*r01*r11 + 4*r02*r12 = (-2)*r01*r11 + (-1)*r02*r12
-                        #
+                        # TGN: sufficient condition of simplification may not be necessarily equal 
+                        # 
+                        # In the non-equal case, consider (a+b)*r00*r10 + (b+c)*r01*r11 + (c+a)*r02*r12 
+                        # where a,b,c are distinct. 
+                        # One of the acceptable results may be (c-a)*r01*r11 + (c-b)*r02*r12 
+                        # INSTEAD of (-c)*r00*r10 + (-a)*r01*r11 + (-b)*r02*r12 
+                        # 
+                        # E.g. 5*r00*r10 + 3*r01*r11 + 4*r02*r12 = (-2)*r01*r11 + (-1)*r02*r12 
+                        # 
                         # This observation only applies to DOT case, not to CROSS case
-
-                        if   m0[gi0] == 1 and m0[gi1] == 1 and m1[gj0] == 1 and m1[gj1] == 1:
-                            m0l = list(m0); m0l[gi0] = 0; m0l[gi1] = 0
+                        
+                        if   m0[gi0] == 1 and m0[gi1] == 1 and m1[gj0] == 1 and m1[gj1] == 1: 
+                            # make sure the left over terms are also the same 
+                            m0l = list(m0); m0l[gi0] = 0; m0l[gi1] = 0 
                             m1l = list(m1); m1l[gj0] = 0; m1l[gj1] = 0
                             
-                        elif m0[gj0] == 1 and m0[gj1] == 1 and m1[gi0] == 1 and m1[gi1] == 1:
-                            m0l = list(m0); m0l[gj0] = 0; m0l[gj1] = 0
+                        elif m0[gj0] == 1 and m0[gj1] == 1 and m1[gi0] == 1 and m1[gi1] == 1: 
+                            # make sure the left over terms are also the same 
+                            m0l = list(m0); m0l[gj0] = 0; m0l[gj1] = 0 
                             m1l = list(m1); m1l[gi0] = 0; m1l[gi1] = 0
-                            
+
                         else:
                             continue
-
-                        exec(ipython_str)
-                            
-                        # make sure the left over terms are also the same
-                        if m0l == m1l:
+                                
+                                 
+                        if m0l == m1l: 
+                            # m2l = list(m0l); m2l[gk0] += 1; m2l[gk1] += 1 
+                            # deep copy list
                             gk0 = g[k][0]
                             gk1 = g[k][1]
-                            m2l = m0l[:]; m2l[gk0] += 1; m2l[gk1] += 1
-                            m2 = tuple(m2l)
-                            
-                            # there is a bug in sympy v0.6.7 polynomial adding here!
+                            m2l = m0l[:]; m2l[gk0] += 1; m2l[gk1] += 1 
+                            m2 = tuple(m2l) 
+                                
+                            # there is a bug in sympy v0.6.7 polynomial adding here! 
                             # TGN: Now > 0.7, so no problem now?
-
+                            
                             p = p.\
                                 sub(Poly.from_dict({m0:c0}, *p.gens)). \
-                                sub(Poly.from_dict({m1:c0}, *p.gens)). \
+                                sub(Poly.from_dict({m1:c1}, *p.gens)). \
                                 sub(Poly.from_dict({m2:c0}, *p.gens))
 
-                            g3 = g[3]
-                            if g3 != S.Zero:
-                                # when g3 = npx, px, npy, py, npz, or pz
-                                new_m0 = tuple(m0l)
-                                p = p.add(Poly(g3, *p.gens)*Poly.from_dict({new_m0:c0}, *p.gens))
+                            g3 = g[3] 
+                            if g3 != S.Zero: 
+                                # when g3 = npx, px, npy, py, npz, or pz 
+                                new_m0 = tuple(m0l) 
+                                p = p.add(Poly(g3, *p.gens)*Poly.from_dict({new_m0:c0}, *p.gens)) 
+                            
                                         
                             changed = True
                             usedindices.add(index0)
@@ -6242,7 +6244,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         listterms = list(p.terms())
         usedindices = set()
-        perm_len_listterms = permutations(range(len(listterms)),2)
+        rng_len_listterms = range(len(listterms))
         
         for cg in groups:
 
@@ -6251,7 +6253,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             cg10 = cg[1][0]
             cg11 = cg[1][1]
             
-            for index0, index1 in perm_len_listterms:
+            for index0, index1 in combinations(rng_len_listterms, 2):
                 
                 if index0 in usedindices or index1 in usedindices:
                     continue
