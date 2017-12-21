@@ -410,7 +410,7 @@ class IKFastSolver(AutoReloader):
             eq0 = eq0.as_expr()
         if isinstance(eq1, Poly):
             eq1 = eq1.as_expr()
-        return eq0-eq1 == S.Zero #expand(eq0-eq1) == S.Zero
+        return eq0-eq1 == S.Zero # TGN: BOLD move, see if it works. expand(eq0-eq1) == S.Zero
 
     def chop(self, expr, precision = None):
         return expr
@@ -8137,7 +8137,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if numvar in [1, 2]:
                 try:
                     tempsolutions  = solve(eqnew, var)
-                    jointsolutions = [self.SimplifyTransform(self.trigsimp(s.subs(symbols), othersolvedvars)) \
+
+                    # TGN: ensure curvars is a subset of self.trigvars_subs
+                    assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                    # equivalent?
+                    assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                    
+                    jointsolutions = [self.SimplifyTransform(self.trigsimp_new(s.subs(symbols))) \
                                       for s in tempsolutions]
                     if all([self.isValidSolution(s) and s != S.Zero \
                             for s in jointsolutions]) and \
@@ -8162,7 +8168,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     jointsolutions = []
                     for s in tempsolutions:
                         s2 = s.subs(symbols)
-                        s3 = self.trigsimp(s2,othersolvedvars)
+
+                        # TGN: ensure curvars is a subset of self.trigvars_subs
+                        assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                        # equivalent?
+                        assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                    
+                        s3 = self.trigsimp_new(s2)
                         s4 = self.SimplifyTransform(s3)
                         try:
                             jointsolutions.append(2*atan(s4, evaluate = False))
@@ -8619,7 +8631,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     for s in tempsolutions:
                         eqsub = s.subs(symbols)
                         if self.codeComplexity(eqsub) < 2000:
-                            eqsub = self.SimplifyTransform(self.trigsimp(eqsub, othersolvedvars))
+                            
+                            # TGN: ensure curvars is a subset of self.trigvars_subs
+                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
+                            # equivalent?
+                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            
+                            eqsub = self.SimplifyTransform(self.trigsimp_new(eqsub))
                         jointsolutions.append(eqsub)
                         
                     if all([self.isValidSolution(s) and s != S.Zero \
