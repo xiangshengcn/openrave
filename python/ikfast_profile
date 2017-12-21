@@ -1,1 +1,0 @@
-python -m cProfile -o ikfast_profile.out -s tottime /home/mujin/mujin/jhbuildapppickworker/install/bin/openrave.py --database inversekinematics ../src/collada_robots/barrett-wam.zae --numiktests=1000

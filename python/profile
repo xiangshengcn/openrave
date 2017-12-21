@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python -m cProfile -o ikfast_profile.out -s cumtime /home/mujin/mujin/jhbuildapppickworker/install/bin/openrave.py --database inversekinematics ../src/collada_robots/barrett-wam.zae --numiktests=1000
+python -m cProfile -o ikfast_profile.out /home/mujin/mujin/jhbuildapppickworker/install/bin/openrave.py --database inversekinematics ../src/collada_robots/barrett-wam.zae --numiktests=1000
 
 python ikfast_profile.py
 
