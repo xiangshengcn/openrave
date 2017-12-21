@@ -405,12 +405,12 @@ class IKFastSolver(AutoReloader):
             return reduce(mul, Ts, 1)
     
     @staticmethod
-    def equal(eq0,eq1):
+    def equal(eq0, eq1):
         if isinstance(eq0, Poly):
             eq0 = eq0.as_expr()
         if isinstance(eq1, Poly):
             eq1 = eq1.as_expr()
-        return expand(eq0-eq1) == S.Zero
+        return eq0-eq1 == S.Zero #expand(eq0-eq1) == S.Zero
 
     def chop(self, expr, precision = None):
         return expr
