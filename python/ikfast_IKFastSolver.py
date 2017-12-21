@@ -1440,6 +1440,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                           '_rotsymbols',
                           '_rotpossymbols',
                           '_rotnormgroups',
+                          '_rotposnormgroups',
                           '_rotdotgroups',
                           '_rotposdotgroups',
                           '_rotcrossgroups',
@@ -5912,12 +5913,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if peq == S.Zero:
                 return S.Zero
             
-            peqnew = peq.termwise(lambda m,c: self.SimplifyTransform(c))
+            peqnew = peq.termwise(lambda m, c: self.SimplifyTransform(c))
             return peqnew.as_expr()
         
         # there can be global substitutions like pz = 0.
         # get those that do not start with gconst
-        transformsubstitutions = [(var,value) for var, value in self.globalsymbols \
+        transformsubstitutions = [(var, value) for var, value in self.globalsymbols \
                                   if var.is_Symbol and not var.name.startswith('gconst')]
 
 #        exec(ipython_str) in globals(), locals()
@@ -5949,18 +5950,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             # TO-DO: if there is a divide by self._rotsymbols, then cannot proceed since cannot make Polynomials from them
             if eq.is_Add:
-                for arg in eq.args:
-                    if fraction(arg)[1].has(*self._rotsymbols):
-                        log.info('argument in equation %s has _rotsymbols in its denom; skip', arg)
-                        return eq
+                if any([fraction(arg)[1].has(*self._rotsymbols) for arg in eq.args]):
+                    log.info('argument in equation %s has _rotsymbols in its denom; skip', arg)
+                    return eq
             elif fraction(eq)[1].has(*self._rotsymbols):
                 log.info('equation %s has _rotsymbols in its denom; skip', eq)
                 return eq
         
             simpiter = 0
             origeq = eq
-        
+
+            
             # first simplify just rotations since they don't introduce new symbols
+            """
             changed = True
             while changed and eq.has(*self._rotsymbols):
                 # log.info('simpiter = %d, complexity = %d', \
@@ -5969,54 +5971,45 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 simpiter += 1
                 changed = False
             
-                neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups)
+                neweq = self._SimplifyRotationNorm(eq, self._rotsymbols, self._rotnormgroups)
                 if neweq is not None:
-                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq,eq2):
-                        eq = eq2
+                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                    if not self.equal(eq, neweq):
+                        eq = neweq
                         changed = True
                     
                 neweq = self._SimplifyRotationDot(eq, self._rotsymbols, self._rotdotgroups)
                 if neweq is not None:
-                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq,eq2):
-                        eq = eq2
+                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                    if not self.equal(eq, neweq):
+                        eq = neweq
                         changed = True
                     
                 neweq = self._SimplifyRotationCross(eq, self._rotsymbols, self._rotcrossgroups)
                 if neweq is not None:
-                    eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq,eq2):
-                        eq = eq2
+                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                    if not self.equal(eq, neweq):
+                        eq = neweq
                         changed = True
-                
-            # check if full 3D position is available
-            if self.pp is not None:
-                changed = True
-                while changed and eq.has(*self._rotpossymbols):
-                    changed = False
-                
-                    neweq = self._SimplifyRotationNorm(eq, self._rotposnormgroups)
-                    if neweq is not None:
-                        eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                        if not self.equal(eq,eq2):
-                            eq = eq2
-                            changed = True
-                        
-                    neweq = self._SimplifyRotationDot(eq, self._rotpossymbols, self._rotposdotgroups)
-                    if neweq is not None:
-                        eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                        if not self.equal(eq,eq2):
-                            eq = eq2
-                            changed = True
-                        
-                    neweq = self._SimplifyRotationCross(eq, self._rotpossymbols, self._rotposcrossgroups)
-                    if neweq is not None:
-                        eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                        if not self.equal(eq,eq2):
-                            eq = eq2
-                            changed = True
-                         
+            """
+            def _SimplifyRotationFcn(fcn, eq, changed, groups):
+                neweq = fcn(eq, self._rotpossymbols, groups)
+                if neweq is None:
+                    return eq, changed
+                else:
+                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                    if not self.equal(eq, neweq):
+                        changed = True
+                    return neweq, changed
+
+            # TGN: no need to check if self.pp is not None, i.e. if full 3D position is available
+            changed = True
+            while changed and eq.has(*self._rotpossymbols):
+                changed = False
+                eq, changed = _SimplifyRotationFcn(self._SimplifyRotationNorm , eq, changed, self._rotposnormgroups)
+                eq, changed = _SimplifyRotationFcn(self._SimplifyRotationDot  , eq, changed, self._rotposdotgroups)
+                eq, changed = _SimplifyRotationFcn(self._SimplifyRotationCross, eq, changed, self._rotposcrossgroups)
+                    
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
             #log.info("simplify eq:\n%r\n->new eq:\n%r", origeq, eq)
@@ -6027,10 +6020,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return eq
 
     
-    def _SimplifyRotationNorm(self, eq, groups):
+    def _SimplifyRotationNorm(self, eq, symbols, groups):
         """
         Simplify eq based on 2-norm of each row/column being 1
 
+        symbols is self._rotsymbols   or self._rotpossymbols
         groups is self._rotnormgroups or self._rotposnormgroups
 
         Called by SimplifyTransform only.
@@ -6049,7 +6043,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 # need to do 1234*group[3] hack in order to get the Poly domain to recognize group[3] (sympy 0.7.1)
                 # p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
                 # p -= Poly(1234*group[3], *p.gens, domain = p.domain)
-                p = Poly(eq, group[0], group[1], group[2])
+                p = Poly(eq, *group[0:3])
                 
             except (PolynomialError, CoercionFailed, ZeroDivisionError), e:
                 continue
@@ -6151,8 +6145,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
  [[6, 12], [7, 13], [8, 14], pz]]
 
         """
+
         try:
-            p = Poly(eq,*symbols)
+            p = Poly(eq, *symbols)
         except (PolynomialError, CoercionFailed), e:
             return None
         
@@ -6199,6 +6194,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             
                         else:
                             continue
+
+                        exec(ipython_str)
                             
                         # make sure the left over terms are also the same
                         if m0l == m1l:
@@ -6209,6 +6206,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             
                             # there is a bug in sympy v0.6.7 polynomial adding here!
                             # TGN: Now > 0.7, so no problem now?
+
                             p = p.\
                                 sub(Poly.from_dict({m0:c0}, *p.gens)). \
                                 sub(Poly.from_dict({m1:c0}, *p.gens)). \
@@ -6277,6 +6275,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         
                     else:
                         continue
+
+                    exec(ipython_str)
                         
                     if tuple(m0l) == tuple(m1l):
                         m2l = m0l[:]; m2l[cg[2]] += 1
@@ -6802,8 +6802,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self.globalsymbols.append((var, eq))
         return False
         
-    def AddSolution(self,solutions,AllEquations,curvars,othersolvedvars,solsubs,endbranchtree, currentcases=None, currentcasesubs=None, unknownvars=None):
-        """Take the least complex solution of a set of solutions and resume solving
+    def AddSolution(self, solutions, AllEquations, \
+                    curvars, othersolvedvars, \
+                    solsubs, endbranchtree, \
+                    currentcases = None, \
+                    currentcasesubs = None, \
+                    unknownvars = None):
+        """
+        Take the least complex solution of a set of solutions and resume solving
         """
         from ikfast_AST import AST
         
