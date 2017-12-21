@@ -670,7 +670,10 @@ class IKFastSolver(AutoReloader):
         return eq
     """
     
-    def SimplifyAtan2(self, eq, incos=False, insin=False, epsilon=None):
+    def SimplifyAtan2(self, eq, \
+                      incos = False, \
+                      insin = False, \
+                      epsilon = None):
         """
         Simplifies equations involving atan2 and sin/cos/tan
 
@@ -883,7 +886,7 @@ class IKFastSolver(AutoReloader):
             
         return exprs
 
-    def checkForDivideByZero(self,eq):
+    def checkForDivideByZero(self, eq):
         """returns the equations to check for zero
         """
         checkforzeros = []
@@ -891,9 +894,11 @@ class IKFastSolver(AutoReloader):
             if eq.is_Function:
                 if eq.func == atan2:
                     # atan2 is only a problem when both numerator and denominator are 0!
-                    #checkforzeros.append((eq.args[0]**2+eq.args[1]**2).expand())
+                    #
+                    # checkforzeros.append((eq.args[0]**2+eq.args[1]**2).expand())
                     # have to re-substitute given the global symbols
-                    # args[0] and args[1] are very complicated, then there's no reason to do this check
+                    #
+                    # If args[0] and args[1] are very complicated, then there's no reason to do this check
                     substitutedargs = []
                     for argeq in eq.args:
                         argeq2 = self._SubstituteGlobalSymbols(argeq)
@@ -903,32 +908,39 @@ class IKFastSolver(AutoReloader):
                             substitutedargs.append(argeq2)
                     # has to be greater than 20 since some const coefficients can be simplified
                     if self.codeComplexity(substitutedargs[0]) < 30 and self.codeComplexity(substitutedargs[1]) < 30:
-                        if not substitutedargs[0].is_number or substitutedargs[0] == S.Zero:
-                            if not substitutedargs[1].is_number or substitutedargs[1] == S.Zero:
-                                sumeq = substitutedargs[0]**2+substitutedargs[1]**2
+                        if (not substitutedargs[0].is_number or substitutedargs[0] == S.Zero) and \
+                           (not substitutedargs[1].is_number or substitutedargs[1] == S.Zero):
+                            
+                                sumeq = substitutedargs[0]**2 + substitutedargs[1]**2
                                 if self.codeComplexity(sumeq) < 400:
-                                    testeq = self.SimplifyAtan2((substitutedargs[0]**2+substitutedargs[1]**2).expand())
+                                    testeq = self.SimplifyAtan2(sumeq.expand())
                                 else:
                                     testeq = sumeq
+                                    
                                 testeq2 = abs(substitutedargs[0])+abs(substitutedargs[1])
                                 if self.codeComplexity(testeq) < self.codeComplexity(testeq2):
                                     testeqmin = testeq
                                 else:
                                     testeqmin = testeq2
+                                    
                                 if testeqmin.is_Mul:
                                     checkforzeros += testeqmin.args
                                 else:
                                     checkforzeros.append(testeqmin)
+                                    
                                 if checkforzeros[-1].evalf() == S.Zero:
                                     raise self.CannotSolveError('equation evaluates to 0, never OK')
+                                
                                 log.info('add atan2( %r, \n                   %r ) \n' \
                                          + '        check zero ' \
                                          #+ ': %r' \
                                          , substitutedargs[0], substitutedargs[1] \
                                          #, checkforzeros[-1]
                                 )
+                                
                 for arg in eq.args:
                     checkforzeros += self.checkForDivideByZero(arg)
+                    
             elif eq.is_Add:
                 for arg in eq.args:
                     checkforzeros += self.checkForDivideByZero(arg)
@@ -940,8 +952,8 @@ class IKFastSolver(AutoReloader):
                     checkforzeros += self.checkForDivideByZero(arg)
                 if eq.exp.is_number and eq.exp < 0:
                     checkforzeros.append(eq.base)
-        except AssertionError,e:
-            log.warn('%s',e)
+        except AssertionError, e:
+            log.warn('%s', e)
 
         if len(checkforzeros) > 0:
             newcheckforzeros = []
@@ -6035,8 +6047,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 # exec(ipython_str)
                 
                 # need to do 1234*group[3] hack in order to get the Poly domain to recognize group[3] (sympy 0.7.1)
-                p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
-                p -= Poly(1234*group[3], *p.gens, domain = p.domain)
+                # p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
+                # p -= Poly(1234*group[3], *p.gens, domain = p.domain)
+                p = Poly(eq, group[0], group[1], group[2])
                 
             except (PolynomialError, CoercionFailed, ZeroDivisionError), e:
                 continue
@@ -6048,6 +6061,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             usedindices = set()
 
             equiv_zero_term = group[3]-group[0]**2-group[1]**2-group[2]**2
+            perm_range_3 = permutations(range(3),3) #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
             
             for index0, index1 in combinations(range(len(listterms)),2):
                 if index0 in usedindices or index1 in usedindices:
@@ -6063,50 +6077,46 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     # replace x0**2+x1**2 by x3-x2**2
                     #         x1**2+x2**2 by x3-x0**2
                     #         x2**2+x0**2 by x3-x1**2
-                    for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
+                    for i, j, k in perm_range_3:
                         if m0[k] == m1[k]:
                             
                             assert(m1[i] >= 0 and m0[j] >= 0)
                             if m0[i] == m1[i]+2 and m0[j]+2 == m1[j]:
-                                p += Poly(c0* \
-                                          equiv_zero_term* \
-                                          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j]), \
-                                          group[0], group[1], group[2])
-                                changed = True
+                                #p += Poly(c0* \
+                                #          equiv_zero_term* \
+                                #          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j]), \
+                                #          group[0], group[1], group[2])
 
-                            assert(m0[i] >= 0 and m1[j] >= 0)
-                            if m1[i] == m0[i]+2 and m1[j]+2 == m0[j]:
-                                p += Poly(c0* \
-                                          equiv_zero_term * \
-                                          (group[k]**m1[k])*(group[i]**m0[i])*(group[j]**m1[j]), \
-                                          group[0], group[1], group[2])
+                                q = eq + c0* \
+                                          equiv_zero_term* \
+                                          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j])
+
+                                #assert(expand(p.as_expr()-q) == S.Zero)
                                 changed = True
                             
                 elif self.equal(c0, -c1):
                     # As x3 = x0**2 + x1**2 + x2**2
                     # x0**4 - x1**4 = (x0**2-x1**2)*(x0**2+x1**2) = (x0**2-x1**2)*(x3-x2**2)
-                    for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
+                    for i, j, k in perm_range_3:
                         if m0[k] == m1[k]:
                             if m0[i] == 4 and m1[j] == 4:
-                                p += Poly(c0* \
+                                #p += Poly(c0* \
+                                #          group[k]**m0[k]* \
+                                #          ((group[3]-group[k]**2)*(group[i]**2-group[j]**2) \
+                                #           -group[i]**4 + group[j]**4), \
+                                #          group[0], group[1], group[2])
+
+                                q = eq + c0* \
                                           group[k]**m0[k]* \
                                           ((group[3]-group[k]**2)*(group[i]**2-group[j]**2) \
-                                           -group[i]**4 + group[j]**4), \
-                                          group[0], group[1], group[2])
-                                changed = True
-                                
-                            if m0[j] == 4 and m1[i] == 4:
-                                p += Poly(c0* \
-                                          group[k]**m0[k]* \
-                                          ((group[3]-group[k]**2)*(group[j]**2-group[i]**2) \
-                                           -group[j]**4 + group[i]**4), \
-                                          group[0], group[1], group[2])
+                                           -group[i]**4 + group[j]**4)
+
+                                #assert(expand(p.as_expr()-q) == S.Zero)
                                 changed = True
                                 
                 if changed:
-                    neweq = p #.as_expr()
+                    neweq = q # p #.as_expr()
                     eq = neweq
-                    changed = True
                     usedindices.add(index0)
                     usedindices.add(index1)
                     break
