@@ -5979,6 +5979,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             
             peqnew = peq.termwise(lambda m, c: self.SimplifyTransform(c))
             return peqnew.as_expr()
+
+        if eq in self.simplify_transform_dict:
+            self.simplify_transform_use += 1
+            return self.simplify_transform_dict[eq]
         
         # there can be global substitutions like pz = 0.
         # get those that do not start with gconst
@@ -6051,8 +6055,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # not translationdirection5d nor transform6d
             pass
 
-        #print origeq, eq
-        #exec(ipython_str)
+
+        
+        neweq = eq.subs(self.trigsubs)
+        if self.codeComplexity(neweq)<self.codeComplexity(eq):
+            eq = neweq
+
+        """
+        print origeq
+        print '----------'
+        print eq
+        exec(ipython_str, globals(), locals())
+        """
+
+        self.simplify_transform_dict[origeq] = eq
         return eq
 
     
