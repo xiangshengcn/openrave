@@ -53,6 +53,7 @@ from operator import itemgetter, mul
 # mul for reduce(mul, [...], 1), same as prod([...]) in Matlab
 
 from itertools import izip, chain, product
+
 try:
     from itertools import combinations, permutations
 except ImportError:
@@ -887,8 +888,10 @@ class IKFastSolver(AutoReloader):
         return exprs
 
     def checkForDivideByZero(self, eq):
-        """returns the equations to check for zero
         """
+        Returns the equations to check for zero
+        """
+        import itertools
         checkforzeros = []
         try:
             if eq.is_Function:
@@ -907,51 +910,44 @@ class IKFastSolver(AutoReloader):
                         else:
                             substitutedargs.append(argeq2)
                     # has to be greater than 20 since some const coefficients can be simplified
-                    if self.codeComplexity(substitutedargs[0]) < 30 and self.codeComplexity(substitutedargs[1]) < 30:
-                        if (not substitutedargs[0].is_number or substitutedargs[0] == S.Zero) and \
-                           (not substitutedargs[1].is_number or substitutedargs[1] == S.Zero):
+                    if self.codeComplexity(substitutedargs[0]) < 30 and \
+                       self.codeComplexity(substitutedargs[1]) < 30 and \
+                       (not substitutedargs[0].is_number or substitutedargs[0] == S.Zero) and \
+                       (not substitutedargs[1].is_number or substitutedargs[1] == S.Zero):
                             
-                                sumeq = substitutedargs[0]**2 + substitutedargs[1]**2
-                                if self.codeComplexity(sumeq) < 400:
-                                    testeq = self.SimplifyAtan2(sumeq.expand())
-                                else:
-                                    testeq = sumeq
+                        sumeq = substitutedargs[0]**2 + substitutedargs[1]**2
+
+                        testeq = sumeq if self.codeComplexity(sumeq) >= 400 \
+                                 else self.SimplifyAtan2(sumeq.expand())
                                     
-                                testeq2 = abs(substitutedargs[0])+abs(substitutedargs[1])
-                                if self.codeComplexity(testeq) < self.codeComplexity(testeq2):
-                                    testeqmin = testeq
-                                else:
-                                    testeqmin = testeq2
+                        testeq2 = abs(substitutedargs[0]) + abs(substitutedargs[1])
+
+                        testeqmin = testeq if self.codeComplexity(testeq) < self.codeComplexity(testeq2) \
+                                    else testeq2
                                     
-                                if testeqmin.is_Mul:
-                                    checkforzeros += testeqmin.args
-                                else:
-                                    checkforzeros.append(testeqmin)
+                        if testeqmin.is_Mul:
+                            checkforzeros += testeqmin.args
+                        else:
+                            checkforzeros.append(testeqmin)
                                     
-                                if checkforzeros[-1].evalf() == S.Zero:
-                                    raise self.CannotSolveError('equation evaluates to 0, never OK')
-                                
-                                log.info('add atan2( %r, \n                   %r ) \n' \
-                                         + '        check zero ' \
-                                         #+ ': %r' \
-                                         , substitutedargs[0], substitutedargs[1] \
-                                         #, checkforzeros[-1]
-                                )
-                                
-                for arg in eq.args:
-                    checkforzeros += self.checkForDivideByZero(arg)
+                        if checkforzeros[-1].evalf() == S.Zero:
+                            raise self.CannotSolveError('equation evaluates to 0, never OK')
+                        
+                        log.info('add atan2( %r, \n                   %r ) \n' \
+                                 + '        check zero ' \
+                                 #+ ': %r' \
+                                 , substitutedargs[0], substitutedargs[1] \
+                                 #, checkforzeros[-1]
+                        )
+
+            # originally, is_Mul, is_Add, is_Pow
+            checkforzeros += list(itertools.chain.from_iterable \
+                                  ([self.checkForDivideByZero(arg) for arg in eq.args]))
+            # TGN: if eq.is_number, then the list is []; can eq.is_Poly???
                     
-            elif eq.is_Add:
-                for arg in eq.args:
-                    checkforzeros += self.checkForDivideByZero(arg)
-            elif eq.is_Mul:
-                for arg in eq.args:
-                    checkforzeros += self.checkForDivideByZero(arg)
-            elif eq.is_Pow:
-                for arg in eq.args:
-                    checkforzeros += self.checkForDivideByZero(arg)
-                if eq.exp.is_number and eq.exp < 0:
-                    checkforzeros.append(eq.base)
+            if eq.is_Pow and eq.exp.is_number and eq.exp < 0:
+                checkforzeros.append(eq.base)
+                    
         except AssertionError, e:
             log.warn('%s', e)
 
@@ -961,17 +957,22 @@ class IKFastSolver(AutoReloader):
                 # check for abs(x**y), in that case choose x
                 if eqtemp.is_Function and eqtemp.func == Abs:
                     eqtemp = eqtemp.args[0]
+                    
                 while eqtemp.is_Pow:
                     eqtemp = eqtemp.base
+                    
                 #self.codeComplexity(eqtemp)
                 if self.codeComplexity(eqtemp) < 500:
-                    checkeq = self.removecommonexprs(eqtemp,onlygcd=False,onlynumbers=True)
-                    if self.CheckExpressionUnique(newcheckforzeros,checkeq):
+                    checkeq = self.removecommonexprs(eqtemp, \
+                                                     onlygcd = False, \
+                                                     onlynumbers = True)
+                    if self.CheckExpressionUnique(newcheckforzeros, checkeq):
                         newcheckforzeros.append(checkeq)
                 else:
                     # not even worth checking since the equation is so big...
                     newcheckforzeros.append(eqtemp)
-            return newcheckforzeros
+                    
+            checkforzeros = newcheckforzeros
 
         return checkforzeros
 
@@ -985,58 +986,68 @@ class IKFastSolver(AutoReloader):
         sol.score = 20000*sol.numsolutions()
         
         try:
+
+            # exec(ipython_str, globals(), locals())
+            
             # multiby by 400 in order to prioritize equations with less solutions
-            if hasattr(sol,'jointeval') and sol.jointeval is not None:
+
+            # TGN: remove all those hasattr(sol, ...) check, because they are always True
+            
+            if sol.jointeval is not None:
                 for s in sol.jointeval:
                     sol.score += self.codeComplexity(s)
                     sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointeval
                 
-            elif hasattr(sol,'jointevalsin') and sol.jointevalsin is not None:
+            elif sol.jointevalsin is not None:
                 for s in sol.jointevalsin:
                     sol.score += self.codeComplexity(s)
                     sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointevalsin
                 
-            elif hasattr(sol,'jointevalcos') and sol.jointevalcos is not None:
+            elif sol.jointevalcos is not None:
                 for s in sol.jointevalcos:
                     sol.score += self.codeComplexity(s)
                     sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointevalcos
+                
             else:
                 return sol.score
 
             # have to also check solution dictionary
-            for s,v in sol.dictequations:
+            for s, v in sol.dictequations:
                 sol.score += self.codeComplexity(v)
                 sol.checkforzeros += self.checkForDivideByZero(v.subs(sol.dictequations))
             
-            def checkpow(expr,sexprs):
+            def checkpow(expr, sexprs):
                 score = 0
                 if expr.is_Pow:
                     sexprs.append(expr.base)
-                    if expr.base.is_finite is not None and not expr.base.is_finite:
+                    
+                    if not (expr.base.is_finite is None or expr.base.is_finite):
                         return oo # infinity
+                    
                     if expr.exp.is_number and expr.exp < 0:
                         # check if exprbase contains any variables that have already been solved
-                        containsjointvar = expr.base.has(*solvedvars)
-                        cancheckexpr = not expr.base.has(*unsolvedvars)
+                        # containsjointvar = expr.base.has(*solvedvars)
+                        # cancheckexpr = not expr.base.has(*unsolvedvars)
                         score += 10000
-                        if not cancheckexpr:
+                        if expr.base.has(*unsolvedvars): #not cancheckexpr:
                             score += 100000
+                            
                 elif not self.isValidSolution(expr):
                     return oo # infinity
+                
                 return score
             
             sexprs = subexprs[:]
             while len(sexprs) > 0:
                 sexpr = sexprs.pop(0)
                 if sexpr.is_Add:
-                    sol.score += sum([sum([checkpow(arg2, sexprs) for arg2 in arg.args]) \
-                                      if arg.is_Mul else checkpow(arg, sexprs) \
-                                      for arg in sexpr.args])
+                    sol.score += sum([sum([checkpow(arg2, sexprs) for arg2 in arg.args  ]) if arg.is_Mul \
+                                      else checkpow(arg , sexprs) for arg  in sexpr.args])
                 elif sexpr.is_Mul:
-                    sol.score += sum([checkpow(arg,sexprs) for arg in sexpr.args])
+                    sol.score += sum([checkpow(arg, sexprs) for arg in sexpr.args])
                     
                 elif sexpr.is_Function:
                     sexprs += sexpr.args
@@ -1044,6 +1055,7 @@ class IKFastSolver(AutoReloader):
                 elif not self.isValidSolution(sexpr):
                     log.warn('not valid: %s', sexpr)
                     sol.score = oo # infinity
+                    
                 else:
                     sol.score += checkpow(sexpr, sexprs)
                     
@@ -1065,6 +1077,7 @@ class IKFastSolver(AutoReloader):
                         newcheckforzeros.append(checkeq)
             else:
                 newcheckforzeros.append(eqtemp)
+                
         sol.checkforzeros = newcheckforzeros
         return sol.score
 
