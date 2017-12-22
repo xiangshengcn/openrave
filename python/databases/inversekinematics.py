@@ -339,7 +339,8 @@ class InverseKinematicsModel(DatabaseGenerator):
             pass
         with open(statsfilename, 'w') as f:
             pickle.dump((self.getversion(),self.statistics,self.ikfeasibility,self.solveindices,self.freeindices,self.freeinc), f)
-        log.info('inversekinematics generation is done, compiled shared object: %s',self.getfilename(False))
+        log.info('IK generation is done\n' + \
+                 '        Shared object created: %s', self.getfilename(False))
         
     def load(self,freeinc=None,checkforloaded=True,*args,**kwargs):
         try:
@@ -1029,14 +1030,15 @@ class InverseKinematicsModel(DatabaseGenerator):
                 except ImportError,e:
                     log.warn(e)
                     
-                log.info(u'successfully generated c++ ik in %fs, file=%s', \
+                log.info(u'Successfully generated C++ IK file in %fs\n' + \
+                         '        file = %s', \
                          self.statistics['generationtime'], sourcefilename)
             except self.ikfast.IKFastSolver.IKFeasibilityError, e:
                 self.ikfeasibility = str(e)
                 log.warn(e)
 
         if self.ikfeasibility is None:
-            log.info('compiling ik file to %s',output_filename)
+            log.info('Compiling C++ IK file to %s', output_filename)
             if outputlang == 'cpp':
                 # compile the code and create the shared object
                 compiler,compile_flags = self.getcompiler()
@@ -1074,7 +1076,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                                                     libraries = libraries)
                         
                     if not self.setrobot():
-                        return ValueError('failed to generate ik solver')
+                        return ValueError('Failed to generate IK solver')
                 finally:
                     # cleanup intermediate files
                     if os.path.isfile(platformsourcefilename):
@@ -1085,7 +1087,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                         except:
                             pass
             else:
-                log.warn('cannot continue further if outputlang %s is not cpp',outputlang)
+                log.warn('Cannot continue further if outputlang %s is not cpp', outputlang)
                 
         self._cachedKinematicsHash = self.manip.GetInverseKinematicsStructureHash(self.iktype)
         
@@ -1312,27 +1314,10 @@ class InverseKinematicsModel(DatabaseGenerator):
             robotatts = {'skipgeometry':'1'}
 
 
-        #from IPython.terminal import embed;
-        #ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())
-
-        #import cProfile
-        #import re
-        #cProfile.run('
         model = DatabaseGenerator.RunFromParser(Model = Model, parser = parser, robotatts = robotatts, args = args, **kwargs)
-        #')
-
-
-
-        
-
-#        model = DatabaseGenerator.RunFromParser(Model = Model,\
-#                                                parser = parser,\
-#                                                robotatts = robotatts,\
-#                                                args = args, \
-#                                                **kwargs)
         
         if options.iktests is not None or options.perftiming is not None:
-            log.info('testing the success rate of robot %s ',options.robot)
+            log.info('Testing the success rate of robot %s ', options.robot)
             env = Environment()
             try:
                 #robot = env.ReadRobotXMLFile(options.robot,{'skipgeometry':'1'})

@@ -6004,11 +6004,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             # TGN: no need to check if self.pp is not None, i.e. if full 3D position is available
             changed = True
+
+            fcn_groups_pair = [[self._SimplifyRotationNorm , self._rotposnormgroups ], \
+                               [self._SimplifyRotationDot  , self._rotposdotgroups  ], \
+                               [self._SimplifyRotationCross, self._rotposcrossgroups]]
+            
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
-                eq, changed = _SimplifyRotationFcn(self._SimplifyRotationNorm , eq, changed, self._rotposnormgroups)
-                eq, changed = _SimplifyRotationFcn(self._SimplifyRotationDot  , eq, changed, self._rotposdotgroups)
-                eq, changed = _SimplifyRotationFcn(self._SimplifyRotationCross, eq, changed, self._rotposcrossgroups)
+                for fcn, groups in fcn_groups_pair:
+                    eq, changed = _SimplifyRotationFcn(fcn, eq, changed, groups)
                     
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
