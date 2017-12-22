@@ -238,8 +238,9 @@ class IKFastSolver(AutoReloader):
                 self.axismapinv[idof] = name
 
         # TGN adds the following
-        self.trigvars_subs = [];
-        self.trigsubs = [];
+        self.trigvars_subs = []
+        self.trigsubs = []
+        self.checkpow_expr_dict = {}
     
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
         """
@@ -976,78 +977,79 @@ class IKFastSolver(AutoReloader):
 
         return checkforzeros
 
+    def checkpow(self, expr, sexprs, unsolvedvars):
+
+        if expr in self.checkpow_expr_dict:
+            # Look up value
+            score = self.checkpow_expr_dict[expr]
+
+        else:
+            score = 0
+            if expr.is_Pow:
+                sexprs.append(expr.base)
+            
+                if not (expr.base.is_finite is None or expr.base.is_finite):
+                    return oo # infinity
+                    
+                if expr.exp.is_number and expr.exp < 0:
+                    # check if exprbase contains any variables that have already been solved
+                    # containsjointvar = expr.base.has(*solvedvars)
+                    # cancheckexpr = not expr.base.has(*unsolvedvars)
+                    score += 10000
+                    if expr.base.has(*unsolvedvars): #not cancheckexpr:
+                        score += 100000
+                            
+            elif not self.isValidSolution(expr):
+                score = oo # infinity
+
+            # Add to dictionary
+            self.checkpow_expr_dict[expr] = score
+
+        return score
+
     def ComputeSolutionComplexity(self, sol, solvedvars, unsolvedvars):
         """
         For all solutions, check if there is a divide by zero
         
         Fills checkforzeros for the solution
         """
+
         sol.checkforzeros = sol.getPresetCheckForZeros()
         sol.score = 20000*sol.numsolutions()
         
         try:
-
             # exec(ipython_str, globals(), locals())
-            
             # multiby by 400 in order to prioritize equations with less solutions
-
             # TGN: remove all those hasattr(sol, ...) check, because they are always True
-            
             if sol.jointeval is not None:
-                for s in sol.jointeval:
-                    sol.score += self.codeComplexity(s)
-                    sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointeval
-                
             elif sol.jointevalsin is not None:
-                for s in sol.jointevalsin:
-                    sol.score += self.codeComplexity(s)
-                    sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointevalsin
-                
             elif sol.jointevalcos is not None:
-                for s in sol.jointevalcos:
-                    sol.score += self.codeComplexity(s)
-                    sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
                 subexprs = sol.jointevalcos
-                
             else:
                 return sol.score
+
+            for s in subexprs:
+                sol.score += self.codeComplexity(s)
+                sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
 
             # have to also check solution dictionary
             for s, v in sol.dictequations:
                 sol.score += self.codeComplexity(v)
                 sol.checkforzeros += self.checkForDivideByZero(v.subs(sol.dictequations))
             
-            def checkpow(expr, sexprs):
-                score = 0
-                if expr.is_Pow:
-                    sexprs.append(expr.base)
-                    
-                    if not (expr.base.is_finite is None or expr.base.is_finite):
-                        return oo # infinity
-                    
-                    if expr.exp.is_number and expr.exp < 0:
-                        # check if exprbase contains any variables that have already been solved
-                        # containsjointvar = expr.base.has(*solvedvars)
-                        # cancheckexpr = not expr.base.has(*unsolvedvars)
-                        score += 10000
-                        if expr.base.has(*unsolvedvars): #not cancheckexpr:
-                            score += 100000
-                            
-                elif not self.isValidSolution(expr):
-                    return oo # infinity
-                
-                return score
-            
             sexprs = subexprs[:]
             while len(sexprs) > 0:
                 sexpr = sexprs.pop(0)
                 if sexpr.is_Add:
-                    sol.score += sum([sum([checkpow(arg2, sexprs) for arg2 in arg.args  ]) if arg.is_Mul \
-                                      else checkpow(arg , sexprs) for arg  in sexpr.args])
+                    sol.score += sum([sum([self.checkpow(arg2, sexprs, unsolvedvars) \
+                                           for arg2 in arg.args  ]) if arg.is_Mul \
+                                      else self.checkpow(arg , sexprs, unsolvedvars) \
+                                      for arg  in sexpr.args])
                 elif sexpr.is_Mul:
-                    sol.score += sum([checkpow(arg, sexprs) for arg in sexpr.args])
+                    sol.score += sum([self.checkpow(arg, sexprs, unsolvedvars) \
+                                      for arg in sexpr.args])
                     
                 elif sexpr.is_Function:
                     sexprs += sexpr.args
@@ -1057,7 +1059,7 @@ class IKFastSolver(AutoReloader):
                     sol.score = oo # infinity
                     
                 else:
-                    sol.score += checkpow(sexpr, sexprs)
+                    sol.score += self.checkpow(sexpr, sexprs, unsolvedvars)
                     
         except AssertionError, e:
             log.warn('%s', e)
@@ -2193,8 +2195,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv): # generator
             try:
                 return self.solve6DIntersectingAxes(T0links, T1links, transvars, rotvars, \
-                                                    solveRotationFirst=solveRotationFirst, \
-                                                    endbranchtree=endbranchtree)
+                                                    solveRotationFirst = solveRotationFirst, \
+                                                    endbranchtree = endbranchtree)
             except (self.CannotSolveError,self.IKFeasibilityError), e:
                 log.warn('%s',e)
         return None
@@ -2577,8 +2579,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                            solsubs = solsubs, \
                                            endbranchtree = newendbranchtree)
 
+        exec(ipython_str)
+
         transtree = self.verifyAllEquations(AllEquations, \
-                                            transvars+rotvars, \
+                                            transvars + rotvars, \
                                             # rotvars if solveRotationFirst \
                                             # else transvars+rotvars, \
                                             self.freevarsubs[:], transtree)
