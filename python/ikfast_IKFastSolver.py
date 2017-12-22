@@ -240,12 +240,15 @@ class IKFastSolver(AutoReloader):
         # TGN adds the following
         self.trigvars_subs = []
         self.trigsubs = []
+        self.trigsubs_one = []         
+        self.ppsubs_ext = []
         self.checkpow_expr_dict = {}
         self.code_complexity_dict = {}
         self.code_complexity_use = 0
         self.check_div_zero_dict = {}
         self.check_div_zero_use = 0
-        
+        self.simplify_transform_dict = {} 
+        self.simplify_transform_use = 0 
     
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
         """
@@ -639,6 +642,21 @@ class IKFastSolver(AutoReloader):
                                       1-Symbol('c%s'%v.name)**2))
         return
     
+    def gen_trigsubs_one(self, trigvars): 
+        for v in trigvars: 
+            self.trigsubs_one.append((sin(v)**2+cos(v)**2, 1)) 
+            self.trigsubs_one.append((Symbol('s%s'%v.name)**2+Symbol('c%s'%v.name)**2, 1)) 
+        return 
+ 
+    def gen_ppsubs_ext(self): 
+        px, py, pz = self.Tee[0:3,3] 
+        pp = self.pp 
+         
+        self.ppsubs_ext = [[px**2+py**2, pp-pz**2], \
+                           [py**2+pz**2, pp-px**2], \
+                           [pz**2+px**2, pp-py**2]] 
+        return 
+    
     def trigsimp_new(self, eq):
         """
         TGN's rewrite version of trigsimp: recursively subs sin**2 for 1-cos**2 for every trig var
@@ -701,7 +719,6 @@ class IKFastSolver(AutoReloader):
         # incos and insin indicate whether we should take cos/sin into account
         if eq.is_Add:
             if incos:
-                # exec(ipython_str)
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
@@ -714,7 +731,6 @@ class IKFastSolver(AutoReloader):
                 processed = True
                 
             elif insin:
-                # exec(ipython_str)
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
@@ -756,13 +772,9 @@ class IKFastSolver(AutoReloader):
                 elif eq.args[1].is_integer:
                     num = eq.args[1]
                     eq2 = eq.args[0]
-                if num is not None:
-                    if num == S.One:
-                        neweq = self.SimplifyAtan2(eq2, incos = True)
-                        processed = True
-                    if num == -S.One:
-                        neweq = self.SimplifyAtan2(eq2, incos = True)
-                        processed = True
+                if num is not None and (num == S.One or num == -S.One): 
+                    neweq = self.SimplifyAtan2(eq2, incos = True) 
+                    processed = True 
                         
             elif insin and len(eq.args) == 2:
                 num = None
@@ -772,13 +784,9 @@ class IKFastSolver(AutoReloader):
                 elif eq.args[1].is_integer:
                     num = eq.args[1]
                     eq2 = eq.args[0]
-                if num is not None:
-                    if num == S.One:
-                        neweq = self.SimplifyAtan2(eq2, insin = True)
-                        processed = True
-                    if num == -S.One:
-                        neweq = -self.SimplifyAtan2(eq2, insin = True)
-                        processed = True
+                if num is not None and (num == S.One or num == -S.One): 
+                    neweq = num*self.SimplifyAtan2(eq2, insin = True) 
+                    processed = True 
                         
             if not processed:
                 neweq = self.SimplifyAtan2(eq.args[0])
@@ -1505,8 +1513,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         print('\n')
         print('========================== END OF SETUP PRINT ================================\n')
         
-        # MAIN FUNCTION
         self.gen_trigsubs(jointvars)
+        self.gen_trigsubs_one(jointvars)         
+        self.gen_ppsubs_ext()
+        
+        # MAIN FUNCTION
         chaintree = solvefn(self, LinksRaw, jointvars, isolvejointvars)
         if self.useleftmultiply:
             chaintree.leftmultiply(Tleft=self.multiplyMatrix(LinksLeft), Tleftinv=self.multiplyMatrix(LinksLeftInv[::-1]))
@@ -5974,8 +5985,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         transformsubstitutions = [(var, value) for var, value in self.globalsymbols \
                                   if var.is_Symbol and not var.name.startswith('gconst')]
 
-#        exec(ipython_str) in globals(), locals()
-        
         if self._iktype == 'translationdirection5d':
             # since this IK type includes direction, we use the first row only,
             # i.e., r00**2 + r01**2 + r02**2 = 1
@@ -6009,42 +6018,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             elif fraction(eq)[1].has(*self._rotsymbols):
                 log.info('equation %s has _rotsymbols in its denom; skip', eq)
                 return eq
-        
+
             simpiter = 0
             origeq = eq
-
             
-            # first simplify just rotations since they don't introduce new symbols
-            """
-            changed = True
-            while changed and eq.has(*self._rotsymbols):
-                # log.info('simpiter = %d, complexity = %d', \
-                #          simpiter, \
-                #          self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
-                simpiter += 1
-                changed = False
-            
-                neweq = self._SimplifyRotationNorm(eq, self._rotsymbols, self._rotnormgroups)
-                if neweq is not None:
-                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq, neweq):
-                        eq = neweq
-                        changed = True
-                    
-                neweq = self._SimplifyRotationDot(eq, self._rotsymbols, self._rotdotgroups)
-                if neweq is not None:
-                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq, neweq):
-                        eq = neweq
-                        changed = True
-                    
-                neweq = self._SimplifyRotationCross(eq, self._rotsymbols, self._rotcrossgroups)
-                if neweq is not None:
-                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq, neweq):
-                        eq = neweq
-                        changed = True
-            """
             def _SimplifyRotationFcn(fcn, eq, changed, groups):
                 neweq = fcn(eq, self._rotpossymbols, groups)
                 if neweq is None:
@@ -6074,6 +6051,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # not translationdirection5d nor transform6d
             pass
 
+        #print origeq, eq
+        #exec(ipython_str)
         return eq
 
     
@@ -6170,7 +6149,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     usedindices.add(index0)
                     usedindices.add(index1)
                     break
-                
+
         return neweq
     
     def _SimplifyRotationDot(self, eq, symbols, groups):
