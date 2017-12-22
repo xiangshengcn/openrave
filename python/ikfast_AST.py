@@ -32,7 +32,7 @@ class AST:
         dictequations       = None
         presetcheckforzeros = None
         equationsused       = None
-        score               = -1        
+        score               = -1 # TGN: used to be None      
         FeasibleIsZeros     = False
         """
         If FeasibleIsZeros is True, then solution is feasible only when all equations evaluate to ZERO.

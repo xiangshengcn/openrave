@@ -241,6 +241,9 @@ class IKFastSolver(AutoReloader):
         self.trigvars_subs = []
         self.trigsubs = []
         self.checkpow_expr_dict = {}
+        self.code_complexity_dict = {}
+        self.code_complexity_use = 0
+        
     
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
         """
@@ -838,18 +841,27 @@ class IKFastSolver(AutoReloader):
         else:
             return neweq
 
-    @staticmethod
-    def codeComplexity(expr):
+    #@staticmethod
+    def codeComplexity(self, expr):
+
+        if expr in self.code_complexity_dict:
+            self.code_complexity_use += 1
+            return self.code_complexity_dict[expr]
+        
         complexity = 1
-        if expr.is_Add or expr.is_Mul:
-            complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
+        if expr.is_number:
+            # no need to add constants into dictionary
+            return 1
+        
+        elif expr.is_Add or expr.is_Mul:
+            complexity += sum(self.codeComplexity(term) for term in expr.args)
 
         elif expr.is_Function:
-            complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args) + 1
+            complexity += sum(self.codeComplexity(term) for term in expr.args) + 1
             
         elif expr.is_Pow:
-            complexity += IKFastSolver.codeComplexity(expr.base) + \
-                          IKFastSolver.codeComplexity(expr.exp)
+            complexity += self.codeComplexity(expr.base) + \
+                          self.codeComplexity(expr.exp)
 
         elif expr.is_Poly:
             # TGN: this function does not evaluate the complexity of a Poly object???
@@ -859,10 +871,12 @@ class IKFastSolver(AutoReloader):
             # complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
             #
             # Not sure if it has the same effect as
-            complexity += IKFastSolver.codeComplexity(expr.as_expr())
+            complexity += self.codeComplexity(expr.as_expr())
             
         else: # trivial cases
-            assert(expr.is_number or expr.is_Symbol)
+            assert(expr.is_Symbol)
+
+        self.code_complexity_dict[expr] = complexity
             
         return complexity
     
@@ -1012,6 +1026,10 @@ class IKFastSolver(AutoReloader):
         For all solutions, check if there is a divide by zero
         
         Fills checkforzeros for the solution
+
+        TGN: This function only derives values for 
+
+        sol.checkforzeros and sol.score
         """
 
         sol.checkforzeros = sol.getPresetCheckForZeros()
@@ -1063,7 +1081,8 @@ class IKFastSolver(AutoReloader):
                     
         except AssertionError, e:
             log.warn('%s', e)
-            sol.score = 1e10
+            # TGN: 1e10 is in float type, not int; solutions.sort does not like float
+            sol.score = 10000000000 
 
         newcheckforzeros = []
         for eqtemp in sol.checkforzeros:
@@ -1081,6 +1100,7 @@ class IKFastSolver(AutoReloader):
                 newcheckforzeros.append(eqtemp)
                 
         sol.checkforzeros = newcheckforzeros
+        # TGN: no function calls use this return value; perhaps just a dummy return
         return sol.score
 
     def checkSolvability(self, AllEquations, checkvars, othervars):
@@ -2578,8 +2598,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                            othersolvedvars = othersolvedvars[:], \
                                            solsubs = solsubs, \
                                            endbranchtree = newendbranchtree)
-
-        exec(ipython_str)
 
         transtree = self.verifyAllEquations(AllEquations, \
                                             transvars + rotvars, \
