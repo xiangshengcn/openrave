@@ -243,6 +243,8 @@ class IKFastSolver(AutoReloader):
         self.checkpow_expr_dict = {}
         self.code_complexity_dict = {}
         self.code_complexity_use = 0
+        self.check_div_zero_dict = {}
+        self.check_div_zero_use = 0
         
     
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
@@ -282,7 +284,7 @@ class IKFastSolver(AutoReloader):
             else:
                 neweq = self.convertRealToRational(eq,precision)
         else:
-            neweq=eq
+            neweq = eq
         return neweq
     
     def normalizeRotation(self,M):
@@ -906,6 +908,13 @@ class IKFastSolver(AutoReloader):
         """
         Returns the equations to check for zero
         """
+
+        if eq.is_number or eq.is_Symbol:
+            return []
+        elif eq in self.check_div_zero_dict:
+            self.check_div_zero_use += 1
+            return self.check_div_zero_dict[eq]
+        
         import itertools
         checkforzeros = []
         try:
@@ -989,6 +998,11 @@ class IKFastSolver(AutoReloader):
                     
             checkforzeros = newcheckforzeros
 
+
+        # print eq, checkforzeros
+        # exec(ipython_str)
+        self.check_div_zero_dict[eq] = checkforzeros
+            
         return checkforzeros
 
     def checkpow(self, expr, sexprs, unsolvedvars):
@@ -2599,6 +2613,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                            solsubs = solsubs, \
                                            endbranchtree = newendbranchtree)
 
+        # exec(ipython_str)
+        
         transtree = self.verifyAllEquations(AllEquations, \
                                             transvars + rotvars, \
                                             # rotvars if solveRotationFirst \
