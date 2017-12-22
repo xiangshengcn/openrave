@@ -948,9 +948,9 @@ class IKFastSolver(AutoReloader):
 
                         testeqmin = testeq if self.codeComplexity(testeq) < self.codeComplexity(testeq2) \
                                     else testeq2
-                                    
+
                         if testeqmin.is_Mul:
-                            checkforzeros += testeqmin.args
+                            checkforzeros += [arg for arg in testeqmin.args if not arg.is_number]
                         else:
                             checkforzeros.append(testeqmin)
                                     
@@ -963,6 +963,8 @@ class IKFastSolver(AutoReloader):
                                  , substitutedargs[0], substitutedargs[1] \
                                  #, checkforzeros[-1]
                         )
+                        # print checkforzeros
+                        # exec(ipython_str)
 
             # originally, is_Mul, is_Add, is_Pow
             checkforzeros += list(itertools.chain.from_iterable \
