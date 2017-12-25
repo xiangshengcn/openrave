@@ -708,7 +708,7 @@ class IKFastSolver(AutoReloader):
     def SimplifyAtan2(self, eq, \
                       incos = False, \
                       insin = False, \
-                      epsilon = None):
+                      epsilon = 1e-15):
         """
         Simplifies equations involving atan2 and sin/cos/tan
 
@@ -729,6 +729,28 @@ class IKFastSolver(AutoReloader):
  
         In primitive calls, incos == insin == False 
         """
+
+        if eq.is_number:
+            if incos:
+                neweq = cos(eq)
+                return neweq if abs(neweq.evalf())>=epsilon else S.Zero
+            elif insin:
+                neweq = sin(eq)
+                return neweq if abs(neweq.evalf())>=epsilon else S.Zero
+            else:
+                return eq if abs(eq.evalf())>=epsilon else S.Zero
+
+        elif eq.is_Symbol:
+            if incos:
+                return cos(eq)
+            elif insin:
+                return sin(eq)
+            else:
+                return eq
+
+        if not (incos or insin) and eq in self.simplify_atan2_dict: 
+            self.simplify_atan2_use += 1 
+            return self.simplify_atan2_dict[eq] 
         
         processed = False
         # incos/insin indicates whether eq is inside cos/sin
@@ -855,29 +877,16 @@ class IKFastSolver(AutoReloader):
                 # neweq = base**pwr 
                 neweq = self.SimplifyAtan2(eq.base)**self.SimplifyAtan2(eq.exp)
                 
-        elif eq.is_number:            
-            if epsilon is None:
-                epsilon = 1e-15
-            if insin:
-                neweq = sin(eq)
-            elif incos:
-                neweq = cos(eq)
-            else:
-                neweq = eq
-                
-            processed = True
-            if abs(neweq.evalf()) <= epsilon:
-                neweq = S.Zero
-                
         else:
-            neweq = eq
+            assert(0)
             
         if not processed and insin:
             return sin(neweq)
         elif not processed and incos:
             return cos(neweq)
-        else:
-            return neweq
+
+        self.simplify_atan2_dict[eq] = neweq 
+        return neweq 
 
     #@staticmethod
     def codeComplexity(self, expr):
@@ -5993,17 +6002,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         return peq.termwise(lambda m,c: self.SimplifyTransform(c))
 
-    def _SimplifyRotationFcn(self, fcn, eq, changed, groups, \
-                             transformsubstitutions):
-        neweq = fcn(eq, self._rotpossymbols, groups)
-        if neweq is None:
-            return eq, changed
-        else:
-            neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-            if not self.equal(eq, neweq):
-                changed = True
-            return neweq, changed
-    
     def SimplifyTransform(self, eq, othervars = None):
         """
         Attemps to simplify eq using properties of a 3D rotation matrix, i.e., 18 constraints:
@@ -6032,6 +6030,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         transformsubstitutions = [(var, value) for var, value in self.globalsymbols \
                                   if var.is_Symbol and not var.name.startswith('gconst')]
 
+        def _SimplifyRotationFcn(fcn, eq, changed, groups):
+            neweq = fcn(eq, self._rotpossymbols, groups)
+            if neweq is None:
+                return eq, changed
+            else:
+                neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+                if not self.equal(eq, neweq):
+                    changed = True
+                return neweq, changed
+    
         if self._iktype == 'translationdirection5d':
             # since this IK type includes direction, we use the first row only,
             # i.e., r00**2 + r01**2 + r02**2 = 1
@@ -6079,8 +6087,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
                 for fcn, groups in fcn_groups_pair:
-                    eq, changed = self._SimplifyRotationFcn(fcn, eq, changed, groups, \
-                                                            transformsubstitutions)
+                    eq, changed = _SimplifyRotationFcn(fcn, eq, changed, groups)
                     
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
