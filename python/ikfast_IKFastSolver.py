@@ -243,14 +243,23 @@ class IKFastSolver(AutoReloader):
         self.trigsubs = []
         self.trigsubs_one = []         
         self.ppsubs_ext = []
-        self.checkpow_expr_dict = {}
-        self.code_complexity_dict = {}
-        self.code_complexity_use = 0
-        self.check_div_zero_dict = {}
-        self.check_div_zero_use = 0
-        self.simplify_transform_dict = {} 
+
+        # used by checkpow {formula: int} 
+        self.checkpow_expr_dict = {} 
+        # used by codeComplexity {formula: int} 
+        self.code_complexity_dict = {} 
+        self.code_complexity_use = 0 
+        # used by checkForDivideByZero {formula: formula} 
+        self.check_div_zero_dict = {} 
+        self.check_div_zero_use = 0 
+        # used by SimplifyTransform {formula: formula} 
+        self.simplify_transform_dict = {}  
+        self.simplify_transform_use = 0  
         self.simplify_transform_use = 0 
-    
+        # used by SimplifyAtan2 with incos == insin == False 
+        self.simplify_atan2_dict = {} 
+        self.simplify_atan2_use = 0
+        
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
         """
         Progress is in [0,1], when 0 means "start" and 1 means "finish"
@@ -715,15 +724,21 @@ class IKFastSolver(AutoReloader):
         Then the internal operations have to be carried over.
 
         TGN: Can we somehow resolve this problem?
+
+        incos == True or insin == True ONLY in recursive calls 
+ 
+        In primitive calls, incos == insin == False 
         """
+        
         processed = False
-        # incos and insin indicate whether we should take cos/sin into account
+        # incos/insin indicates whether eq is inside cos/sin
         if eq.is_Add:
             if incos:
                 lefteq = eq.args[1]
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
                         lefteq += eq.args[ieq]
+                # cos(a+b) = cos(a)*cos(b) - sin(a)*sin(b)         
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
                         self.SimplifyAtan2(lefteq,     incos = True) - \
@@ -736,6 +751,7 @@ class IKFastSolver(AutoReloader):
                 if len(eq.args) > 2:
                     for ieq in range(2,len(eq.args)):
                         lefteq += eq.args[ieq]
+                # sin(a+b) = cos(a)*sin(b) + sin(a)*cos(b) 
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
                         self.SimplifyAtan2(lefteq,     insin = True) + \
@@ -744,9 +760,13 @@ class IKFastSolver(AutoReloader):
                 processed = True
                 
             else:
+                # neweq = sum([(arg if arg.is_number or arg.is_Symbol \
+                #               else self.SimplifyAtan2(arg)) \
+                #              for arg in eq.args])
                 neweq = S.Zero
                 for subeq in eq.args:
                     neweq += self.SimplifyAtan2(subeq)
+                    
                 # call simplify in order to take in common terms
                 if self.codeComplexity(neweq) > 80:
                     neweq2 = neweq
@@ -790,19 +810,23 @@ class IKFastSolver(AutoReloader):
                     processed = True 
                         
             if not processed:
+                # neweq = reduce(mul, \
+                #               [(arg if arg.is_number or arg.is_Symbol \
+                #                  else self.SimplifyAtan2(arg)) \
+                #                 for arg in eq.args], 1) 
                 neweq = self.SimplifyAtan2(eq.args[0])
                 for subeq in eq.args[1:]:
                     neweq *= self.SimplifyAtan2(subeq)
                     
         elif eq.is_Function:
             
-            if incos and eq.func == atan2:
+            if incos and eq.func == atan2: # cos(atan2(yeq, xeq)) 
                 yeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[0]))
                 xeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[1]))
                 neweq = xeq / sqrt(self.SimplifyTransform(yeq**2+xeq**2))
                 processed = True
                 
-            elif insin and eq.func == atan2:
+            elif insin and eq.func == atan2: # sin(atan2(yeq, xeq)) 
                 yeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[0]))
                 xeq = self.SimplifyTransform(self.SimplifyAtan2(eq.args[1]))
                 neweq = yeq / sqrt(self.SimplifyTransform(yeq**2+xeq**2))
@@ -826,6 +850,9 @@ class IKFastSolver(AutoReloader):
                     neweq = abs(self.SimplifyAtan2(eq.base.base))
                     
             if neweq is None:
+                # base = eq.base if eq.base.is_Symbol else self.SimplifyAtan2(eq.base) 
+                # pwr  = eq.exp  if eq.exp.is_number else self.SimplifyAtan2(eq.exp) 
+                # neweq = base**pwr 
                 neweq = self.SimplifyAtan2(eq.base)**self.SimplifyAtan2(eq.exp)
                 
         elif eq.is_number:            
