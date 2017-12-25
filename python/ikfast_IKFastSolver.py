@@ -74,6 +74,7 @@ hdlr = logging.FileHandler('/var/tmp/ikfast_IKFastSolver.log')
 formatter = logging.Formatter(LOGGING_FORMAT)
 hdlr.setFormatter(formatter)
 log.addHandler(hdlr)
+#log.propagate = False
 
 try:
     # not necessary, just used for testing
@@ -1309,12 +1310,16 @@ class IKFastSolver(AutoReloader):
 
         # have to include new_rXX
         self.pvars = self.Tee[0:12] + \
-                     self.npxyz+[self.pp] + self.rxp[0]+self.rxp[1]+self.rxp[2] + \
-                     [Symbol('new_r00'), Symbol('new_r01'), Symbol('new_r02'), \
-                      Symbol('new_r10'), Symbol('new_r11'), Symbol('new_r12'), \
-                      Symbol('new_r20'), Symbol('new_r21'), Symbol('new_r22')]
-        self._rotsymbols = list(self.Tee[0:3,0:3])
+                     self.npxyz + \
+                     [self.pp] + self.rxp[0]+self.rxp[1]+self.rxp[2] + \
+                     [Symbol('new_r%d%d' % (i,j)) for i in range(3) for j in range(3)]
 
+        # [r00, r01, r02, px, r10, r11, r12, py, r20, r21, r22, pz]
+        # [npx, npy, npz]
+        # [pp], [rxp0_0, rxp0_1, rxp0_2], [rxp1_0, rxp1_1, rxp1_2], [rxp2_0, rxp2_1, rxp2_2]
+        # [new_r00, new_r01, new_r02, new_r10, new_r11, new_r12, new_r20, new_r21, new_r22]
+        
+        self._rotsymbols = list(self.Tee[0:3,0:3])
         # add positions
         ip = 9
         inp = 12
@@ -5960,6 +5965,17 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             return peq
         
         return peq.termwise(lambda m,c: self.SimplifyTransform(c))
+
+    def _SimplifyRotationFcn(self, fcn, eq, changed, groups, \
+                             transformsubstitutions):
+        neweq = fcn(eq, self._rotpossymbols, groups)
+        if neweq is None:
+            return eq, changed
+        else:
+            neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
+            if not self.equal(eq, neweq):
+                changed = True
+            return neweq, changed
     
     def SimplifyTransform(self, eq, othervars = None):
         """
@@ -6025,16 +6041,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             simpiter = 0
             origeq = eq
-            
-            def _SimplifyRotationFcn(fcn, eq, changed, groups):
-                neweq = fcn(eq, self._rotpossymbols, groups)
-                if neweq is None:
-                    return eq, changed
-                else:
-                    neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-                    if not self.equal(eq, neweq):
-                        changed = True
-                    return neweq, changed
 
             # TGN: no need to check if self.pp is not None, i.e. if full 3D position is available
             changed = True
@@ -6046,32 +6052,22 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
                 for fcn, groups in fcn_groups_pair:
-                    eq, changed = _SimplifyRotationFcn(fcn, eq, changed, groups)
+                    eq, changed = self._SimplifyRotationFcn(fcn, eq, changed, groups, \
+                                                            transformsubstitutions)
                     
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
-            #log.info("simplify eq:\n%r\n->new eq:\n%r", origeq, eq)
+            #log.info("simplify eq:\n%r\n->new eq:\n%r", origeq, eq) 
         else:
             # not translationdirection5d nor transform6d
             pass
 
+        eq = self.trigsimp_new(eq)
 
-        
-        neweq = eq.subs(self.trigsubs)
-        if self.codeComplexity(neweq)<self.codeComplexity(eq):
-            eq = neweq
-
-        """
-        print origeq
-        print '----------'
-        print eq
-        exec(ipython_str, globals(), locals())
-        """
-
+        log.info("%r\n --->   %r", origeq, eq) 
         self.simplify_transform_dict[origeq] = eq
         return eq
 
-    
     def _SimplifyRotationNorm(self, eq, symbols, groups):
         """
         Simplify eq based on 2-norm of each row/column being 1
@@ -6087,8 +6083,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             try:
                 # not sure about this thresh
                 if self.codeComplexity(eq) > 300:
-                    log.warn(u'equation too complex to simplify for rot norm: %s', eq)
-                    continue
+
+                    neweq = self.trigsimp_new(factor(eq))
+                    if self.codeComplexity(neweq) > 300:
+                        log.warn(u'equation too complex to simplify for rot norm: %s', eq)
+                        break
+                    else:
+                        eq = neweq
 
                 # exec(ipython_str)
                 
@@ -6846,7 +6847,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return neweq
     
     def _AddToGlobalSymbols(self, var, eq):
-        """adds to the global symbols, returns True if replaced with an existing entry
+        """
+        Adds global symbols; returns True if replaced with an existing entry
         """
         for iglobal, gvarexpr in enumerate(self.globalsymbols):
             if var == gvarexpr[0]:
@@ -8147,7 +8149,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if not all([c.is_number for c in coeffs]):
                 # cannot evalute
                 log.warn('cannot evaluate\n        %s', \
-                         "\n        ".join(str(x) for x in coeffs))
+                         "\n        ".join(str(x) for x in coeffs if not x.is_number))
                 found = True
                 break            
             realsolution = pfinal.gens[0].subs(subs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
