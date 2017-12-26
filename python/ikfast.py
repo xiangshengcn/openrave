@@ -309,10 +309,10 @@ except ImportError:
 import logging
 LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s ]\n' + \
                  '\t%(message)s\n'
-logging.basicConfig( format = LOGGING_FORMAT, \
-                     datefmt='%d-%m-%Y:%H:%M:%S', \
-                     level=logging.DEBUG) 
-log = logging.getLogger('IKFastSolver') 
+logging.basicConfig( format  = LOGGING_FORMAT, \
+                     datefmt = '%d-%m-%Y:%H:%M:%S', \
+                     level   = logging.DEBUG) 
+log = logging.getLogger('ikfast') 
 hdlr = logging.FileHandler('/var/tmp/ikfast_IKFastSolver.log') 
 formatter = logging.Formatter(LOGGING_FORMAT) 
 hdlr.setFormatter(formatter) 
