@@ -261,9 +261,10 @@ class IKFastSolver(AutoReloader):
         self.simplify_atan2_use = 0
 
         # poly_counter_rotnorm
-        self.poly_counter_rotnorm  = 0
-        self.poly_counter_rotdot   = 0
-        self.poly_counter_rotcross = 0
+        self.poly_counter_rotnorm     = 0
+        self.poly_counter_rotnorm_new = 0
+        self.poly_counter_rotdot      = 0
+        self.poly_counter_rotcross    = 0
         
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
         """
@@ -1380,6 +1381,16 @@ class IKFastSolver(AutoReloader):
             
         self._rotposnormgroups = list(self._rotnormgroups)
         self._rotposnormgroups.append([self.Tee[0,3], self.Tee[1,3], self.Tee[2,3], self.pp])
+
+        # TGN creates _rotnormgroups_new and _rotposnormgroups_new
+        self._rotnormgroups_new = [ [[0, 1, 2], 1], \
+                                    [[0, 3, 6], 1], \
+                                    [[3, 4, 5], 1], \
+                                    [[1, 4, 7], 1], \
+                                    [[6, 7, 8], 1], \
+                                    [[2, 5, 8], 1] ]
+        self._rotposnormgroups_new = list(self._rotnormgroups_new)
+        self._rotposnormgroups_new.append([[9,10,11], self.pp])
         
         # dot product of each pair of rows/columns in R are 0
         self._rotdotgroups = []
@@ -6093,15 +6104,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # TGN: no need to check if self.pp is not None, i.e. if full 3D position is available
             changed = True
 
-            fcn_groups_pair = [[self._SimplifyRotationNorm , self._rotposnormgroups ], \
-                               [self._SimplifyRotationDot  , self._rotposdotgroups  ], \
-                               [self._SimplifyRotationCross, self._rotposcrossgroups]]
+            #fcn_groups_pair = [[self._SimplifyRotationNorm , self._rotposnormgroups ], \
+            fcn_groups_pair = [[self._SimplifyRotationNorm_new, self._rotposnormgroups_new ], \
+                               [self._SimplifyRotationDot     , self._rotposdotgroups      ], \
+                               [self._SimplifyRotationCross   , self._rotposcrossgroups    ]]
             
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
                 for fcn, groups in fcn_groups_pair:
-                    print fcn
-                    exec(ipython_str, globals(), locals())
                     eq, changed = _SimplifyRotationFcn(fcn, eq, changed, groups)
                     
             if isinstance(eq, Poly):
@@ -6116,6 +6126,144 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         log.info("%r\n --->   %r", origeq, eq) 
         self.simplify_transform_dict[origeq] = eq
         return eq
+
+    def _SimplifyRotationNorm_new(self, eq, symbols, groups):
+        """
+        Simplify eq based on 2-norm of each row/column being 1
+
+        symbols is self._rotsymbols   or self._rotpossymbols
+        groups is self._rotnormgroups or self._rotposnormgroups
+
+        Called by SimplifyTransform only.
+
+        We now use
+
+[[[0, 1, 2], 1],
+ [[0, 3, 6], 1],
+ [[3, 4, 5], 1],
+ [[1, 4, 7], 1],
+ [[6, 7, 8], 1],
+ [[2, 5, 8], 1],
+ [[9, 10, 11], pp]]
+
+[r00, r01, r02,             0,  1,  2
+ r10, r11, r12,             3,  4,  5
+ r20, r21, r22,             6,  7,  8
+ px, py, pz,                9, 10, 11
+ npx, npy, npz,            12, 13, 14
+ pp,                               15
+ rxp0_0, rxp0_1, rxp0_2,   16, 17, 18
+ rxp1_0, rxp1_1, rxp1_2,   19, 20, 21
+ rxp2_0, rxp2_1, rxp2_2]   22, 23, 24
+
+        so that notation is consistent with _SimplifyRotationDot and _SimplifyRotationCross
+
+        """
+        try:
+            p = Poly(eq, *symbols)
+            self.poly_counter_rotnorm_new += 1
+        except (PolynomialError, CoercionFailed), e:
+            return None
+        
+        changed = False
+        listterms = list(p.terms())
+        usedindices = set()
+
+        rng_len_listterms = range(len(listterms))
+        
+        for g in groups: # e.g. g = [[0,1,2], 1] or [[9,10,11], pp]
+            for i, j, k in permutations(range(3),3): # [(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
+
+                g0i = g[0][i]
+                g0j = g[0][j]
+
+                for index0, index1 in combinations(rng_len_listterms, 2):
+
+                    if index0 in usedindices or index1 in usedindices:
+                        continue
+
+                    m0, c0 = listterms[index0] 
+                    m1, c1 = listterms[index1]
+                    
+                    if self.equal(c0, c1):
+                        # replace x0**2+x1**2 by x3-x2**2
+                        #         x1**2+x2**2 by x3-x0**2
+                        #         x2**2+x0**2 by x3-x1**2
+                        if m0[g0i]-m1[g0i] == 2 and m1[g0j]-m0[g0j] == 2:
+                            m0l = list(m0); m0l[g0i] = m1[g0i];
+                            m1l = list(m1); m1l[g0j] = m0[g0j];
+                                 
+                            if m0l == m1l:  # the rest of terms are the same
+                                g0k = g[0][k]  ; g1  = g[1]
+                                m2l = m0l[:]   ; m3l = m0l[:];
+                                m2l[g0k] += 2
+
+                                if g1 == self.pp:
+                                    m3l[15] += 1 # 15 is index of pp
+                                
+                                m2 = tuple(m2l); m3 = tuple(m3l)
+                            
+                                p = p.\
+                                    sub(Poly.from_dict({m0:c0}, *p.gens)). \
+                                    sub(Poly.from_dict({m1:c0}, *p.gens)). \
+                                    add(Poly.from_dict({m3:c0}, *p.gens)). \
+                                    sub(Poly.from_dict({m2:c0}, *p.gens))
+                                
+                                changed = True
+                                usedindices.add(index0)
+                                usedindices.add(index1)
+                                break
+
+                    elif self.equal(c0, -c1):
+                        # As x3 = x0**2 + x1**2 + x2**2, we replace x0**4 - x1**4 by
+                        #
+                        #   x0**4 - x1**4
+                        # = (x0**2-x1**2)*(x0**2+x1**2)
+                        # = (x0**2-x1**2)*(x3-x2**2)
+                        # = x0**2*x3 - x1**2*x3 - x0**2*x2**2 + x1**2*x2**2
+                        
+                        if m0[g0i]-m1[g0i] == 4 and m1[g0j]-m0[g0j] == 4:
+                            m0l = list(m0); m0l[g0i] = m1[g0i];
+                            m1l = list(m1); m1l[g0j] = m0[g0j];
+                                 
+                            if m0l == m1l:  # the rest of terms are the same
+                                g0k = g[0][k]; g1  = g[1]
+
+                                m2l = m0l[:] ; m3l = m0l[:];
+                                m4l = m0l[:] ; m5l = m0l[:];
+
+                                if g1 == self.pp:
+                                    m2l[15] += 1; m3l[15] += 1 # 15 is index of pp
+
+                                # x0**2*x3
+                                m2l[g0i] += 2
+                                # x1**2*x3
+                                m3l[g0j] += 2
+                                # x0**2*x2**2
+                                m4l[g0i] += 2; m4l[g0k] += 2
+                                # x1**2*x2**2
+                                m5l[g0j] += 2; m5l[g0k] += 2
+
+                                if g1 == self.pp:
+                                    m3l[15] += 1
+                                
+                                m2 = tuple(m2l); m3 = tuple(m3l)
+                                m4 = tuple(m4l); m5 = tuple(m5l)
+
+                                p = p.\
+                                    sub(Poly.from_dict({m0:c0}, *p.gens)). \
+                                    sub(Poly.from_dict({m1:c1}, *p.gens)). \
+                                    add(Poly.from_dict({m2:c0}, *p.gens)). \
+                                    sub(Poly.from_dict({m3:c0}, *p.gens)). \
+                                    sub(Poly.from_dict({m4:c0}, *p.gens)). \
+                                    add(Poly.from_dict({m5:c0}, *p.gens))
+                                
+                                changed = True
+                                usedindices.add(index0)
+                                usedindices.add(index1)
+                                break
+
+        return p.as_expr() if changed else None
 
     def _SimplifyRotationNorm(self, eq, symbols, groups):
         """
@@ -6133,6 +6281,28 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
  [r20, r21, r22, 1],
  [r02, r12, r22, 1],
  [px, py, pz, pp]]
+
+        TGN: We shall use
+
+[[[0, 1, 2], 1],
+ [[0, 3, 6], 1],
+ [[3, 4, 5], 1],
+ [[1, 4, 7], 1],
+ [[6, 7, 8], 1],
+ [[2, 5, 8], 1],
+ [[9, 10, 11], pp]]
+
+        that is consistent with _SimplifyRotationDot and _SimplifyRotationCross
+
+[r00, r01, r02,             0,  1,  2
+ r10, r11, r12,             3,  4,  5
+ r20, r21, r22,             6,  7,  8
+ px, py, pz,                9, 10, 11
+ npx, npy, npz,            12, 13, 14
+ pp,                               15
+ rxp0_0, rxp0_1, rxp0_2,   16, 17, 18
+ rxp1_0, rxp1_1, rxp1_2,   19, 20, 21
+ rxp2_0, rxp2_1, rxp2_2]   22, 23, 24
 
         """
 
@@ -6338,7 +6508,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             usedindices.add(index1)
                             break
 
-        return p if changed else None
+        return p.as_expr() if changed else None
     
     def _SimplifyRotationCross(self, eq, symbols, groups):
         """
@@ -6438,7 +6608,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         usedindices.add(index1)
                         break
                         
-        return p if changed else None
+        return p.as_expr() if changed else None
 
     def CheckExpressionUnique(self, exprs, expr, \
                               checknegative = True, \
