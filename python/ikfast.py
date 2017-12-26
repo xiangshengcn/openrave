@@ -265,7 +265,44 @@ except ImportError:
                 return
 
 import logging
-log = logging.getLogger('openravepy.ikfast')
+# ========== TGN's tools for studying how IKFast works ========== 
+import traceback
+def ikfast_print_stack(): 
+    tb = traceback.extract_stack() 
+    pattern = '%-30s %5s %24s'  
+    print( '\n'+pattern % ('        FUNCTION','LINE', 'FILE      ')) 
+    keyword_of_interest = [ 'ikfast_IKFastSolver.py', 'ikfast_AST.py', 'ikfast.py', 'inversekinematics.py'] 
+    print('--------------------------------------------------------------') 
+    for function_call in tb: 
+        for keyword in keyword_of_interest: 
+            if (keyword in function_call[0]) and (function_call[2] not in 'ikfast_print_stack'): 
+                print(pattern % (function_call[2], function_call[1], keyword)) 
+                break 
+ipython_str = 'ikfast_print_stack(); ' + \
+              'from IPython.terminal import embed; ' + \
+              'ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())' 
+""" 
+When exec(ipython_str) does not work, use 
+ 
+from IPython.terminal import embed; 
+ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals()) 
+""" 
+             
+LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s ]\n' + \
+                 '\t%(message)s\n' 
+logging.basicConfig( format = LOGGING_FORMAT, \
+                     datefmt='%d-%m-%Y:%H:%M:%S', \
+                     level=logging.DEBUG) 
+ 
+log = logging.getLogger('ikfast_generator_cpp') 
+hdlr = logging.FileHandler('/var/tmp/inversekinematics.log') 
+formatter = logging.Formatter(LOGGING_FORMAT) 
+hdlr.setFormatter(formatter) 
+log.addHandler(hdlr) 
+ 
+# TGN writes statistics into a file 
+import datetime 
+# ========== End of TGN's tools  ============== 
 
 try:
     # not necessary, just used for testing
@@ -1651,7 +1688,7 @@ class IKFastSolver(AutoReloader):
                                 raise ValueError('failed to process joint %s'%joint.GetName())
                         
                         Tjoints.append(Tj)
-                    
+
                     if axisAngleFromRotationMatrix is not None:
                         axisangle = axisAngleFromRotationMatrix(numpy.array(numpy.array(Tright * TLeftjoint),numpy.float64))
                         angle = sqrt(axisangle[0]**2+axisangle[1]**2+axisangle[2]**2)
@@ -3153,7 +3190,6 @@ class IKFastSolver(AutoReloader):
     def solve6DIntersectingAxes(self, T0links, T1links, transvars,rotvars,solveRotationFirst,endbranchtree):
         """Solve 6D equations using fact that 3 axes are intersecting. The 3 intersecting axes are all part of T0links and will be used to compute the rotation of the robot. The other 3 axes are part of T1links and will be used to first compute the position.
         """
-        from IPython.terminal import embed; ipshell=embed.InteractiveShellEmbed(config=embed.load_default_config())(local_ns=locals())
         
         self._iktype = 'transform6d'
         assert(len(transvars)==3 and len(rotvars) == 3)

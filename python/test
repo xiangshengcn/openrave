@@ -1,0 +1,18 @@
+#!/bin/bash
+
+#nohup ./test_all ../src/collada_robots/ &
+
+#./test_all ../src/collada_robots
+
+OPENRAVE_DIR=$MUJIN_INSTALL_DIR/lib/python2.7/site-packages/openravepy/_openravepy_0_9
+CURR_IKFAST_DIR=$MUJIN_JHBUILD_CHECKOUT_DIR/openrave/python
+
+cp $CURR_IKFAST_DIR/*.py $OPENRAVE_DIR
+
+cp $CURR_IKFAST_DIR/databases/*.py $OPENRAVE_DIR/databases
+
+clear && clear
+
+./test_all ../test/ikfastrobots
+#./test_all ../src/collada_robots
+#./test_all ../src/robots

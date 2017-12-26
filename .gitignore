@@ -4,3 +4,15 @@ msvc_libxml2/
 msvc_soqt/
 msvc_ode/
 msvc_soqt/
+
+.project
+.pydevproject
+.settings/
+3rdparty/fparser-4.5/
+python/.~/
+*.pyc
+*.txt
+src/models/
+.openravetest/
+results.xml
+*.log

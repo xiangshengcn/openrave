@@ -1,0 +1,9 @@
+#!/bin/bash
+
+python -m cProfile -o ikfast_profile.out /home/mujin/mujin/jhbuildapppickworker/install/bin/openrave.py \
+       --database inversekinematics \
+       --robot=../src/collada_robots/kawada-hironx.zae --numiktests=1000
+
+python ikfast_profile.py
+
+# more ikfast_profile.txt | grep ikfast  > profile_ikfast.txt
