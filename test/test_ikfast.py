@@ -230,7 +230,14 @@ def parseoptions(args=None):
     (options, parseargs) = parser.parse_args(args=args)
     
     if options.iktypes == '*':
-        options.iktypes = [IkParameterizationType.Transform6D, IkParameterizationType.Translation3D, IkParameterizationType.Lookat3D, IkParameterizationType.TranslationDirection5D, IkParameterizationType.TranslationXYOrientation3D, IkParameterizationType.TranslationLocalGlobal6D, IkParameterizationType.TranslationZAxisAngle4D, IkParameterizationType.TranslationXAxisAngleZNorm4D]
+        options.iktypes = [IkParameterizationType.Transform6D,                \
+                           IkParameterizationType.Translation3D,              \
+                           IkParameterizationType.Lookat3D,                   \
+                           IkParameterizationType.TranslationDirection5D,     \
+                           IkParameterizationType.TranslationXYOrientation3D, \
+                           IkParameterizationType.TranslationLocalGlobal6D,   \
+                           IkParameterizationType.TranslationZAxisAngle4D,    \
+                           IkParameterizationType.TranslationXAxisAngleZNorm4D ]
     else:
         iktypes = []
         for iktype in options.iktypes.split(','):
@@ -244,11 +251,36 @@ def parseoptions(args=None):
     for robot in robots:
         if robot == 'basic':
             # only robots that are in defualt openrave repository
-            options.robotfilenames += ['robots/pumaarm.zae','robots/barrettwam.robot.xml','robots/kawada-hironx.zae','ikfastrobots/fail1.robot.xml','robots/pr2-beta-static.zae','robots/kuka-youbot.zae', 'ikfastrobots/fail3.robot.xml']
+            options.robotfilenames += ['robots/pumaarm.zae', \
+                                       'robots/barrettwam.robot.xml', \
+                                       'robots/kawada-hironx.zae', \
+                                       'robots/pr2-beta-static.zae', \
+                                       'robots/kuka-youbot.zae', \
+                                       'ikfastrobots/fail1.robot.xml', \
+                                       'ikfastrobots/fail3.robot.xml']
         elif robot == 'pr2':
             options.robotfilenames += ['robots/pr2-beta-static.zae']
         elif robot == '*':
-            options.robotfilenames += ['robots/unimation-pumaarm.zae','robots/barrett-wam.zae','robots/pr2-beta-static.zae','robots/neuronics-katana.zae','robots/mitsubishi-pa10.zae','robots/schunk-lwa3.zae','robots/darpa-arm.zae','robots/exactdynamics-manusarmleft.zae','robots/kuka-kr5-r650.zae','robots/kuka-kr5-r850.zae','robots/kuka-kr30l16.zae','robots/tridof.robot.xml','robots/barrett-wam4.zae','robots/kawada-hironx.zae','ikfastrobots/fail1.robot.xml','ikfastrobots/fail3.robot.xml', 'ikfastrobots/fail4.robot.xml','robots/kuka-youbot.zae', 'robots/universalrobots-ur6-85-5-a.zae']
+            options.robotfilenames += ['robots/unimation-pumaarm.zae', \
+                                       'robots/barrett-wam.zae', \
+                                       'robots/pr2-beta-static.zae', \
+                                       'robots/neuronics-katana.zae', \
+                                       'robots/mitsubishi-pa10.zae', \
+                                       'robots/schunk-lwa3.zae', \
+                                       'robots/darpa-arm.zae', \
+                                       'robots/exactdynamics-manusarmleft.zae', \
+                                       'robots/kuka-kr5-r650.zae', \
+                                       'robots/kuka-kr5-r850.zae', \
+                                       'robots/kuka-kr30l16.zae', \
+                                       'robots/tridof.robot.xml', \
+                                       'robots/barrett-wam4.zae', \
+                                       'robots/kawada-hironx.zae', \
+                                       'robots/kuka-youbot.zae', \
+                                       'robots/universalrobots-ur6-85-5-a.zae', \
+                                       'ikfastrobots/fail1.robot.xml', \
+                                       'ikfastrobots/fail3.robot.xml', \
+                                       'ikfastrobots/fail4.robot.xml', ]
+
         elif options.robots == 'random':
             options.robotfilenames.append('random')
         else:

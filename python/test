@@ -1,3 +1,5 @@
 #!/bin/bash
 
-nohup ./test_all ../src/collada_robots/ &
+#nohup ./test_all ../src/collada_robots/ &
+
+./test_all ../src/ikfastrobots
