@@ -259,6 +259,11 @@ class IKFastSolver(AutoReloader):
         # used by SimplifyAtan2 with incos == insin == False 
         self.simplify_atan2_dict = {} 
         self.simplify_atan2_use = 0
+
+        # poly_counter_rotnorm
+        self.poly_counter_rotnorm  = 0
+        self.poly_counter_rotdot   = 0
+        self.poly_counter_rotcross = 0
         
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
         """
@@ -872,10 +877,10 @@ class IKFastSolver(AutoReloader):
                     neweq = abs(self.SimplifyAtan2(eq.base.base))
                     
             if neweq is None:
-                # base = eq.base if eq.base.is_Symbol else self.SimplifyAtan2(eq.base) 
-                # pwr  = eq.exp  if eq.exp.is_number else self.SimplifyAtan2(eq.exp) 
-                # neweq = base**pwr 
-                neweq = self.SimplifyAtan2(eq.base)**self.SimplifyAtan2(eq.exp)
+                base = eq.base if eq.base.is_Symbol else self.SimplifyAtan2(eq.base) 
+                pwr  = eq.exp  if eq.exp.is_number  else self.SimplifyAtan2(eq.exp) 
+                neweq = base**pwr 
+                # neweq = self.SimplifyAtan2(eq.base)**self.SimplifyAtan2(eq.exp)
                 
         else:
             assert(0)
@@ -2189,6 +2194,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # check if some set of three consecutive axes intersect at one point
         # if so, the IK solution will be easier to derive
         tree = self.TestIntersectingAxes(solvejointvars, Links, LinksInv, endbranchtree)
+        
         if tree is None:
             sliderjointvars = [var for var in solvejointvars if not self.IsHinge(var.name)]
             if len(sliderjointvars) > 0:
@@ -2239,54 +2245,59 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 tree = self.TestIntersectingAxes(solvejointvars,NewLinks, NewLinksInv,endbranchtree)
                                 if tree is not None:
                                     break
+                                
         if tree is None:
-            linklist = list(self.iterateThreeNonIntersectingAxes(solvejointvars,Links, LinksInv))
+            linklist = list(self.iterateThreeNonIntersectingAxes(solvejointvars, Links, LinksInv))
             # first try LiWoernleHiller since it is most robust
             for ilinklist, (T0links, T1links) in enumerate(linklist):
-                log.info('try first group %d/%d', ilinklist, len(linklist))
+                log.info('Try the first group %d/%d', ilinklist, len(linklist))
                 try:
-                    # if T1links[-1] doesn't have any symbols, put it over to T0links. Since T1links has the position unknowns, putting over the coefficients to T0links makes things simpler
+                    # If T1links[-1] has no symbols, then we put it over to T0links.
+                    # Since T1links has the position unknowns, doing so simplifies computations.
                     if not self.has(T1links[-1], *solvejointvars):
                         T0links.append(self.affineInverse(T1links.pop(-1)))
-                    tree = self.solveFullIK_6DGeneral(T0links, T1links, solvejointvars, endbranchtree, usesolvers=1)
+                    tree = self.solveFullIK_6DGeneral(T0links, T1links, solvejointvars, endbranchtree, usesolvers = 1)
                     break
-                except (self.CannotSolveError,self.IKFeasibilityError), e:
+                except (self.CannotSolveError, self.IKFeasibilityError), e:
                     log.warn('%s',e)
             
             if tree is None:
-                log.info('trying the rest of the general ik solvers')
+                log.info('Trying the rest of the general IK solvers')
                 for ilinklist, (T0links, T1links) in enumerate(linklist):
-                    log.info('try second group %d/%d', ilinklist, len(linklist))
+                    log.info('Try the second group %d/%d', ilinklist, len(linklist))
                     try:
                         # If T1links[-1] has no symbols, then we put it over to T0links.
                         # Since T1links has the position unknowns, doing so simplifies computations.
                         if not self.has(T1links[-1], *solvejointvars):
                             T0links.append(self.affineInverse(T1links.pop(-1)))
-                        tree = self.solveFullIK_6DGeneral(T0links, T1links, solvejointvars, endbranchtree, usesolvers=6)
+                        tree = self.solveFullIK_6DGeneral(T0links, T1links, solvejointvars, endbranchtree, usesolvers = 6)
                         break
-                    except (self.CannotSolveError,self.IKFeasibilityError), e:
+                    except (self.CannotSolveError, self.IKFeasibilityError), e:
                         log.warn('%s',e)
                 
         if tree is None:
-            raise self.CannotSolveError('cannot solve 6D mechanism!')
+            raise self.CannotSolveError('Cannot solve 6D mechanism!')
         
         chaintree = AST.SolverIKChainTransform6D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
                                                  [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
                                                  (self.Tee*self.affineInverse(Tfirstright)).subs(self.freevarsubs), \
                                                  tree, \
                                                  Tfk = self.Tfinal*Tfirstright)
-        chaintree.dictequations += self.ppsubs+self.npxyzsubs+self.rxpsubs
+        
+        chaintree.dictequations += self.ppsubs + self.npxyzsubs + self.rxpsubs
         return chaintree
     
     def TestIntersectingAxes(self,solvejointvars,Links,LinksInv,endbranchtree):
         for T0links, T1links, transvars, rotvars, solveRotationFirst in \
             self.iterateThreeIntersectingAxes(solvejointvars, Links, LinksInv): # generator
+            
             try:
                 return self.solve6DIntersectingAxes(T0links, T1links, transvars, rotvars, \
                                                     solveRotationFirst = solveRotationFirst, \
                                                     endbranchtree = endbranchtree)
             except (self.CannotSolveError,self.IKFeasibilityError), e:
                 log.warn('%s',e)
+                
         return None
 
     def _ExtractTranslationsOutsideOfMatrixMultiplication(self, Links, LinksInv, solvejointvars):
@@ -2667,7 +2678,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                            solsubs = solsubs, \
                                            endbranchtree = newendbranchtree)
 
-        # exec(ipython_str)
+        exec(ipython_str)
         
         transtree = self.verifyAllEquations(AllEquations, \
                                             transvars + rotvars, \
@@ -2691,6 +2702,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for i in range(3):
             for j in range(3):
                 Ree[i,j] = Symbol('new_r%d%d'%(i,j))
+                
         try:
             T1sub = T1.subs(solvedvarsubs)
             othersolvedvars = self.freejointvars if solveRotationFirst else transvars+self.freejointvars
@@ -2716,6 +2728,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             #else:
             rottree[:] = [AST.SolverRotation(T1sub, rottree[:])]
             return solvertree
+        
         finally:
             # remove the Ree global symbols
             removesymbols = set()
@@ -6087,6 +6100,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
                 for fcn, groups in fcn_groups_pair:
+                    print fcn
+                    exec(ipython_str, globals(), locals())
                     eq, changed = _SimplifyRotationFcn(fcn, eq, changed, groups)
                     
             if isinstance(eq, Poly):
@@ -6110,6 +6125,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         groups is self._rotnormgroups or self._rotposnormgroups
 
         Called by SimplifyTransform only.
+
+[[r00, r01, r02, 1],
+ [r00, r10, r20, 1],
+ [r10, r11, r12, 1],
+ [r01, r11, r21, 1],
+ [r20, r21, r22, 1],
+ [r02, r12, r22, 1],
+ [px, py, pz, pp]]
+
         """
 
         neweq = None
@@ -6131,6 +6155,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 # p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
                 # p -= Poly(1234*group[3], *p.gens, domain = p.domain)
                 p = Poly(eq, *group[0:3])
+                self.poly_counter_rotnorm += 1
                 
             except (PolynomialError, CoercionFailed, ZeroDivisionError), e:
                 continue
@@ -6233,6 +6258,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         try:
             p = Poly(eq, *symbols)
+            self.poly_counter_rotdot += 1
         except (PolynomialError, CoercionFailed), e:
             return None
         
@@ -6322,10 +6348,40 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         groups  is self._rotcrossgroups or self._rotposcrossgroups
 
         Called by SimplifyTransform only.
+
+[[[3, 7], [6, 4], 2],
+ [[6, 1], [0, 7], 5],
+ [[0, 4], [3, 1], 8],
+ [[1, 5], [2, 4], 6],
+ [[2, 3], [0, 5], 7],
+ [[0, 4], [1, 3], 8],
+ [[4, 8], [7, 5], 0],
+ [[7, 2], [1, 8], 3],
+ [[1, 5], [4, 2], 6],
+ [[4, 8], [5, 7], 0],
+ [[5, 6], [3, 8], 1],
+ [[3, 7], [4, 6], 2],
+ [[6, 5], [3, 8], 1],
+ [[0, 8], [6, 2], 4],
+ [[3, 2], [0, 5], 7],
+ [[2, 7], [1, 8], 3],
+ [[0, 8], [2, 6], 4],
+ [[1, 6], [0, 7], 5],
+ [[3, 11], [6, 10], 16],
+ [[6, 9], [0, 11], 17],
+ [[0, 10], [3, 9], 18],
+ [[4, 11], [7, 10], 19],
+ [[7, 9], [1, 11], 20],
+ [[1, 10], [4, 9], 21],
+ [[5, 11], [8, 10], 22],
+ [[8, 9], [2, 11], 23],
+ [[2, 10], [5, 9], 24]]
+
         """
         changed = False
         try:
-            p = Poly(eq,*symbols)
+            p = Poly(eq, *symbols)
+            self.poly_counter_rotcross += 1
         except (PolynomialError, CoercionFailed), e:
             return None
 
