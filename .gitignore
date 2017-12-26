@@ -4,3 +4,17 @@ msvc_libxml2/
 msvc_soqt/
 msvc_ode/
 msvc_soqt/
+
+src/
+.project
+.pydevproject
+*#*
+*~*
+.settings/
+3rdparty/
+myrelpath.pyc
+python/Doxyfile 
+*.pyc
+*.log
+*.out
+test/.openravetest

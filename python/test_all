@@ -1,0 +1,11 @@
+#!/bin/bash
+
+DIRNAME=$1
+ZAEFILES=`sudo ls $DIRNAME/*.zae`
+
+rm -f *.log /var/*.log *.out
+
+for f in $ZAEFILES
+do
+    openrave.py --database inversekinematics $f --numiktests=1000
+done

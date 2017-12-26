@@ -56,6 +56,7 @@ except:
         TranslationZAxisAngleYNorm4D=0x44000010
 
 from sympy import *
+from ikfast import LOGGING_FORMAT
 
 try:
     import re # for indenting
@@ -80,7 +81,10 @@ except ImportError:
     using_swiginac = False
 
 import logging
-log = logging.getLogger('openravepy.ikfast')
+logging.basicConfig( format = LOGGING_FORMAT, \
+                     datefmt='%d-%m-%Y:%H:%M:%S', \
+                     level=logging.DEBUG)
+log = logging.getLogger('ikfast_generator_cpp')
 
 from sympy.core import function # for sympy 0.7.1+
 class fmod(function.Function):
@@ -1121,7 +1125,7 @@ IkReal r00 = 0, r11 = 0, r22 = 0;
         eqcode = cStringIO.StringIO()
         name = node.jointname
         self._solutioncounter += 1
-        log.info('c=%d var=%s', self._solutioncounter, name)
+        log.info('c = %d, var = %s', self._solutioncounter, name)
         node.HasFreeVar = False
         allnumsolutions = 0
         #log.info('generateSolution %s (%d)', name, len(node.dictequations))
@@ -1709,7 +1713,7 @@ IkReal r00 = 0, r11 = 0, r22 = 0;
         return ''
     def generateStoreSolution(self, node):
         self._solutioncounter += 1
-        log.info('c=%d, store solution', self._solutioncounter)
+        log.info('c = %d, store solution', self._solutioncounter)
         code = cStringIO.StringIO()
         if node.checkgreaterzero is not None and len(node.checkgreaterzero) > 0:
             origequations = self.copyequations()

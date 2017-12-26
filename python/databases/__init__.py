@@ -194,6 +194,10 @@ class DatabaseGenerator(metaclass.AutoReloader):
             options.viewername=OpenRAVEGlobalArguments.parseEnvironment(options,env,defaultviewer=defaultviewer,returnviewer=True)
             with env:
                 env.Load(options.robot,robotatts)
+
+                # TGN clears
+                os.system('clear'); os.system('clear')
+                
                 # TODO: if exception is raised after this point, program exits with glibc double-link list corruption. most likely something in Load?
                 if len(env.GetRobots()) > 0:
                     # get the first robot with DOF > 0
