@@ -737,6 +737,7 @@ class IKFastSolver(AutoReloader):
         """
 
         if eq.is_number:
+            # exec(ipython_str)
             if incos:
                 neweq = cos(eq)
                 return neweq if abs(neweq.evalf())>=epsilon else S.Zero
@@ -747,6 +748,7 @@ class IKFastSolver(AutoReloader):
                 return eq if abs(eq.evalf())>=epsilon else S.Zero
 
         elif eq.is_Symbol:
+            # exec(ipython_str)
             if incos:
                 return cos(eq)
             elif insin:
@@ -788,12 +790,12 @@ class IKFastSolver(AutoReloader):
                 processed = True
                 
             else:
-                # neweq = sum([(arg if arg.is_number or arg.is_Symbol \
-                #               else self.SimplifyAtan2(arg)) \
-                #              for arg in eq.args])
-                neweq = S.Zero
-                for subeq in eq.args:
-                    neweq += self.SimplifyAtan2(subeq)
+                neweq = sum([(arg if arg.is_number or arg.is_Symbol \
+                              else self.SimplifyAtan2(arg)) \
+                             for arg in eq.args])
+                #neweq = S.Zero
+                #for subeq in eq.args:
+                #    neweq += self.SimplifyAtan2(subeq)
                     
                 # call simplify in order to take in common terms
                 if self.codeComplexity(neweq) > 80:
@@ -838,13 +840,13 @@ class IKFastSolver(AutoReloader):
                     processed = True 
                         
             if not processed:
-                # neweq = reduce(mul, \
-                #               [(arg if arg.is_number or arg.is_Symbol \
-                #                  else self.SimplifyAtan2(arg)) \
-                #                 for arg in eq.args], 1) 
-                neweq = self.SimplifyAtan2(eq.args[0])
-                for subeq in eq.args[1:]:
-                    neweq *= self.SimplifyAtan2(subeq)
+                neweq = reduce(mul, \
+                              [(arg if arg.is_number or arg.is_Symbol \
+                                 else self.SimplifyAtan2(arg)) \
+                                for arg in eq.args], 1) 
+                # neweq = self.SimplifyAtan2(eq.args[0])
+                # for subeq in eq.args[1:]:
+                #     neweq *= self.SimplifyAtan2(subeq)
                     
         elif eq.is_Function:
             
@@ -919,7 +921,6 @@ class IKFastSolver(AutoReloader):
         elif expr.is_Poly:
             # TGN: this function does not evaluate the complexity of a Poly object???
             # should I add the following?
-            # exec(ipython_str) in globals(), locals()
             #
             # complexity += sum(IKFastSolver.codeComplexity(term) for term in expr.args)
             #
@@ -961,6 +962,7 @@ class IKFastSolver(AutoReloader):
         """
 
         if eq.is_number or eq.is_Symbol:
+            # exec(ipython_str)
             return []
         elif eq in self.check_div_zero_dict:
             self.check_div_zero_use += 1
@@ -981,7 +983,7 @@ class IKFastSolver(AutoReloader):
                     for argeq in eq.args:
                         argeq2 = self._SubstituteGlobalSymbols(argeq)
                         if self.codeComplexity(argeq2) < 200:
-                            substitutedargs.append(self.SimplifyAtan2(argeq2))
+                            substitutedargs.append(argeq2 if argeq2.is_Symbol else self.SimplifyAtan2(argeq2))
                         else:
                             substitutedargs.append(argeq2)
                     # has to be greater than 20 since some const coefficients can be simplified
@@ -1001,12 +1003,13 @@ class IKFastSolver(AutoReloader):
                                     else testeq2
 
                         if testeqmin.is_Mul:
-                            checkforzeros += [arg for arg in testeqmin.args if not arg.is_number]
+                            checkforzeros += [arg for arg in testeqmin.args \
+                                              if not (arg.is_number or arg.is_Symbol)]
                         else:
                             checkforzeros.append(testeqmin)
                                     
                         if checkforzeros[-1].evalf() == S.Zero:
-                            raise self.CannotSolveError('equation evaluates to 0, never OK')
+                            raise self.CannotSolveError('Nonzero condition evaluates to 0. Never OK!!!')
                         
                         log.info('add atan2( %r, \n                   %r ) \n' \
                                  + '        check zero ' \
@@ -1019,7 +1022,9 @@ class IKFastSolver(AutoReloader):
 
             # originally, is_Mul, is_Add, is_Pow
             checkforzeros += list(itertools.chain.from_iterable \
-                                  ([self.checkForDivideByZero(arg) for arg in eq.args]))
+                                  ([self.checkForDivideByZero(arg) \
+                                    for arg in eq.args \
+                                    if not (arg.is_number or arg.is_Symbol)]))
             # TGN: if eq.is_number, then the list is []; can eq.is_Poly???
                     
             if eq.is_Pow and eq.exp.is_number and eq.exp < 0:
@@ -1051,11 +1056,8 @@ class IKFastSolver(AutoReloader):
                     
             checkforzeros = newcheckforzeros
 
-
-        # print eq, checkforzeros
-        # exec(ipython_str)
-        self.check_div_zero_dict[eq] = checkforzeros
             
+        self.check_div_zero_dict[eq] = checkforzeros
         return checkforzeros
 
     def checkpow(self, expr, sexprs, unsolvedvars):
@@ -1117,12 +1119,16 @@ class IKFastSolver(AutoReloader):
 
             for s in subexprs:
                 sol.score += self.codeComplexity(s)
-                sol.checkforzeros += self.checkForDivideByZero(s.subs(sol.dictequations))
+                ssubs = s.subs(sol.dictequations)
+                if not (ssubs.is_Symbol or ssubs.is_number):
+                    sol.checkforzeros += self.checkForDivideByZero(ssubs)
 
             # have to also check solution dictionary
             for s, v in sol.dictequations:
                 sol.score += self.codeComplexity(v)
-                sol.checkforzeros += self.checkForDivideByZero(v.subs(sol.dictequations))
+                vsubs = v.subs(sol.dictequations)
+                if not (vsubs.is_Symbol or vsubs.is_number):
+                    sol.checkforzeros += self.checkForDivideByZero(vsubs)
             
             sexprs = subexprs[:]
             while len(sexprs) > 0:
@@ -2689,7 +2695,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                            solsubs = solsubs, \
                                            endbranchtree = newendbranchtree)
 
-        exec(ipython_str)
+        # exec(ipython_str)
         
         transtree = self.verifyAllEquations(AllEquations, \
                                             transvars + rotvars, \
@@ -6319,8 +6325,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     else:
                         eq = neweq
 
-                # exec(ipython_str)
-                
                 # need to do 1234*group[3] hack in order to get the Poly domain to recognize group[3] (sympy 0.7.1)
                 # p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
                 # p -= Poly(1234*group[3], *p.gens, domain = p.domain)
@@ -6591,8 +6595,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     else:
                         continue
 
-                    exec(ipython_str)
-                        
                     if tuple(m0l) == tuple(m1l):
                         m2l = m0l[:]; m2l[cg[2]] += 1
                         m2 = tuple(m2l)
@@ -7450,8 +7452,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                      '        AllEquations = %s', \
                      scopecounter, len(currentcases), curvars, \
                      ("\n"+" "*23).join(str(x) for x in list(AllEquations)))
+
+            varlist =  [(var, eq if eq.is_Symbol or eq.is_number else \
+                         self.SimplifyAtan2(self._SubstituteGlobalSymbols(eq, originalGlobalSymbols))) \
+                        for var, eq in currentcasesubs]
             
-            lastbranch.append(AST.SolverBreak('%d cases reached'%self.maxcasedepth, [(var,self.SimplifyAtan2(self._SubstituteGlobalSymbols(eq, originalGlobalSymbols))) for var, eq in currentcasesubs], othersolvedvars, solsubs, originalGlobalSymbols, endbranchtree))
+            lastbranch.append(AST.SolverBreak('%d cases reached' % self.maxcasedepth, \
+                                              varlist, \
+                                              othersolvedvars, solsubs, originalGlobalSymbols, endbranchtree))
+
             return prevbranch
         
         # fill the last branch with all the zero conditions
