@@ -3123,13 +3123,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                            solsubs = solsubs, \
                                            endbranchtree = newendbranchtree)
 
-        # exec(ipython_str)
-        
         transtree = self.verifyAllEquations(AllEquations, \
                                             transvars + rotvars, \
                                             # rotvars if solveRotationFirst \
                                             # else transvars+rotvars, \
                                             self.freevarsubs[:], transtree)
+
+        # exec(ipython_str)
 
         solvertree = []
         solvedvarsubs = self.freevarsubs[:]
@@ -6545,17 +6545,26 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
-                for fcn, groups in fcn_groups_pair:
-#                    print '\n', fcn, '\n\n', eq, '\n'
-#                    if self.codeComplexity(eq)>600:
-#                        print '\n', fcn, '\n', eq, '\n'
-#                        exec(ipython_str, globals(), locals())
-                    neweq, newchanged = _SimplifyRotationFcn(fcn, eq, changed, groups)
-                    changed = changed or newchanged
-                    if newchanged:
-                        log.info('Number of operations changes from %d to %d' % \
-                                 (eq.count_ops(), neweq.count_ops()))
-                        eq = neweq
+                try:
+                    # if we can convert it to Poly, then we work with Poly
+                    eq = Poly(eq, *self._rotpossymbols)
+                    self.poly_counter_rotdot += 1
+                
+                    for fcn, groups in fcn_groups_pair:
+#                        print '\n', fcn, '\n\n', eq, '\n'
+#                        if self.codeComplexity(eq)>600:
+#                            print '\n', fcn, '\n', eq, '\n'
+#                            exec(ipython_str, globals(), locals())
+                        neweq, newchanged = _SimplifyRotationFcn(fcn, eq, changed, groups)
+                        changed = changed or newchanged
+                        if newchanged:
+                            log.info('Number of operations changes from %d to %d' % \
+                                     (eq.count_ops(), neweq.count_ops()))
+                            eq = neweq
+
+                except (PolynomialError, CoercionFailed), e:
+                    # otherwise work with the rational formula (TO-DO)
+                    pass
                     
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
@@ -6603,12 +6612,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         so that notation is consistent with _SimplifyRotationDot and _SimplifyRotationCross
 
         """
-        try:
-            p = Poly(eq, *symbols)
-            self.poly_counter_rotnorm_new += 1
-        except (PolynomialError, CoercionFailed), e:
-            return None
-        
+        if eq.is_Poly:
+            p = eq
+        else:
+            try:
+                self.poly_counter_rotnorm_new += 1
+                p = Poly(eq, *symbols)
+            except (PolynomialError, CoercionFailed), e:
+                return None
+            
         changed = False
         listterms = list(p.terms())
         usedindices = set()
@@ -6738,7 +6750,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     usedindices.add(index1)
                                     break
 
-        return p.as_expr() if changed else None
+        return p if changed else None
 
     def _SimplifyRotationNorm(self, eq, symbols, groups):
         """
@@ -6899,11 +6911,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
  [[6, 12], [7, 13], [8, 14], pz]]
 
         """
-        try:
-            p = Poly(eq, *symbols)
-            self.poly_counter_rotdot += 1
-        except (PolynomialError, CoercionFailed), e:
-            return None
+        if eq.is_Poly:
+            p = eq
+        else:
+            try:
+                self.poly_counter_rotcross += 1
+                p = Poly(eq, *symbols)
+            except (PolynomialError, CoercionFailed), e:
+                return None
         
         changed = False
         listterms = list(p.terms())
@@ -7008,7 +7023,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 usedindices.add(index1)
                                 break
 
-        return p.as_expr() if changed else None
+        return p if changed else None
     
     def _SimplifyRotationCross(self, eq, symbols, groups):
         """
@@ -7048,11 +7063,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
  [[2, 10], [5, 9], 24]]
 
         """
-        try:
-            p = Poly(eq, *symbols)
-            self.poly_counter_rotcross += 1
-        except (PolynomialError, CoercionFailed), e:
-            return None
+
+        if eq.is_Poly:
+            p = eq
+        else:
+            try:
+                self.poly_counter_rotcross += 1                
+                p = Poly(eq, *symbols)
+            except (PolynomialError, CoercionFailed), e:
+                return None
 
         changed = False
         listterms = list(p.terms())
@@ -7140,7 +7159,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         #    exec(ipython_str, globals(), locals())
 
 
-        return p.as_expr() if changed else None
+        return p if changed else None
 
     def CheckExpressionUnique(self, exprs, expr, \
                               checknegative = True, \
