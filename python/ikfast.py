@@ -6564,6 +6564,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
                 except (PolynomialError, CoercionFailed), e:
                     # otherwise work with the rational formula (TO-DO)
+                    log.info('Cannot convert %r to Poly' % eq)
                     pass
                     
             if isinstance(eq, Poly):
@@ -6574,8 +6575,21 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             pass
 
         eq = self.trigsimp_new(eq)
+        if eq == origeq:
+            # TGN: Sometimes eq is not "simplified" because global substitutions happen,
+            #      not because _SimplifyRotation* functions don't work
+            #
+            # E.g., eq = px**2 + py**2 is unchanged, while
+            #
+            # [(sj2, 1), (cj2, 0), (j2, pi/2), (pz, 0), (j3, 0), (sj3, 0), (cj3, 1),
+            # (pp, px**2 + py**2), (npx, px*r00 + py*r10), (npy, px*r01 + py*r11), (npz, px*r02 + py*r12),
+            # (rxp0_0, -py*r20), (rxp0_1, px*r20), (rxp1_0, -py*r21), (rxp1_1, px*r21), (rxp2_0, -py*r22), (rxp2_1, px*r22)]
+            #
+            # See this line above: neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
 
-        log.info("%r\n --->   %r", origeq, eq) 
+            log.info("Formula unchanged: %r")
+        else:
+            log.info("%r\n --->   %r", origeq, eq) 
         self.simplify_transform_dict[origeq] = eq
 
         return eq
@@ -6680,7 +6694,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 m1l = list(m1); m1l[g0j] = m0[g0j];
                                  
                                 if m0l == m1l:  # the rest of terms are the same
-
+                                    
                                     # print '\n', m0, c0, '\n', m1, c1, '\n'
                                     g0k = g[0][k]  ; g1  = g[1]
                                     m2l = m0l[:]   ; m3l = m0l[:];
