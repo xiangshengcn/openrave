@@ -1096,7 +1096,7 @@ class InverseKinematicsModel(DatabaseGenerator):
             results = self.ikfastproblem.SendCommand('PerfTiming num %d %s'%(num,self.getfilename(True)))
             return [double(s)*1e-9 for s in results.split()]
         
-    def testik( self,iktests, jacobianthreshold=None, filename=None):
+    def testik( self,iktests, jacobianthreshold = None, filename = None ):
         """Tests the iksolver.
         :param iktests: the number of tests, or a filename that describes the tests
         :param jacobianthreshold: When testing configurations, the eigenvalues of the jacobian all have to be greater than this value
@@ -1340,7 +1340,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                     raise InverseKinematicsError(u'failed to load ik')
                 
                 if options.iktests is not None:
-                    filename = [ zae for zae in args if 'zae' in zae ]
+                    filename = [ arg for arg in args if 'zae' in arg or 'xml' in arg ]
                     successrate, wrongrate = ikmodel.testik( iktests = options.iktests,\
                                                             jacobianthreshold = options.iktestjthresh, \
                                                             filename = filename[0] )
