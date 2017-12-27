@@ -863,7 +863,10 @@ class IKFastSolver(AutoReloader):
             eq0 = eq0.as_expr()
         if isinstance(eq1, Poly):
             eq1 = eq1.as_expr()
-        return eq0-eq1 == S.Zero # TGN: BOLD move, see if it works. expand(eq0-eq1) == S.Zero
+        # return eq0-eq1 == S.Zero # TGN: BOLD move, see if it works. expand(eq0-eq1) == S.Zero
+        check_zero = expand(eq0-eq1)
+        # print 'finished check zero'
+        return check_zero == S.Zero
 
     def chop(self, expr, precision = None):
         return expr
@@ -6488,7 +6491,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         def _SimplifyRotationFcn(fcn, eq, changed, groups):
             neweq = fcn(eq, self._rotpossymbols, groups)
             if neweq is None:
-                return eq, changed
+                return eq, False
             else:
                 neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
                 if not self.equal(eq, neweq):
@@ -6543,7 +6546,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             while changed and eq.has(*self._rotpossymbols):
                 changed = False
                 for fcn, groups in fcn_groups_pair:
-                    eq, changed = _SimplifyRotationFcn(fcn, eq, changed, groups)
+#                    print '\n', fcn, '\n\n', eq, '\n'
+#                    if self.codeComplexity(eq)>600:
+#                        print '\n', fcn, '\n', eq, '\n'
+#                        exec(ipython_str, globals(), locals())
+                    neweq, newchanged = _SimplifyRotationFcn(fcn, eq, changed, groups)
+                    changed = changed or newchanged
+                    if newchanged:
+                        log.info('Number of operations changes from %d to %d' % \
+                                 (eq.count_ops(), neweq.count_ops()))
+                        eq = neweq
                     
             if isinstance(eq, Poly):
                 eq = eq.as_expr()
@@ -6556,6 +6568,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         log.info("%r\n --->   %r", origeq, eq) 
         self.simplify_transform_dict[origeq] = eq
+
         return eq
 
     def _SimplifyRotationNorm_new(self, eq, symbols, groups):
@@ -6599,100 +6612,131 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         changed = False
         listterms = list(p.terms())
         usedindices = set()
+        eq_comp = self.codeComplexity(eq)
 
-        rng_len_listterms = range(len(listterms))
-        
+        listterms = [(listterm[0], simplify(listterm[1]), sum(listterm[0])) \
+                     for listterm in listterms \
+                     if any(i for i in listterm[0] if i > 1)] # need at least power >=2
+
+        listterms = [(listterm[0], listterm[1], listterm[2], listterm[1].count_ops()) \
+                     for listterm in listterms if listterm[1]!=S.Zero ]
+
+        # TGN: sort w.r.t sum of powers first, and then count of operations
+        listterms.sort(key = lambda x: (x[2], x[3]))
+
+        len_listterms = len(listterms)
+        rng_len_listterms = range(len_listterms)
+
+        q = p
+
         for g in groups: # e.g. g = [[0,1,2], 1] or [[9,10,11], pp]
+
+            # print g
+            
             for i, j, k in permutations(range(3),3): # [(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
 
                 g0i = g[0][i]
                 g0j = g[0][j]
 
-                for index0, index1 in combinations(rng_len_listterms, 2):
+                # print i,j,k
 
-                    if index0 in usedindices or index1 in usedindices:
+                rng_index0 = [ind for ind in rng_len_listterms if ind not in usedindices]
+
+                for index0 in rng_index0:
+
+                    if index0 in usedindices:
                         continue
 
-                    m0, c0 = listterms[index0] 
-                    m1, c1 = listterms[index1]
+                    m0, c0, s0, op0 = listterms[index0]
+                    rng_index1 = [ind for ind in rng_len_listterms \
+                                  if ind not in usedindices and ind>index0]
                     
-                    if self.equal(c0, c1):
-                        # replace x0**2+x1**2 by x3-x2**2
-                        #         x1**2+x2**2 by x3-x0**2
-                        #         x2**2+x0**2 by x3-x1**2
-                        if m0[g0i]-m1[g0i] == 2 and m1[g0j]-m0[g0j] == 2:
-                            m0l = list(m0); m0l[g0i] = m1[g0i];
-                            m1l = list(m1); m1l[g0j] = m0[g0j];
-                                 
-                            if m0l == m1l:  # the rest of terms are the same
-                                g0k = g[0][k]  ; g1  = g[1]
-                                m2l = m0l[:]   ; m3l = m0l[:];
-                                m2l[g0k] += 2
+                    for index1 in rng_index1:
+                        m1, c1, s1, op1 = listterms[index1]
 
-                                if g1 == self.pp:
-                                    m3l[15] += 1 # 15 is index of pp
+                        # If sums of powers are different OR counts of ops differ more than 1, then these two
+                        # items cannot do simplifications
+                        if s1 != s0 or op1-op0>1:
+                            break;
+
+                        if self.equal(c0, c1):
+                            # replace x0**2+x1**2 by x3-x2**2
+                            #         x1**2+x2**2 by x3-x0**2
+                            #         x2**2+x0**2 by x3-x1**2
+                            if m0[g0i]-m1[g0i] == 2 and m1[g0j]-m0[g0j] == 2:
+                                m0l = list(m0); m0l[g0i] = m1[g0i];
+                                m1l = list(m1); m1l[g0j] = m0[g0j];
+                                 
+                                if m0l == m1l:  # the rest of terms are the same
+
+                                    # print '\n', m0, c0, '\n', m1, c1, '\n'
+                                    g0k = g[0][k]  ; g1  = g[1]
+                                    m2l = m0l[:]   ; m3l = m0l[:];
+                                    m2l[g0k] += 2
+
+                                    if g1 == self.pp:
+                                        m3l[15] += 1 # 15 is index of pp
                                 
-                                m2 = tuple(m2l); m3 = tuple(m3l)
+                                    m2 = tuple(m2l); m3 = tuple(m3l)
                             
-                                p = p.\
-                                    sub(Poly.from_dict({m0:c0}, *p.gens)). \
-                                    sub(Poly.from_dict({m1:c0}, *p.gens)). \
-                                    add(Poly.from_dict({m3:c0}, *p.gens)). \
-                                    sub(Poly.from_dict({m2:c0}, *p.gens))
-                                
-                                changed = True
-                                usedindices.add(index0)
-                                usedindices.add(index1)
-                                break
+                                    p = p.\
+                                        sub(Poly.from_dict({m0:c0}, *p.gens)). \
+                                        sub(Poly.from_dict({m1:c0}, *p.gens)). \
+                                        add(Poly.from_dict({m3:c0}, *p.gens)). \
+                                        sub(Poly.from_dict({m2:c0}, *p.gens))
 
-                    elif self.equal(c0, -c1):
-                        # As x3 = x0**2 + x1**2 + x2**2, we replace x0**4 - x1**4 by
-                        #
-                        #   x0**4 - x1**4
-                        # = (x0**2-x1**2)*(x0**2+x1**2)
-                        # = (x0**2-x1**2)*(x3-x2**2)
-                        # = x0**2*x3 - x1**2*x3 - x0**2*x2**2 + x1**2*x2**2
+                                    changed = True
+                                    usedindices.add(index0)
+                                    usedindices.add(index1)
+                                    break
+
+                        elif self.equal(c0, -c1):
+                            # As x3 = x0**2 + x1**2 + x2**2, we replace x0**4 - x1**4 by
+                            #
+                            #   x0**4 - x1**4
+                            # = (x0**2-x1**2)*(x0**2+x1**2)
+                            # = (x0**2-x1**2)*(x3-x2**2)
+                            # = x0**2*x3 - x1**2*x3 - x0**2*x2**2 + x1**2*x2**2
                         
-                        if m0[g0i]-m1[g0i] == 4 and m1[g0j]-m0[g0j] == 4:
-                            m0l = list(m0); m0l[g0i] = m1[g0i];
-                            m1l = list(m1); m1l[g0j] = m0[g0j];
+                            if m0[g0i]-m1[g0i] == 4 and m1[g0j]-m0[g0j] == 4:
+                                m0l = list(m0); m0l[g0i] = m1[g0i];
+                                m1l = list(m1); m1l[g0j] = m0[g0j];
                                  
-                            if m0l == m1l:  # the rest of terms are the same
-                                g0k = g[0][k]; g1  = g[1]
+                                if m0l == m1l:  # the rest of terms are the same
+                                    g0k = g[0][k]; g1  = g[1]
 
-                                m2l = m0l[:] ; m3l = m0l[:];
-                                m4l = m0l[:] ; m5l = m0l[:];
+                                    m2l = m0l[:] ; m3l = m0l[:];
+                                    m4l = m0l[:] ; m5l = m0l[:];
 
-                                if g1 == self.pp:
-                                    m2l[15] += 1; m3l[15] += 1 # 15 is index of pp
+                                    if g1 == self.pp:
+                                        m2l[15] += 1; m3l[15] += 1 # 15 is index of pp
+                                    # x0**2*x3
+                                    m2l[g0i] += 2
+                                    # x1**2*x3
+                                    m3l[g0j] += 2
+                                    # x0**2*x2**2
+                                    m4l[g0i] += 2; m4l[g0k] += 2
+                                    # x1**2*x2**2
+                                    m5l[g0j] += 2; m5l[g0k] += 2
 
-                                # x0**2*x3
-                                m2l[g0i] += 2
-                                # x1**2*x3
-                                m3l[g0j] += 2
-                                # x0**2*x2**2
-                                m4l[g0i] += 2; m4l[g0k] += 2
-                                # x1**2*x2**2
-                                m5l[g0j] += 2; m5l[g0k] += 2
-
-                                if g1 == self.pp:
-                                    m3l[15] += 1
+                                    if g1 == self.pp:
+                                        m3l[15] += 1
+                        
+                                    m2 = tuple(m2l); m3 = tuple(m3l)
+                                    m4 = tuple(m4l); m5 = tuple(m5l)
+                                    
+                                    p = p.\
+                                        sub(Poly.from_dict({m0:c0}, *p.gens)). \
+                                        sub(Poly.from_dict({m1:c1}, *p.gens)). \
+                                        add(Poly.from_dict({m2:c0}, *p.gens)). \
+                                        sub(Poly.from_dict({m3:c0}, *p.gens)). \
+                                        sub(Poly.from_dict({m4:c0}, *p.gens)). \
+                                        add(Poly.from_dict({m5:c0}, *p.gens))
                                 
-                                m2 = tuple(m2l); m3 = tuple(m3l)
-                                m4 = tuple(m4l); m5 = tuple(m5l)
-
-                                p = p.\
-                                    sub(Poly.from_dict({m0:c0}, *p.gens)). \
-                                    sub(Poly.from_dict({m1:c1}, *p.gens)). \
-                                    add(Poly.from_dict({m2:c0}, *p.gens)). \
-                                    sub(Poly.from_dict({m3:c0}, *p.gens)). \
-                                    sub(Poly.from_dict({m4:c0}, *p.gens)). \
-                                    add(Poly.from_dict({m5:c0}, *p.gens))
-                                
-                                changed = True
-                                usedindices.add(index0)
-                                usedindices.add(index1)
-                                break
+                                    changed = True
+                                    usedindices.add(index0)
+                                    usedindices.add(index1)
+                                    break
 
         return p.as_expr() if changed else None
 
@@ -6864,10 +6908,23 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         changed = False
         listterms = list(p.terms())
         usedindices = set()
+        eq_comp = self.codeComplexity(eq)
 
-        rng_len_listterms = range(len(listterms))
+        listterms = [(listterm[0], simplify(listterm[1]), sum(listterm[0])) \
+                     for listterm in listterms]
+
+        listterms = [(listterm[0], listterm[1], listterm[2], listterm[1].count_ops()) \
+                     for listterm in listterms if listterm[1]!=S.Zero and listterm[2]>1]
+
+        # TGN: sort w.r.t sum of powers first, and then count of operations
+        listterms.sort(key = lambda x: (x[2], x[3]))
+
+        len_listterms = len(listterms)
+        rng_len_listterms = range(len_listterms)
+
+        q = p
         
-        for g in groups:
+        for g in groups: # e.g. g = [[0, 3], [1, 4], [2, 5], 0]
             for i, j, k in [(0,1,2), (1,2,0), (2,0,1)]:
 
                 gi0 = g[i][0]
@@ -6875,67 +6932,81 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 gj0 = g[j][0]
                 gj1 = g[j][1]
 
-                for index0, index1 in combinations(rng_len_listterms, 2):
+                rng_index0 = [ind for ind in rng_len_listterms if ind not in usedindices]
 
-                    if index0 in usedindices or index1 in usedindices:
+                for index0 in rng_index0:
+
+                    if index0 in usedindices:
                         continue
 
-                    m0, c0 = listterms[index0] 
-                    m1, c1 = listterms[index1]
-                    
-                    if self.equal(c0, c1):
-                        # TGN: sufficient condition of simplification may not be necessarily equal 
-                        # 
-                        # In the non-equal case, consider (a+b)*r00*r10 + (b+c)*r01*r11 + (c+a)*r02*r12 
-                        # where a,b,c are distinct. 
-                        # One of the acceptable results may be (c-a)*r01*r11 + (c-b)*r02*r12 
-                        # INSTEAD of (-c)*r00*r10 + (-a)*r01*r11 + (-b)*r02*r12 
-                        # 
-                        # E.g. 5*r00*r10 + 3*r01*r11 + 4*r02*r12 = (-2)*r01*r11 + (-1)*r02*r12 
-                        # 
-                        # This observation only applies to DOT case, not to CROSS case
-                        
-                        if   m0[gi0] == 1 and m0[gi1] == 1 and m1[gj0] == 1 and m1[gj1] == 1: 
-                            # make sure the left over terms are also the same 
-                            m0l = list(m0); m0l[gi0] = 0; m0l[gi1] = 0 
-                            m1l = list(m1); m1l[gj0] = 0; m1l[gj1] = 0
-                            
-                        elif m0[gj0] == 1 and m0[gj1] == 1 and m1[gi0] == 1 and m1[gi1] == 1: 
-                            # make sure the left over terms are also the same 
-                            m0l = list(m0); m0l[gj0] = 0; m0l[gj1] = 0 
-                            m1l = list(m1); m1l[gi0] = 0; m1l[gi1] = 0
+                    m0, c0, s0, op0 = listterms[index0]
+                    rng_index1 = [ind for ind in rng_len_listterms \
+                                  if ind not in usedindices and ind>index0]
 
-                        else:
-                            continue
+                    for index1 in rng_index1:
+                        m1, c1, s1, op1 = listterms[index1]
+
+                        # If sums of powers are different OR counts of ops differ more than 1, then these two
+                        # items cannot do simplifications
+                        if s1 != s0 or op1-op0>1:
+                            break;
+                        
+                        if self.equal(c0, c1):
+
+                            # TGN: sufficient condition of simplification may not be necessarily equal 
+                            # 
+                            # In the non-equal case, consider (a+b)*r00*r10 + (b+c)*r01*r11 + (c+a)*r02*r12 
+                            # where a,b,c are distinct. 
+                            # One of the acceptable results may be (c-a)*r01*r11 + (c-b)*r02*r12 
+                            # INSTEAD of (-c)*r00*r10 + (-a)*r01*r11 + (-b)*r02*r12 
+                            # 
+                            # E.g. 5*r00*r10 + 3*r01*r11 + 4*r02*r12 = (-2)*r01*r11 + (-1)*r02*r12 
+                            # 
+                            # This observation only applies to DOT case, not to CROSS case
+                        
+                            if   m0[gi0] == 1 and m0[gi1] == 1 and m1[gj0] == 1 and m1[gj1] == 1: 
+                                # make sure the left over terms are also the same 
+                                m0l = list(m0); m0l[gi0] = 0; m0l[gi1] = 0 
+                                m1l = list(m1); m1l[gj0] = 0; m1l[gj1] = 0
+                            
+                            elif m0[gj0] == 1 and m0[gj1] == 1 and m1[gi0] == 1 and m1[gi1] == 1: 
+                                # make sure the left over terms are also the same 
+                                m0l = list(m0); m0l[gj0] = 0; m0l[gj1] = 0 
+                                m1l = list(m1); m1l[gi0] = 0; m1l[gi1] = 0
+
+                            else:
+                                continue
                                 
                                  
-                        if m0l == m1l: 
-                            # m2l = list(m0l); m2l[gk0] += 1; m2l[gk1] += 1 
-                            # deep copy list
-                            gk0 = g[k][0]
-                            gk1 = g[k][1]
-                            m2l = m0l[:]; m2l[gk0] += 1; m2l[gk1] += 1 
-                            m2 = tuple(m2l) 
+                            if m0l == m1l:
+                                # print '\n', m0, c0, '\n', m1, c1, '\n'
+                             
+                                # m2l = list(m0l); m2l[gk0] += 1; m2l[gk1] += 1 
+                                # deep copy list
+                                gk0 = g[k][0]
+                                gk1 = g[k][1]
+                                m2l = m0l[:]; m2l[gk0] += 1; m2l[gk1] += 1 
+                                m2 = tuple(m2l) 
                                 
-                            # there is a bug in sympy v0.6.7 polynomial adding here! 
-                            # TGN: Now > 0.7, so no problem now?
+                                # there is a bug in sympy v0.6.7 polynomial adding here! 
+                                # TGN: Now > 0.7, so no problem now?
                             
-                            p = p.\
-                                sub(Poly.from_dict({m0:c0}, *p.gens)). \
-                                sub(Poly.from_dict({m1:c1}, *p.gens)). \
-                                sub(Poly.from_dict({m2:c0}, *p.gens))
+                                p = p.\
+                                    sub(Poly.from_dict({m0:c0}, *p.gens)). \
+                                    sub(Poly.from_dict({m1:c1}, *p.gens)). \
+                                    sub(Poly.from_dict({m2:c0}, *p.gens))
 
-                            g3 = g[3] 
-                            if g3 != S.Zero: 
-                                # when g3 = npx, px, npy, py, npz, or pz 
-                                new_m0 = tuple(m0l) 
-                                p = p.add(Poly(g3, *p.gens)*Poly.from_dict({new_m0:c0}, *p.gens)) 
+                                g3 = g[3] 
+                                if g3 != S.Zero: 
+                                    # when g3 = npx, px, npy, py, npz, or pz 
+                                    new_m0 = tuple(m0l) 
+                                    p = p.add(Poly(g3, *p.gens)*Poly.from_dict({new_m0:c0}, *p.gens)) 
                             
                                         
-                            changed = True
-                            usedindices.add(index0)
-                            usedindices.add(index1)
-                            break
+                                changed = True
+                                usedindices.add(index0)
+                                usedindices.add(index1)
+                                break
 
         return p.as_expr() if changed else None
     
@@ -6977,64 +7048,98 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
  [[2, 10], [5, 9], 24]]
 
         """
-        changed = False
         try:
             p = Poly(eq, *symbols)
             self.poly_counter_rotcross += 1
         except (PolynomialError, CoercionFailed), e:
             return None
 
+        changed = False
         listterms = list(p.terms())
         usedindices = set()
-        rng_len_listterms = range(len(listterms))
+        eq_comp = self.codeComplexity(eq)
         
-        for cg in groups:
+        listterms = [(listterm[0], simplify(listterm[1]), sum(listterm[0])) \
+                     for listterm in listterms]
+        
+        listterms = [(listterm[0], listterm[1], listterm[2], listterm[1].count_ops()) \
+                     for listterm in listterms if listterm[1]!=S.Zero and listterm[2]>1]
+
+        # TGN: sort w.r.t sum of powers first, and then count of operations
+        listterms.sort(key = lambda x: (x[2], x[3]))
+
+        len_listterms = len(listterms)
+        rng_len_listterms = range(len_listterms)
+
+        q = p
+
+#        if eq_comp>300:
+#            exec(ipython_str, globals(), locals())
+        
+        for cg in groups: # e.g. cg = [[3, 7], [6, 4], 2]
+
+            # print cg
 
             cg00 = cg[0][0]
             cg01 = cg[0][1]
             cg10 = cg[1][0]
             cg11 = cg[1][1]
-            
-            for index0, index1 in combinations(rng_len_listterms, 2):
-                
-                if index0 in usedindices or index1 in usedindices:
+
+            rng_index0 = [ind for ind in rng_len_listterms if ind not in usedindices]
+
+            for index0 in rng_index0:
+                    
+                if index0 in usedindices:
                     continue
+                    
+                m0, c0, s0, op0 = listterms[index0]
+                rng_index1 = [ind for ind in rng_len_listterms \
+                              if ind not in usedindices and ind>index0]
 
-                m0, c0 = listterms[index0]
-                m1, c1 = listterms[index1]
+                for index1 in rng_index1:
+                    m1, c1, s1, op1 = listterms[index1]
                 
-                if self.equal(c0, -c1):
+                    if self.equal(c0, -c1):
 
-                    if   m0[cg00] == 1 and m0[cg01] == 1 and m1[cg10] == 1 and m1[cg11] == 1:
-                        # make sure the left over terms are also the same
-                        m0l = list(m0); m0l[cg00] = 0; m0l[cg01] = 0
-                        m1l = list(m1); m1l[cg10] = 0; m1l[cg11] = 0
+                        if   m0[cg00] == 1 and m0[cg01] == 1 and m1[cg10] == 1 and m1[cg11] == 1:
+                            # make sure the left over terms are also the same
+                            m0l = list(m0); m0l[cg00] = 0; m0l[cg01] = 0
+                            m1l = list(m1); m1l[cg10] = 0; m1l[cg11] = 0
+                            case = 1
                         
-                    elif m0[cg10] == 1 and m0[cg11] == 1 and m1[cg00] == 1 and m1[cg01] == 1:
-                        # make sure the left over terms are also the same
-                        m0l = list(m0); m0l[cg10] = 0; m0l[cg11] = 0
-                        m1l = list(m1); m1l[cg00] = 0; m1l[cg01] = 0
-                        c0 = -c0
-                        assert(self.equal(c0,c1))
+                        elif m0[cg10] == 1 and m0[cg11] == 1 and m1[cg00] == 1 and m1[cg01] == 1:
+                            # make sure the left over terms are also the same
+                            m0l = list(m0); m0l[cg10] = 0; m0l[cg11] = 0
+                            m1l = list(m1); m1l[cg00] = 0; m1l[cg01] = 0
+                            case = 2
                         
-                    else:
-                        continue
+                        else:
+                            continue
 
-                    if tuple(m0l) == tuple(m1l):
-                        m2l = m0l[:]; m2l[cg[2]] += 1
-                        m2 = tuple(m2l)
+                        if m0l == m1l:
+
+                            # print '\n', m0, c0, '\n', m1, c1, '\n'
+
+                            exec(ipython_str, globals(), locals())
+            
+                            m2l = m0l[:]; m2l[cg[2]] += 1
+                            m2 = tuple(m2l)
                         
-                        # there is a bug in sympy polynomial caching here! (0.6.7)
-                        # TGN: Now > 0.7, so no problem now?
-                        p = p.\
-                            sub(Poly.from_dict({m0:c0}, *p.gens)).\
-                            add(Poly.from_dict({m1:c0}, *p.gens)).\
-                            add(Poly.from_dict({m2:c0}, *p.gens))
-                        changed = True
-                        usedindices.add(index0)
-                        usedindices.add(index1)
-                        break
-                        
+                            # there is a bug in sympy polynomial caching here! (0.6.7)
+                            # TGN: Now > 0.7, so no problem now?
+                            p = p.\
+                                sub(Poly.from_dict({m0:c0}, *p.gens)).\
+                                sub(Poly.from_dict({m1:c1}, *p.gens)).\
+                                add(Poly.from_dict({m2:c0 if case==1 else c1}, *p.gens))
+                            changed = True
+                            usedindices.add(index0)
+                            usedindices.add(index1)
+                            break
+
+        #if eq_comp>300:
+        #    exec(ipython_str, globals(), locals())
+
+
         return p.as_expr() if changed else None
 
     def CheckExpressionUnique(self, exprs, expr, \
