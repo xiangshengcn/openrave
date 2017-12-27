@@ -1,11 +1,11 @@
 #!/bin/bash
 
 DIRNAME=$1
-ZAEFILES=`sudo ls $DIRNAME/*.zae`
+ZAEFILES=`sudo ls $DIRNAME/*.zae $DIRNAME/*.xml`
 
 rm -f *.log /var/*.log *.out
 
 for f in $ZAEFILES
 do
-    openrave.py --database inversekinematics $f --numiktests=1000
+    openrave.py --database inversekinematics --robot=$f --numiktests=1000
 done
