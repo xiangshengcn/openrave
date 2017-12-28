@@ -954,7 +954,7 @@ class IKFastSolver(AutoReloader):
                                 raise ValueError('failed to process joint %s' % joint.GetName())
                         
                         Tjoints.append(Tj)
-                    
+                        
                     if axisAngleFromRotationMatrix is not None:
                         axisangle = axisAngleFromRotationMatrix(\
                                                                 numpy.array(\
@@ -2875,6 +2875,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         num_of_combination = len(ilinks)-2
         for i in range(num_of_combination):
+
+            exec(ipython_str)
+            
             startindex = ilinks[i]
             endindex   = ilinks[i+2]+1
 
@@ -2917,6 +2920,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             
                 translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
                 if not self.has(translationeqs,*hingejointvars):
+                    # second attempt succeeds
+                    exec(ipython_str)
+            
                     T1links = TestLinks[endindex:]
                     # A_e, A_{e+1}, ..., A_{n-1}
                     if len(T1links) > 0:
@@ -2944,6 +2950,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     T1links[-1][0:3,3] += Tlefttrans[0:3,3]
                     solveRotationFirst = True
             else:
+                exec(ipython_str)
+                
                 # first attempt succeeds as translation eqns don't depend on hingejointvars
                 #
                 #  A_s * A_{s+1} * ... A_{e-1} = Tlefttrans * prod(T0links_NEW) * Trighttrans
