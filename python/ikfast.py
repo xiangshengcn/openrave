@@ -6718,8 +6718,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             if m0[g0i]-m1[g0i] == 2 and m1[g0j]-m0[g0j] == 2:
                                 m0l = list(m0); m0l[g0i] = m1[g0i];
                                 m1l = list(m1); m1l[g0j] = m0[g0j];
-                                 
-                                if m0l == m1l:  # the rest of terms are the same
+
+                                # check if the remaining terms are the same
+                                if m0l == m1l:
                                     
                                     # print '\n', m0, c0, '\n', m1, c1, '\n'
                                     g0k = g[0][k]  ; g1  = g[1]
@@ -6753,15 +6754,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             if m0[g0i]-m1[g0i] == 4 and m1[g0j]-m0[g0j] == 4:
                                 m0l = list(m0); m0l[g0i] = m1[g0i];
                                 m1l = list(m1); m1l[g0j] = m0[g0j];
-                                 
-                                if m0l == m1l:  # the rest of terms are the same
+
+                                # check if the remaining terms are the same
+                                if m0l == m1l:
                                     g0k = g[0][k]; g1  = g[1]
 
                                     m2l = m0l[:] ; m3l = m0l[:];
                                     m4l = m0l[:] ; m5l = m0l[:];
 
-                                    if g1 == self.pp:
-                                        m2l[15] += 1; m3l[15] += 1 # 15 is index of pp
                                     # x0**2*x3
                                     m2l[g0i] += 2
                                     # x1**2*x3
@@ -6772,8 +6772,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     m5l[g0j] += 2; m5l[g0k] += 2
 
                                     if g1 == self.pp:
-                                        m3l[15] += 1
-                        
+                                        m2l[15] += 1; m3l[15] += 1 # 15 is index of pp = x3
+                                        
                                     m2 = tuple(m2l); m3 = tuple(m3l)
                                     m4 = tuple(m4l); m5 = tuple(m5l)
                                     
@@ -6791,137 +6791,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     break
 
         return p if changed else None
-
-    def _SimplifyRotationNorm(self, eq, symbols, groups):
-        """
-        Simplify eq based on 2-norm of each row/column being 1
-
-        symbols is self._rotsymbols   or self._rotpossymbols
-        groups is self._rotnormgroups or self._rotposnormgroups
-
-        Called by SimplifyTransform only.
-
-[[r00, r01, r02, 1],
- [r00, r10, r20, 1],
- [r10, r11, r12, 1],
- [r01, r11, r21, 1],
- [r20, r21, r22, 1],
- [r02, r12, r22, 1],
- [px, py, pz, pp]]
-
-        TGN: We shall use
-
-[[[0, 1, 2], 1],
- [[0, 3, 6], 1],
- [[3, 4, 5], 1],
- [[1, 4, 7], 1],
- [[6, 7, 8], 1],
- [[2, 5, 8], 1],
- [[9, 10, 11], pp]]
-
-        that is consistent with _SimplifyRotationDot and _SimplifyRotationCross
-
-[r00, r01, r02,             0,  1,  2
- r10, r11, r12,             3,  4,  5
- r20, r21, r22,             6,  7,  8
- px, py, pz,                9, 10, 11
- npx, npy, npz,            12, 13, 14
- pp,                               15
- rxp0_0, rxp0_1, rxp0_2,   16, 17, 18
- rxp1_0, rxp1_1, rxp1_2,   19, 20, 21
- rxp2_0, rxp2_1, rxp2_2]   22, 23, 24
-
-        """
-
-        neweq = None
-        for group in groups:
-            try:
-                # not sure about this thresh
-                if self.codeComplexity(eq) > 300:
-
-                    neweq = self.trigsimp_new(factor(eq))
-                    if self.codeComplexity(neweq) > 300:
-                        log.warn(u'equation too complex to simplify for rot norm: %s', eq)
-                        break
-                    else:
-                        eq = neweq
-
-                # need to do 1234*group[3] hack in order to get the Poly domain to recognize group[3] (sympy 0.7.1)
-                # p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
-                # p -= Poly(1234*group[3], *p.gens, domain = p.domain)
-                p = Poly(eq, *group[0:3])
-                self.poly_counter_rotnorm += 1
-                
-            except (PolynomialError, CoercionFailed, ZeroDivisionError), e:
-                continue
-            
-            changed = False
-            listterms = list(p.terms())
-            if len(listterms) == 1:
-                continue
-            usedindices = set()
-
-            equiv_zero_term = group[3]-group[0]**2-group[1]**2-group[2]**2
-            
-            for index0, index1 in combinations(range(len(listterms)),2):
-                if index0 in usedindices or index1 in usedindices:
-                    continue
-
-                # In the following assignment,
-                # the first  return value m contains powers of a power product
-                # the second return value c is the coefficient
-                m0, c0 = listterms[index0]
-                m1, c1 = listterms[index1]
-                
-                if self.equal(c0, c1):
-                    # replace x0**2+x1**2 by x3-x2**2
-                    #         x1**2+x2**2 by x3-x0**2
-                    #         x2**2+x0**2 by x3-x1**2
-                    for i, j, k in permutations(range(3),3): #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
-                        if m0[k] == m1[k]:
-                            
-                            assert(m1[i] >= 0 and m0[j] >= 0)
-                            if m0[i] == m1[i]+2 and m0[j]+2 == m1[j]:
-                                #p += Poly(c0* \
-                                #          equiv_zero_term* \
-                                #          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j]), \
-                                #          group[0], group[1], group[2])
-
-                                q = eq + c0* \
-                                          equiv_zero_term* \
-                                          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j])
-
-                                #assert(expand(p.as_expr()-q) == S.Zero)
-                                changed = True
-                            
-                elif self.equal(c0, -c1):
-                    # As x3 = x0**2 + x1**2 + x2**2
-                    # x0**4 - x1**4 = (x0**2-x1**2)*(x0**2+x1**2) = (x0**2-x1**2)*(x3-x2**2)
-                    for i, j, k in permutations(range(3),3): #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
-                        if m0[k] == m1[k]:
-                            if m0[i] == 4 and m1[j] == 4:
-                                #p += Poly(c0* \
-                                #          group[k]**m0[k]* \
-                                #          ((group[3]-group[k]**2)*(group[i]**2-group[j]**2) \
-                                #           -group[i]**4 + group[j]**4), \
-                                #          group[0], group[1], group[2])
-
-                                q = eq + c0* \
-                                          group[k]**m0[k]* \
-                                          ((group[3]-group[k]**2)*(group[i]**2-group[j]**2) \
-                                           -group[i]**4 + group[j]**4)
-
-                                #assert(expand(p.as_expr()-q) == S.Zero)
-                                changed = True
-                                
-                if changed:
-                    neweq = q # p #.as_expr()
-                    eq = neweq
-                    usedindices.add(index0)
-                    usedindices.add(index1)
-                    break
-
-        return neweq
     
     def _SimplifyRotationDot(self, eq, symbols, groups):
         """
@@ -7019,20 +6888,24 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             # 
                             # This observation only applies to DOT case, not to CROSS case
                         
-                            if   m0[gi0] == 1 and m0[gi1] == 1 and m1[gj0] == 1 and m1[gj1] == 1: 
-                                # make sure the left over terms are also the same 
-                                m0l = list(m0); m0l[gi0] = 0; m0l[gi1] = 0 
-                                m1l = list(m1); m1l[gj0] = 0; m1l[gj1] = 0
+                            if   m0[gi0]-m1[gi0] == 1 and m0[gi1]-m1[gi1] == 1 and \
+                                 m1[gj0]-m0[gj0] == 1 and m1[gj1]-m0[gj1] == 1: 
+                                m0l = list(m0)
+                                m1l = list(m1)
+                                m0l[gi0] = m1l[gi0]; m0l[gi1] = m1l[gi1]
+                                m1l[gj0] = m0l[gj0]; m1l[gj1] = m0l[gj1]
                             
-                            elif m0[gj0] == 1 and m0[gj1] == 1 and m1[gi0] == 1 and m1[gi1] == 1: 
-                                # make sure the left over terms are also the same 
-                                m0l = list(m0); m0l[gj0] = 0; m0l[gj1] = 0 
-                                m1l = list(m1); m1l[gi0] = 0; m1l[gi1] = 0
+                            elif m0[gj0]-m1[gj0] == 1 and m0[gj1]-m1[gj1] == 1 and \
+                                 m1[gi0]-m0[gi0] == 1 and m1[gi1]-m0[gi1] == 1: 
+                                m0l = list(m0)
+                                m1l = list(m1)
+                                m0l[gj0] = m1l[gj0]; m0l[gj1] = m1l[gj1] 
+                                m1l[gi0] = m0l[gi0]; m1l[gi1] = m0l[gi1]
 
                             else:
                                 continue
                                 
-                                 
+                            # check if the remaining terms are the same     
                             if m0l == m1l:
                                 # print '\n', m0, c0, '\n', m1, c1, '\n'
                              
@@ -7160,21 +7033,26 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 
                     if self.equal(c0, -c1):
 
-                        if   m0[cg00] == 1 and m0[cg01] == 1 and m1[cg10] == 1 and m1[cg11] == 1:
-                            # make sure the left over terms are also the same
-                            m0l = list(m0); m0l[cg00] = 0; m0l[cg01] = 0
-                            m1l = list(m1); m1l[cg10] = 0; m1l[cg11] = 0
+                        if   m0[cg00]-m1[cg00] == 1 and m0[cg01]-m1[cg01] == 1 and \
+                             m1[cg10]-m0[cg10] == 1 and m1[cg11]-m0[cg11] == 1:
+                            m0l = list(m0)
+                            m1l = list(m1)
+                            m0l[cg00] = m1l[cg00]; m0l[cg01] = m1l[cg01]
+                            m1l[cg10] = m0l[cg10]; m1l[cg11] = m0l[cg11]
                             case = 1
                         
-                        elif m0[cg10] == 1 and m0[cg11] == 1 and m1[cg00] == 1 and m1[cg01] == 1:
-                            # make sure the left over terms are also the same
-                            m0l = list(m0); m0l[cg10] = 0; m0l[cg11] = 0
-                            m1l = list(m1); m1l[cg00] = 0; m1l[cg01] = 0
+                        elif m0[cg10]-m1[cg10] == 1 and m0[cg11]-m1[cg11] == 1 and \
+                             m1[cg00]-m0[cg00] == 1 and m1[cg01]-m0[cg01] == 1:
+                            m0l = list(m0)
+                            m1l = list(m1)
+                            m0l[cg10] = m1l[cg10]; m0l[cg11] = m1l[cg11]
+                            m1l[cg00] = m0l[cg00]; m1l[cg01] = m0l[cg01]
                             case = 2
                         
                         else:
                             continue
 
+                        # check if the remaining terms are the same 
                         if m0l == m1l:
 
                             # print '\n', m0, c0, '\n', m1, c1, '\n'
@@ -10555,6 +10433,137 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 'translationyaxisanglexnorm4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D,
                 'translationzaxisangleynorm4d':IKFastSolver.solveFullIK_TranslationAxisAngle4D
                 }
+
+    def _SimplifyRotationNorm(self, eq, symbols, groups):
+        """
+        Simplify eq based on 2-norm of each row/column being 1
+
+        symbols is self._rotsymbols   or self._rotpossymbols
+        groups is self._rotnormgroups or self._rotposnormgroups
+
+        Called by SimplifyTransform only.
+
+[[r00, r01, r02, 1],
+ [r00, r10, r20, 1],
+ [r10, r11, r12, 1],
+ [r01, r11, r21, 1],
+ [r20, r21, r22, 1],
+ [r02, r12, r22, 1],
+ [px, py, pz, pp]]
+
+        TGN: We shall use
+
+[[[0, 1, 2], 1],
+ [[0, 3, 6], 1],
+ [[3, 4, 5], 1],
+ [[1, 4, 7], 1],
+ [[6, 7, 8], 1],
+ [[2, 5, 8], 1],
+ [[9, 10, 11], pp]]
+
+        that is consistent with _SimplifyRotationDot and _SimplifyRotationCross
+
+[r00, r01, r02,             0,  1,  2
+ r10, r11, r12,             3,  4,  5
+ r20, r21, r22,             6,  7,  8
+ px, py, pz,                9, 10, 11
+ npx, npy, npz,            12, 13, 14
+ pp,                               15
+ rxp0_0, rxp0_1, rxp0_2,   16, 17, 18
+ rxp1_0, rxp1_1, rxp1_2,   19, 20, 21
+ rxp2_0, rxp2_1, rxp2_2]   22, 23, 24
+
+        """
+
+        neweq = None
+        for group in groups:
+            try:
+                # not sure about this thresh
+                if self.codeComplexity(eq) > 300:
+
+                    neweq = self.trigsimp_new(factor(eq))
+                    if self.codeComplexity(neweq) > 300:
+                        log.warn(u'equation too complex to simplify for rot norm: %s', eq)
+                        break
+                    else:
+                        eq = neweq
+
+                # need to do 1234*group[3] hack in order to get the Poly domain to recognize group[3] (sympy 0.7.1)
+                # p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
+                # p -= Poly(1234*group[3], *p.gens, domain = p.domain)
+                p = Poly(eq, *group[0:3])
+                self.poly_counter_rotnorm += 1
+                
+            except (PolynomialError, CoercionFailed, ZeroDivisionError), e:
+                continue
+            
+            changed = False
+            listterms = list(p.terms())
+            if len(listterms) == 1:
+                continue
+            usedindices = set()
+
+            equiv_zero_term = group[3]-group[0]**2-group[1]**2-group[2]**2
+            
+            for index0, index1 in combinations(range(len(listterms)),2):
+                if index0 in usedindices or index1 in usedindices:
+                    continue
+
+                # In the following assignment,
+                # the first  return value m contains powers of a power product
+                # the second return value c is the coefficient
+                m0, c0 = listterms[index0]
+                m1, c1 = listterms[index1]
+                
+                if self.equal(c0, c1):
+                    # replace x0**2+x1**2 by x3-x2**2
+                    #         x1**2+x2**2 by x3-x0**2
+                    #         x2**2+x0**2 by x3-x1**2
+                    for i, j, k in permutations(range(3),3): #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
+                        if m0[k] == m1[k]:
+                            
+                            assert(m1[i] >= 0 and m0[j] >= 0)
+                            if m0[i] == m1[i]+2 and m0[j]+2 == m1[j]:
+                                #p += Poly(c0* \
+                                #          equiv_zero_term* \
+                                #          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j]), \
+                                #          group[0], group[1], group[2])
+
+                                q = eq + c0* \
+                                          equiv_zero_term* \
+                                          (group[k]**m0[k])*(group[i]**m1[i])*(group[j]**m0[j])
+
+                                #assert(expand(p.as_expr()-q) == S.Zero)
+                                changed = True
+                            
+                elif self.equal(c0, -c1):
+                    # As x3 = x0**2 + x1**2 + x2**2
+                    # x0**4 - x1**4 = (x0**2-x1**2)*(x0**2+x1**2) = (x0**2-x1**2)*(x3-x2**2)
+                    for i, j, k in permutations(range(3),3): #[(0,1,2), (0,2,1), (1,0,2), (1,2,0), (2,0,1), (2,1,0)]
+                        if m0[k] == m1[k]:
+                            if m0[i] == 4 and m1[j] == 4:
+                                #p += Poly(c0* \
+                                #          group[k]**m0[k]* \
+                                #          ((group[3]-group[k]**2)*(group[i]**2-group[j]**2) \
+                                #           -group[i]**4 + group[j]**4), \
+                                #          group[0], group[1], group[2])
+
+                                q = eq + c0* \
+                                          group[k]**m0[k]* \
+                                          ((group[3]-group[k]**2)*(group[i]**2-group[j]**2) \
+                                           -group[i]**4 + group[j]**4)
+
+                                #assert(expand(p.as_expr()-q) == S.Zero)
+                                changed = True
+                                
+                if changed:
+                    neweq = q # p #.as_expr()
+                    eq = neweq
+                    usedindices.add(index0)
+                    usedindices.add(index1)
+                    break
+
+        return neweq
 
 class AST:
     """Abstarct Syntax Tree class definitions specific for evaluating complex math equations.
