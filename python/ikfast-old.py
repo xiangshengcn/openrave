@@ -3065,7 +3065,15 @@ class IKFastSolver(AutoReloader):
         for j in range(0,3):
             if not separated_trans[j].has(*solvejointvars):
                 Tlefttrans[j,3] = separated_trans[j]
+
         NewLinks[1] = self.affineInverse(Tlefttrans) * NewLinks[1]
+
+        print Links
+        # print Tlefttrans
+        # print Trighttrans
+        print '\n', NewLinks
+        exec(ipython_str)
+        
         return Tlefttrans, NewLinks, Trighttrans
     
     def iterateThreeIntersectingAxes(self, solvejointvars, Links, LinksInv):
@@ -3080,10 +3088,11 @@ class IKFastSolver(AutoReloader):
             polysymbols += [s[0] for s in self.Variable(solvejointvar).subs]
         for i in range(len(ilinks)-2):
 
-            exec(ipython_str)
-            
             startindex = ilinks[i]
             endindex = ilinks[i+2]+1
+
+            
+            print 'Try T0links with i = ', i
             Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication(TestLinks[startindex:endindex], solvejointvars)
             T0 = self.multiplyMatrix(T0links)
             # count number of variables in T0[0:3,0:3]
@@ -3095,6 +3104,9 @@ class IKFastSolver(AutoReloader):
             # so set any coefficients in T0[:3,3] below self.precision precision to zero
             translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
             if not self.has(translationeqs,*hingejointvars):
+                print 'succeeds with T0links and i = ', i
+                exec(ipython_str)
+
                 T1links = TestLinksInv[:startindex][::-1]
                 if len(T1links) > 0:
                     T1links[0] = self.affineInverse(Tlefttrans) * T1links[0]
@@ -3105,10 +3117,14 @@ class IKFastSolver(AutoReloader):
                 T1links[-1] = T1links[-1] * self.affineInverse(Trighttrans)
                 solveRotationFirst = False
             else:
+                print 'first attempt fails with i = %d, try inv(T0links)'%i
                 Tlefttrans, T0links, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication(TestLinksInv[startindex:endindex][::-1], solvejointvars)
                 T0 = self.multiplyMatrix(T0links)
                 translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
                 if not self.has(translationeqs,*hingejointvars):
+                    print 'succeeds with T0linksInv and i = ', i
+                    exec(ipython_str)
+
                     T1links = TestLinks[endindex:]
                     if len(T1links) > 0:
                         T1links[0] = Trighttrans * T1links[0]
@@ -3118,6 +3134,8 @@ class IKFastSolver(AutoReloader):
                     T1links += TestLinks[:startindex]
                     T1links[-1] = T1links[-1] * Tlefttrans
                     solveRotationFirst = False
+                else:
+                    print 'second attempt fails also with i = ', i
             if solveRotationFirst is not None:
                 rotvars = []
                 transvars = []

@@ -2779,7 +2779,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         [ 0 | 1 ]       [ 0 | 1 ]
 
         """
-
+        # print '\n before:\n', Links
+        # exec(ipython_str)
+        
         # this is doing shallow copy, so redundant???
         NewLinks = list(Links)
         assert(id(NewLinks)!=id(Links))
@@ -2803,8 +2805,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
 
         Tlefttrans[0:3,3] = Links[0][0:3,0:3] * Links[1][0:3,3]
-        for j in range(0,3):
-            if Tlefttrans[j].has(*solvejointvars):
+        for j in range(3):
+            if Tlefttrans[j,3].has(*solvejointvars):
                 Tlefttrans[j,3] = S.Zero
 
         # work on the product of the last two matrices to find T_right_trans
@@ -2818,14 +2820,18 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # first iteration:
         # separated_trans = Links[-1][0:3,0:3].transpose() * \
         #                  ( Links[-2][0:3,0:3].transpose()*Links[-2][0:3,3]+Links[-1][0:3,3])
-        # second iteration:
-        separated_trans = -LinksInv[-2][0:3,0:3]*LinksInv[-1][0:3,3]-LinksInv[-2][0:3,3]
+        #
+        # second iteration: use LinksInv. Note in Links and LinksInv, orders are inverse, i.e.
+        #
+        # Links = [ A_1, A_2, ..., A_p ] and LinksInv = [ inv(A_p), ... , inv(A_2), inv(A_1) ]
+        separated_trans = -LinksInv[0][0:3,0:3]*LinksInv[1][0:3,3]-LinksInv[0][0:3,3]
         
-        for j in range(0,3):
+        for j in range(3):
             if separated_trans[j].has(*solvejointvars):
                 Trighttrans[j,3] = S.Zero
             else:
                 Trighttrans[j,3] = separated_trans[j]
+
                 
         """
         if any(Tlefttrans-eye(4)):
@@ -2854,6 +2860,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # print "b = ", b
         # print "NewLinks[-2] = ", NewLinks[-2]
         assert(not any(b-Links[-2]))
+
+        # print '\n after:\n', Links
+        # print Tlefttrans
+        # print Trighttrans
+        # exec(ipython_str)
         
         return Tlefttrans, Trighttrans
 
@@ -2864,8 +2875,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         Called by TestIntersectingAxes only.
         """
-        TestLinks=Links
-        TestLinksInv=LinksInv
+        TestLinks = Links
+        TestLinksInv = LinksInv
+
         # extract indices for matrices that contain joint variables
         ilinks = [i for i,Tlink in enumerate(TestLinks) if self.has(Tlink,*solvejointvars)]
         hingejointvars = [var for var in solvejointvars if self.IsHinge(var.name)]
@@ -2876,12 +2888,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         num_of_combination = len(ilinks)-2
         for i in range(num_of_combination):
 
-            exec(ipython_str)
-            
             startindex = ilinks[i]
             endindex   = ilinks[i+2]+1
 
             T0links    = TestLinks[startindex:endindex]
+
+            # print i, TestLinks[startindex:endindex]
+            
             # There are exactly three joint variables in T0links, one in the first matrix, on in the last.
             # To isolate the left and right translation parts that are independent of solvejointvars,
             # we examine the 2nd and 2nd last matrices in T0links, respectively.
@@ -2892,6 +2905,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             #    T0linksInv = TestLinksInv[endindex-1:startindex-1:-1]
             T0linksInv = TestLinksInv[startindex:endindex][::-1]
 
+            log.info( 'Try T0links with i = %d' % i)
             Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                       ( T0links, T0linksInv, solvejointvars )
             # T0links can be modified by the above call; T0linksInv does not change
@@ -2912,6 +2926,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # TGN: inconsistency in code, should decide whether to write 0:3 or merely :3
 
             if self.has(translationeqs, *hingejointvars):
+                log.info('First attempt fails with i = %d, try inv(T0links)' % i)
                 # first attempt does not succeed, so we try working on T0linksInv
                 Tlefttrans, Trighttrans = self._ExtractTranslationsOutsideOfMatrixMultiplication \
                                           ( T0linksInv, T0links, solvejointvars )
@@ -2919,8 +2934,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 T0 = self.multiplyMatrix(T0linksInv)
                             
                 translationeqs = [self.RoundEquationTerms(eq.expand()) for eq in T0[:3,3]]
-                if not self.has(translationeqs,*hingejointvars):
+                if not self.has(translationeqs,*hingejointvars):                    
                     # second attempt succeeds
+                    log.info('Second succeeds with T0linksInv and i = %d' % i)
                     exec(ipython_str)
             
                     T1links = TestLinks[endindex:]
@@ -2949,9 +2965,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     Tlefttrans[0:3,3] = T1links[-1][0:3,0:3]*Tlefttrans[0:3,3]
                     T1links[-1][0:3,3] += Tlefttrans[0:3,3]
                     solveRotationFirst = True
+                else:
+                    log.info('Second attempt fails also with i = %d' % i)
             else:
-                exec(ipython_str)
-                
+                log.info('succeeds with T0links and i = %d' % i)
                 # first attempt succeeds as translation eqns don't depend on hingejointvars
                 #
                 #  A_s * A_{s+1} * ... A_{e-1} = Tlefttrans * prod(T0links_NEW) * Trighttrans
