@@ -6558,8 +6558,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         neweq, newchanged = _SimplifyRotationFcn(fcn, eq, changed, groups)
                         changed = changed or newchanged
                         if newchanged:
-                            log.info('Number of operations changes from %d to %d' % \
-                                     (eq.count_ops(), neweq.count_ops()))
+#                            log.info('Number of operations changes from %d to %d' % \
+#                                     (eq.count_ops(), neweq.count_ops()))
                             eq = neweq
 
                 except (PolynomialError, CoercionFailed), e:
@@ -6586,8 +6586,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # (rxp0_0, -py*r20), (rxp0_1, px*r20), (rxp1_0, -py*r21), (rxp1_1, px*r21), (rxp2_0, -py*r22), (rxp2_1, px*r22)]
             #
             # See this line above: neweq = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
-
-            log.info("Formula unchanged: %r")
+            #
+            # log.info("Formula unchanged: %r", eq)
+            pass
         else:
             log.info("%r\n --->   %r", origeq, eq) 
         self.simplify_transform_dict[origeq] = eq
@@ -7152,8 +7153,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         if m0l == m1l:
 
                             # print '\n', m0, c0, '\n', m1, c1, '\n'
-
-                            exec(ipython_str, globals(), locals())
+                            # exec(ipython_str, globals(), locals())
             
                             m2l = m0l[:]; m2l[cg[2]] += 1
                             m2 = tuple(m2l)
