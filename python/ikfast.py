@@ -8345,8 +8345,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def SolvePairVariablesHalfAngle(self, raweqns, var0, var1, \
                                     othersolvedvars, subs = None):
         """
-        Solves equations of two variables in sin and cos
+        Solves equations of two variables var0, var1 in sin, cos
         """
+        import itertools
 
         varsym0 = self.getVariable(var0)
         varsym1 = self.getVariable(var1)
@@ -8355,58 +8356,75 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         unknownvars = [varsym0.cvar, varsym0.svar, \
                        varsym1.cvar, varsym1.svar  ]
         
-        varsubs    = varsym0.subs + varsym1.subs
+        varsubs    = varsym0.subs    + varsym1.subs
         varsubsinv = varsym0.subsinv + varsym1.subsinv
-        halftansubs = []
-        for varsym in varsyms:
-            halftansubs += [(varsym.cvar,(1-varsym.htvar**2)/(1+varsym.htvar**2)), \
-                            (varsym.svar,     2*varsym.htvar/(1+varsym.htvar**2))]
-        # exec(ipython_str)
 
-        dummyvars = []
-        for othervar in othersolvedvars:
-            v = self.getVariable(othervar)
-            dummyvars += [v.cvar,v.svar,v.var,v.htvar]
+        # numerators
+        halftannum   = [1-varsym0.htvar**2, 2*varsym0.htvar, \
+                        1-varsym1.htvar**2, 2*varsym1.htvar]
+        # denominators
+        halftandenom = [1+varsym0.htvar**2, 1+varsym1.htvar**2]
+
+        # half tangent substitutions
+        halftansubs = [(varsym0.cvar, halftannum[0] / halftandenom[0]), \
+                       (varsym0.svar, halftannum[1] / halftandenom[0]), \
+                       (varsym1.cvar, halftannum[2] / halftandenom[1]), \
+                       (varsym1.svar, halftannum[3] / halftandenom[1])  ]
+                       
+
+        dummyvars = [self.getVariable(othervar) for othervar in othersolvedvars]
+        dummyvars = list(itertools.chain.from_iterable([[v.cvar, v.svar, v.var, v.htvar] \
+                                                        for v in dummyvars]))
+
+        trigsubs = [(varsym0.svar**2,               1-varsym0.cvar**2),  \
+                    (varsym0.svar**3, varsym0.svar*(1-varsym0.cvar**2)), \
+                    (varsym1.svar**2,               1-varsym1.cvar**2),  \
+                    (varsym1.svar**3, varsym1.svar*(1-varsym1.cvar**2))]
             
         polyeqs = []
         for eq in raweqns:
-            trigsubs = [(varsym0.svar**2, 1-varsym0.cvar**2), \
-                        (varsym0.svar**3, varsym0.svar*(1-varsym0.cvar**2)), \
-                        (varsym1.svar**2, 1-varsym1.cvar**2), \
-                        (varsym1.svar**3, varsym1.svar*(1-varsym1.cvar**2))]
-            
+
+            # unknownvars = [ cv1, sv1, cv2, sv2 ]
             peq = Poly(eq.subs(varsubs).subs(trigsubs).expand().subs(trigsubs), *unknownvars)
             
             if peq.has(varsym0.var) or peq.has(varsym1.var):
                 raise self.CannotSolveError('Expecting only sin and cos! %s' % peq)
             
-            maxmonoms = [0, 0, 0, 0]
-            maxdenom  = [0, 0]
-            for monoms in peq.monoms():
-                for i in range(4):
-                    maxmonoms[i] = max(maxmonoms[i], monoms[i])
-                maxdenom[0] = max(maxdenom[0], monoms[0]+monoms[1])
-                maxdenom[1] = max(maxdenom[1], monoms[2]+monoms[3])
-                
+            maxdenom  = [ max([monoms[0]+monoms[1] for monoms in peq.monoms()]), \
+                          max([monoms[2]+monoms[3] for monoms in peq.monoms()])  ]
+
             eqnew = S.Zero
+            
             for monoms, c in peq.terms():
+                """
+                print '\nmonoms = ', monoms, '\nc = ', c
+                term = c 
+                for i in range(4): 
+                    num, denom = fraction(halftansubs[i][1]) 
+                    term *= num**monoms[i] 
+ 
+                # the denoms for 0,1 and 2,3 are the same 
+                for i in [0, 2]: 
+                    denom = fraction(halftansubs[i][1])[1] 
+                    term *= denom**(maxdenom[i/2] - monoms[i] - monoms[i+1])
+                complexityvalue = self.codeComplexity(term.expand()) 
+                if complexityvalue < 450: 
+                    eqnew += simplify(term) 
+                else: 
+                    # too big, so don't simplify? 
+                    eqnew += term    
+                """
+
                 term = c
                 for i in range(4):
-                    num, denom = fraction(halftansubs[i][1])
-                    term *= num**monoms[i]
+                    term *= halftannum[i]**monoms[i]
+                    
+                term *= halftandenom[0]**(maxdenom[0]-monoms[0]-monoms[1])
+                term *= halftandenom[1]**(maxdenom[1]-monoms[2]-monoms[3])
 
-                # the denoms for 0,1 and 2,3 are the same
-                for i in [0, 2]:
-                    denom = fraction(halftansubs[i][1])[1]
-                    term *= denom**(maxdenom[i/2]-monoms[i]-monoms[i+1])
-                    
-                complexityvalue = self.codeComplexity(term.expand())
-                if complexityvalue < 450:
-                    eqnew += simplify(term)
-                else:
-                    # too big, so don't simplify?
-                    eqnew += term
-                    
+                # too big, so don't simplify?
+                eqnew += simplify(term) if self.codeComplexity(term.expand())<450 else term
+                
             polyeq = Poly(eqnew, varsym0.htvar, varsym1.htvar)
             if polyeq.TC() == S.Zero:
                 # might be able to divide out variables?
