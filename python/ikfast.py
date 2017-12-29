@@ -8563,15 +8563,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     if len(possibilities) > 1:
                         try:
                             linearsolutions = self.solveVariablesLinearly(possibilities, othersolvedvars)
+                            log.info('solveVariablesLinearly has found some solution for %r', possibilities[0].gens)
+                            
                             # if can solve for a unique solution linearly, then prioritize this over anything
                             prevsolution = AST.SolverBreak('SolvePairVariablesHalfAngle fail')
-                            for divisor,linearsolution in linearsolutions:
+                            for divisor, linearsolution in linearsolutions:
                                 assert(len(linearsolution)==1)
                                 divisorsymbol = self.gsymbolgen.next()
+                                
+                                # Call AST SolverSolution constructor
                                 solversolution = AST.SolverSolution(varsyms[ileftvar].name, \
                                                                     jointeval = [2*atan(linearsolution[0]/divisorsymbol)], \
                                                                     isHinge = self.IsHinge(varsyms[ileftvar].name))
                                 
+                                # Call AST SolverCheckZeros constructor
                                 prevsolution = AST.SolverCheckZeros(varsyms[ileftvar].name, \
                                                                     [divisorsymbol], \
                                                                     zerobranch    = [prevsolution], \
@@ -8583,6 +8588,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             break
                         
                         except self.CannotSolveError:
+                            log.info('solveVariablesLinearly failed to find %r', possibilities[0].gens)
                             pass
                         
                     if len(possibilities) > 0:
@@ -8596,14 +8602,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         break
                     
         if linearsolution is not None:
-            log.info('SolvePairVariablesHalfAngle returns linear solution.')
+            log.info('SolvePairVariablessHalfAngle returns linear solution.')
             return [linearsolution]
         
         # take the solution with the smallest degree
         if solutions[0] is None:
             if solutions[1] is None:
 
-                log.info('SolvePairVariableHalfAngle has not found any solution yet.')
+                log.info('SolvePairVariablesHalfAngle has not found any solution yet.')
                 
                 pfinals  = None
                 ileftvar = None
@@ -8697,7 +8703,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     log.info('Done multiplying all determinant. Now convert to Poly')
                     det = Poly(S.Zero, leftvar)
                     for ieq, eq in enumerate(eqadds):
-                        log.info('adding to det %d/%d', ieq, len(eqadds))
+                        # log.info('adding to det %d/%d', ieq, len(eqadds))
                         det += eq
                         
                     if len(Mall) <= 3:
@@ -8850,7 +8856,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                              'determinant will most likely freeze (%d)', complexity)
                                 
                         if M.shape[0] == M.shape[1]:
-                            Mdet = self.trigsimp(Mdet.subs(trigsubsinv),othersolvedvars).subs(trigsubs)
+                            Mdet = self.trigsimp(Mdet.subs(trigsubsinv), othersolvedvars).subs(trigsubs)
                             #Minv = M.inv()
                             B = Matrix(M.shape[0],1,[consts[i] for i in rows])
                             Madjugate = M.adjugate()
@@ -9036,7 +9042,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         pfinaldict = pfinal.as_dict()
         for testconsistentvalue in self.testconsistentvalues:
             coeffs = []
-            globalsymbols = [(s,v.subs(self.globalsymbols).subs(testconsistentvalue).evalf()) \
+            globalsymbols = [(s, v.subs(self.globalsymbols).subs(testconsistentvalue).evalf()) \
                              for s, v in self.globalsymbols]
             for degree in range(pfinal.degree(0), -1, -1):
                 value = pfinaldict.get((degree,),S.Zero).subs(subs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf()
@@ -9070,7 +9076,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if found:
                 break
             
-        log.info('Finished checkFinalEquation for %r', pfinal)
+        log.info('Finished checkFinalEquation')
         return pfinal if found else None
 
     def solveSingleVariable(self, raweqns, \
