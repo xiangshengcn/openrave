@@ -5016,8 +5016,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             numaufractions += int(flength/20)
                     #d = AUdetmat.det().evalf()
                     #if d == S.Zero:
-                    if not self.IsDeterminantNonZeroByEval(AUdetmat, len(rows)>9 and (numaufractions > 120 or numaufractions+numausymbols > 120)):
-                        log.info('skip dependent index %d, numausymbols=%d, numausymbols=%d', i,numaufractions,numausymbols)
+                    if not self.IsDeterminantNonZeroByEval(AUdetmat, len(rows)>9 and \
+                                                           (numaufractions > 120 or \
+                                                            numaufractions+numausymbols > 120)):
+                        log.info('skip dependent index %d, numausymbols = %d, numausymbols = %d', \
+                                 i, numaufractions, numausymbols)
                         continue
                     AU = AU2
                     rows.append(i)
@@ -9088,11 +9091,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             assert(len(nz_coeffs)>0)
             
-            if any([c.has(I) for c in nz_coeffs]):
-                log.info('checkFinalEquation: value has imaginary part:\n' + \
+            if any([c.has(I) or c.has(oo) or c.has(-oo) or c.has(nan) for c in nz_coeffs]):
+                log.info('checkFinalEquation: value has I/oo/-oo/nan:\n' + \
                          '        %r', nz_coeffs)
+                exec(ipython_str, globals(), locals())
                 continue
 
+            assert( not any([c.has(I) or c.has(oo) or c.has(-oo) or c.has(nan) for c in nz_coeffs]))
+            
             if Abs(nz_coeffs[0]) < thresh1:
                 log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
                          Abs(nz_coeffs[0]), thresh1)
@@ -9126,13 +9132,18 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             # exact solution
             realsolution = pfinal.gens[0].subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
-            
+
+            print 'nz_coeffs = ', nz_coeffs            
+            assert( not any([c.has(I) or c.has(oo) or c.has(-oo) or c.has(nan) for c in nz_coeffs]))            
+
             coeffs = [0] * (deg+1)
             for i, m in enumerate(ind_list):
                 coeffs[m] = nz_coeffs[i]
 
-            """
+            print 'coeffs = ', coeffs
             r = roots(coeffs).keys()
+            print 'r = ', r
+            
             if any( [Abs(re(root)-realsolution) < thresh3 \
                      and Abs(im(root)) < thresh2
                      for root in r] ):
@@ -9148,6 +9159,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                              '        %r', realsolution, r)
                     #exec(ipython_str, globals(), locals())
             """
+
             # call numpy's polyroots to compute roots
             # need to convert to float64 first, since X.evalf() is still a sympy object
             r = mpmath.polyroots(numpy.array(numpy.array(coeffs), numpy.float64)) 
@@ -9156,6 +9168,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                    Abs(float(root.real)-realsolution) < thresh3:
                     found = True
                     break
+            """
 
         if found:
             log.info('checkFinalEquation returns VALID solution')
