@@ -8343,7 +8343,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         raise self.CannotSolveError('cannot find a good variable')
     
     def SolvePairVariablesHalfAngle(self, raweqns, var0, var1, \
-                                    othersolvedvars, subs = None):
+                                    othersolvedvars, tosubs = []):
         """
         Solves equations of two variables var0, var1 in sin, cos
         """
@@ -8494,7 +8494,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             for peq in newpolyeqs:
                 if len(peq.monoms()) == 1:
-                    possiblefinaleq = self.checkFinalEquation(Poly(peq.LC(), leftvar), subs)
+                    possiblefinaleq = self.checkFinalEquation(Poly(peq.LC(), leftvar), tosubs)
                     if possiblefinaleq is not None:
                         solutions[ileftvar] = [possiblefinaleq]
                         break
@@ -8542,8 +8542,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         if complexity > 1200:
                             log.warn('Complexity of det(Mall) is too big: %d', complexity)
                             continue
-                        
-                        possiblefinaleq = self.checkFinalEquation(Poly(Malldet, leftvar), subs)
+
+                        possiblefinaleq = self.checkFinalEquation(Poly(Malldet, leftvar), tosubs)
                         if possiblefinaleq is not None:
                             # sometimes +- I are solutions, so remove them
                             q, r = div(possiblefinaleq, leftvar+I)
@@ -8729,6 +8729,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     break
                 except self.CannotSolveError,e:
                     log.debug(e)
+        else:
+            log.info('SolvePairVariableHalfAngle has found %d pfinals', len(pfinals))
+                    
                     
         if pfinals is None:
             raise self.CannotSolveError('SolvePairVariablesHalfAngle: ' + \
@@ -8755,12 +8758,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # make threshold a little loose since can be a lot of numbers compounding.
         # depending on the degree, can expect small coefficients to be still valid
         solution.AddHalfTanValue = True
+
+        log.info('End of SolvePairVariableHalfAngle')
+        
         return [solution]
 
     def _createSimplifyFn(self,vars,varsubs,varsubsinv):
-        return lambda eq: self.trigsimp(eq.subs(varsubsinv),vars).subs(varsubs)
+        return lambda eq: self.trigsimp_new(eq.subs(varsubsinv)).subs(varsubs)
                 
-    def solveVariablesLinearly(self,polyeqs,othersolvedvars,maxsolvabledegree=4):
+    def solveVariablesLinearly(self, polyeqs, othersolvedvars, maxsolvabledegree = 4):
         """
         Called by SolvePairVariablesHalfAngle only
         """
@@ -8774,23 +8780,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                   othersolvedvars)
 
         # number of monomials (excluding constants) in each equation
-        nummonoms = [len(peq.monoms())-int(peq.TC()!=S.Zero) for peq in polyeqs]
+        nummonoms = [(len(peq.monoms()) - int(peq.TC()!=S.Zero)) for peq in polyeqs]
         mindegree = __builtin__.min(nummonoms)
-        maxdegree = min(__builtin__.max(nummonoms),len(polyeqs))
+        maxdegree = min(__builtin__.max(nummonoms), len(polyeqs))
 
         polyeqs.sort(key = lambda x: x.count_ops())
         #complexity = [(self.codeComplexity(peq.as_expr()),peq) for peq in polyeqs]
         #complexity.sort(key=itemgetter(0))
         #polyeqs = [peq[1] for peq in complexity]
         
-        trigsubs = []
-        trigsubsinv = []
-        othersolvedvarssyms = []
-
         v = [self.getVariable(othervar) for othervar in othersolvedvars]
-        othersolvedvarssyms = list(itertools.chain.from_iterable([var.vars    for var in v]))
         trigsubs            = list(itertools.chain.from_iterable([var.subs    for var in v]))
         trigsubsinv         = list(itertools.chain.from_iterable([var.subsinv for var in v]))
+        othersolvedvarssyms = list(itertools.chain.from_iterable([var.vars    for var in v]))
 
         symbolscheck = []
         for i,solvevar in enumerate(polyeqs[0].gens):
@@ -8800,7 +8802,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         solutions = []
         
         for degree in range(mindegree, maxdegree+1):
-            allindices = [i for i,n in enumerate(nummonoms) if n <= degree]
+            allindices = [i for i, n in enumerate(nummonoms) if n <= degree]
             if len(allindices) >= degree:
                 allmonoms = set()
                 for index in allindices:
@@ -8822,15 +8824,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     consts = []
                     for index in allindices:
                         pdict = polyeqs[index].as_dict()
-                        systemequations.append([pdict.get(monom,S.Zero) for monom in allmonoms])
+                        systemequations.append([pdict.get(monom, S.Zero) for monom in allmonoms])
                         consts.append(-polyeqs[index].TC())
                         
-                    # generate at least two solutions in case first's determinant is 0
+                    # generate at least two solutions in case the first solution has determinant = 0
                     solutions = []
                     for startrow in range(len(systemequations)):
                         rows = [startrow]
-                        M = Matrix(1,len(allmonoms),systemequations[rows[0]])
-                        for i in range(startrow+1,len(systemequations)):
+                        M = Matrix(1,len(allmonoms), systemequations[rows[0]])
+                        for i in range(startrow+1, len(systemequations)):
                             numequationsneeded = M.shape[1] - M.shape[0]
                             if i+numequationsneeded > len(systemequations):
                                 # cannot do anything
@@ -8856,15 +8858,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                              'determinant will most likely freeze (%d)', complexity)
                                 
                         if M.shape[0] == M.shape[1]:
-                            Mdet = self.trigsimp(Mdet.subs(trigsubsinv), othersolvedvars).subs(trigsubs)
+                            Mdet = self.trigsimp_new(Mdet.subs(trigsubsinv)).subs(trigsubs)
                             #Minv = M.inv()
                             B = Matrix(M.shape[0],1,[consts[i] for i in rows])
                             Madjugate = M.adjugate()
                             solution = []
                             for check in symbolscheck:
                                 value = Madjugate[allmonoms.index(check),:]*B
-                                solution.append(self.trigsimp(value[0].subs(trigsubsinv),othersolvedvars).subs(trigsubs))
-                            solutions.append([Mdet,solution])
+                                solution.append(self.trigsimp_new(value[0].subs(trigsubsinv)).subs(trigsubs))
+                            solutions.append([Mdet, solution])
                             if len(solutions) >= 2:
                                 break
                     if len(solutions) > 0:
@@ -8873,6 +8875,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if len(solutions) == 0:            
             raise self.CannotSolveError('solveVariablesLinearly failed')
         else:
+            exec(ipython_str)
             log.info('solveVariablesLinearly has found some solution.')
         
         return solutions
@@ -8941,7 +8944,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     eq = neweqs2.pop(i)
         return neweqs2
 
-    def solveHighDegreeEquationsHalfAngle(self, lineareqs, varsym, subs = None):
+    def solveHighDegreeEquationsHalfAngle(self, lineareqs, varsym, tosubs = []):
         """solve a set of equations in one variable with half-angle substitution
         """
         
@@ -8991,7 +8994,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                  onlygcd = False,\
                                                  onlynumbers=True), \
                           varsym.htvar)
-            pfinal = self.checkFinalEquation(pfinal,subs)
+            pfinal = self.checkFinalEquation(pfinal, tosubs)
             if pfinal is not None and pfinal.degree(0) > 0:
                 jointsol = 2*atan(varsym.htvar)
                 solution = AST.SolverPolynomialRoots(jointname = varsym.name, \
@@ -9008,75 +9011,157 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         raise self.CannotSolveError(('half-angle substitution for joint %s failed, ' + \
                                     '%d equations examined') % (varsym.var, len(polyeqs)))
 
-    def checkFinalEquation(self, pfinal, subs = None):
+    def checkFinalEquation(self, pfinal, tosubs = []):
         """
         Check an equation in one variable for validity
         """
+        from sympy.functions import re, im
 
         log.info('checkFinalEquation for %r', pfinal)
         
         assert(len(pfinal.gens)==1)
-        if subs is None:
-            subs = []
         htvar = pfinal.gens[0]
-        # remove all trivial 0s
-        while sum(pfinal.degree_list()) > 0 and pfinal.TC() == S.Zero:
-            pfinalnew = Poly(S.Zero,htvar)
-            for m,c in pfinal.terms():
-                if m[0] > 0:
-                    pfinalnew += c*htvar**(m[0]-1)
+        htvar_sqr_plus_one = Poly(htvar**2+1, htvar)
+
+        # remove all factors of (var-0)
+        p = [p[0] for p, c in pfinal.terms() if p[0]>0]
+        if len(p) > 0 and  min(p) > 0 and pfinal.TC() == S.Zero:
+            min_p = min(p)
+            pfinalnew = Poly(S.Zero, htvar)
+            for m, c in pfinal.terms():
+                assert(m[0]-min_p>=0)
+                pfinalnew += c*htvar**(m[0]-min_p)
             pfinal = pfinalnew
+
+        # remove all factors of (var**2+1)
+        #while not pfinal==S.Zero:
+        #    q, r = pfinal.div(htvar_sqr_plus_one)
+        #    if r == S.Zero:
+        #        log.info('checkFinalEquation: divided %r**2+1, result: %r', htvar, q)
+        #        pfinal = q
+        #    else:
+        #        break
             
-        # check to see that LC is non-zero for at least one solution
-        if pfinal.LC().evalf() == S.Zero or \
-           all([pfinal.LC().subs(subs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()==S.Zero \
-                for testconsistentvalue in self.testconsistentvalues]):
+        # while sum(pfinal.degree_list()) > 0 and pfinal.TC() == S.Zero:
+        #     pfinalnew = Poly(S.Zero, htvar)
+        #     for m,c in pfinal.terms():
+        #         if m[0] > 0:
+        #             pfinalnew += c*htvar**(m[0]-1)
+        #     pfinal = pfinalnew
+
+        # Check if leading coefficient (LC) is non-zero for at least one solution
+        if pfinal.LC().evalf() == S.Zero:
+            log.info('checkFinalEquation: ZERO constant; returns NO valid solution')
             return None
-        
+        elif pfinal.degree() == 0:
+            log.info('checkFinalEquation: NONZERO constant; returns NO valid solution')
+            return None
+        elif all([pfinal.LC().subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()==S.Zero \
+                for testconsistentvalue in self.testconsistentvalues]):
+            log.info('checkFinalEquation: ZERO for all sets of consistent values; returns NO valid solution')
+            return None
+
         # sanity check that polynomial can produce a solution and is not actually very small values
         found = False
         LCnormalized, common = self.removecommonexprs(pfinal.LC(), \
                                                       returncommon = True, \
                                                       onlygcd      = False, \
                                                       onlynumbers  = True)
+
+        deg = pfinal.degree()
+        ind_list = [deg-m[0] for m,c in pfinal.terms()]
         pfinaldict = pfinal.as_dict()
+
+        # thresholds
+        thresh1 = 2*(10.0**-self.precision)
+        thresh2 = 10.0**-self.precision
+        thresh3 = 10.0**-(self.precision-2)
+        
         for testconsistentvalue in self.testconsistentvalues:
-            coeffs = []
             globalsymbols = [(s, v.subs(self.globalsymbols).subs(testconsistentvalue).evalf()) \
                              for s, v in self.globalsymbols]
-            for degree in range(pfinal.degree(0), -1, -1):
-                value = pfinaldict.get((degree,),S.Zero).subs(subs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf()
-                if value.has(I): # check if has imaginary number
-                    coeffs = None
-                    break
-                coeffs.append(value)
-                # since coeffs[0] is normalized with the LC constant, can compare for precision
-                if len(coeffs) == 1 and Abs(coeffs[0]) < 2*(10.0**-self.precision):
-                    coeffs = None
-                    break
-                
-            if coeffs is None:
-                continue
+
+            # plug in test consistent values to evaluate all coefficients
+            nz_coeffs = [ c.subs(tosubs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf() \
+                          for m, c in pfinal.terms() ]
             
-            if not all([c.is_number for c in coeffs]):
-                # cannot evalute
-                log.warn('cannot evaluate\n        %s', \
-                         "\n        ".join(str(x) for x in coeffs if not x.is_number))
+
+            assert(len(nz_coeffs)>0)
+            
+            if any([c.has(I) for c in nz_coeffs]):
+                log.info('checkFinalEquation: value has imaginary part:\n' + \
+                         '        %r', nz_coeffs)
+                continue
+
+            if Abs(nz_coeffs[0]) < thresh1:
+                log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
+                         Abs(nz_coeffs[0]), thresh1)
+                continue
+                
+            #for degree in range(pfinal.degree(0), -1, -1):
+                #value = pfinaldict.get((degree,),S.Zero).subs(tosubs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf()
+                #if value.has(I): # check if has imaginary number
+                #    log.info('checkFinalEquation: value has imaginary part: %r', value)
+                #    coeffs = None
+                #    break
+                #else:
+                #    exec(ipython_str,globals(),locals())
+                #    coeffs.append(value)
+                #    # since coeffs[0] is normalized with the LC constant, can compare for precision
+                #    if len(coeffs) == 1 and Abs(coeffs[0]) < 2*(10.0**-self.precision):
+                #        log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
+                #                 Abs(coeffs[0]), 2*(10.0**-self.precision))
+                #        coeffs = None
+                #        break
+                
+            #if coeffs is None:
+            #    continue
+            
+            if not all([c.is_number for c in nz_coeffs]):
+                # cannot evaluate
+                log.warn('checkFinalEquation: set found as True, as we cannot evaluate\n        %s', \
+                         "\n        ".join(str(x) for x in nz_coeffs if not x.is_number))
                 found = True
                 break
+
+            # exact solution
+            realsolution = pfinal.gens[0].subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
             
-            realsolution = pfinal.gens[0].subs(subs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
-            # need to convert to float64 first, X.evalf() is still a sympy object
-            roots = mpmath.polyroots(numpy.array(numpy.array(coeffs), numpy.float64))
-            for root in roots:
-                if Abs(float(root.imag)) < 10.0**-self.precision and \
-                   Abs(float(root.real)-realsolution) < 10.0**-(self.precision-2):
+            coeffs = [0] * (deg+1)
+            for i, m in enumerate(ind_list):
+                coeffs[m] = nz_coeffs[i]
+
+            """
+            r = roots(coeffs).keys()
+            if any( [Abs(re(root)-realsolution) < thresh3 \
+                     and Abs(im(root)) < thresh2
+                     for root in r] ):
+                log.info('checkFinalEquation: precision comparison PASSED for root %r\n' + \
+                         '        %r', realsolution, r)
+                found = True
+                break
+            else:
+                # differences between roots and real solution can be large
+                # when pfinal is a polynomial in one variable only
+                if any([not c.is_number for m,c in pfinal.terms()]):
+                    log.info('checkFinalEquation: precision comparison NOT passed for root %r\n' + \
+                             '        %r', realsolution, r)
+                    #exec(ipython_str, globals(), locals())
+            """
+            # call numpy's polyroots to compute roots
+            # need to convert to float64 first, since X.evalf() is still a sympy object
+            r = mpmath.polyroots(numpy.array(numpy.array(coeffs), numpy.float64)) 
+            for root in r:
+                if Abs(float(root.imag)) < thresh2 and \
+                   Abs(float(root.real)-realsolution) < thresh3:
                     found = True
                     break
-            if found:
-                break
+
+        if found:
+            log.info('checkFinalEquation returns VALID solution')
+        else:
+            log.info('checkFinalEquation returns NO valid solution')
             
-        log.info('Finished checkFinalEquation')
         return pfinal if found else None
 
     def solveSingleVariable(self, raweqns, \
