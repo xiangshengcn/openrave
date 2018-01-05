@@ -260,6 +260,11 @@ try:
 except ImportError:
     pass
 
+from sympy import im as Im
+from sympy import re as Re
+
+from mpmath import polyval
+
 try:
     import re # for latex cleanup
 except ImportError:
@@ -1559,14 +1564,15 @@ class IKFastSolver(AutoReloader):
         sol.score = 20000*sol.numsolutions()
         
         try:
+            log.info('ComputeSolutionComplexity: %r', sol)
             # exec(ipython_str, globals(), locals())
             # multiby by 400 in order to prioritize equations with less solutions
             # TGN: remove all those hasattr(sol, ...) check, because they are always True
-            if sol.jointeval is not None:
+            if hasattr(sol,'jointeval') and sol.jointeval is not None:
                 subexprs = sol.jointeval
-            elif sol.jointevalsin is not None:
+            elif hasattr(sol,'jointevalsin') and sol.jointevalsin is not None:
                 subexprs = sol.jointevalsin
-            elif sol.jointevalcos is not None:
+            elif hasattr(sol,'jointevalcos') and sol.jointevalcos is not None:
                 subexprs = sol.jointevalcos
             else:
                 return sol.score
@@ -7304,7 +7310,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 except self.CannotSolveError:
                     pass
 
-        # Only return here if a solution was found that perfectly determines the unknown
+        # Only return here if a solution was found that perfectly determines the unknown.
         # Otherwise, the pairwise solver could come up with something.
         #
         # There is still a problem with this: (bertold robot)
@@ -7313,8 +7319,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # In the bertold robot case, the next possibility is a pair-wise solution involving two variables
         #
         # TGN: don't we check Abs(y)+Abs(x) for atan2?
-
-        # exec(ipython_str) in globals(), locals()
         
         if any([s[0].numsolutions() == 1 for s in solutions]):
             return self.AddSolution(solutions, \
@@ -7575,7 +7579,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
            len(othersolvedvars) + len(curvars) == len(self.freejointvars) + len(self._solvejointvars) and \
            (len(curvars) == 1 or (len(curvars) < len(self._solvejointvars) and \
                                   currentcases is not None and \
-                                  len(currentcases) > 0)): # only estimate when deep in the hierarchy, do not want the guess to be executed all the time
+                                  len(currentcases) > 0)):
+            # only estimate when deep in the hierarchy, do not want the guess to be executed all the time
             # perhaps there's a degree of freedom that is not trivial to compute?
             # take the highest hinge variable and set it
             log.info('trying to guess variable from %r', curvars)
@@ -8741,7 +8746,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                         'failed to solve dialytically with %d equations'% \
                                         len(polyeqs))
 
-        log.info('SolvePairVariableHalfAngle has found %d pfinals', len(pfinals))
+        log.info('SolvePairVariableHalfAngle has found %d pfinal(s)', len(pfinals))
         jointsol = 2*atan(varsyms[ileftvar].htvar)
 
         # Call AST SolverPolynomialRoots constructor
@@ -8847,7 +8852,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             complexity = 0
                             for i2 in range(M2.rows):
                                 for j2 in range(M2.cols):
-                                    complexity += self.codeComplexity(M2[i,j])
+                                    complexity += self.codeComplexity(M2[i2, j2])
                             if self.IsDeterminantNonZeroByEval(M2):
                                 if complexity < 5000:
                                     Mdet = M2.det()
@@ -8878,7 +8883,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if len(solutions) == 0:            
             raise self.CannotSolveError('solveVariablesLinearly failed')
         else:
-            exec(ipython_str)
+            # exec(ipython_str)
             log.info('solveVariablesLinearly has found some solution.')
         
         return solutions
@@ -9015,7 +9020,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     '%d equations examined') % (varsym.var, len(polyeqs)))
 
     @staticmethod
-    def checkIsNan(self, tocheck):
+    def checkIsNan(tocheck):
         # for sympy's nan and numpy's, respectively
         return tocheck==tocheck+1 or isnan(tocheck) 
 
@@ -9023,7 +9028,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         Check an equation in one variable for validity
         """
-        from sympy.functions import re, im
 
         log.info('checkFinalEquation for %r', pfinal)
         
@@ -9041,14 +9045,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 pfinalnew += c*htvar**(m[0]-min_p)
             pfinal = pfinalnew
 
+        """
         # remove all factors of (var**2+1)
-        #while not pfinal==S.Zero:
-        #    q, r = pfinal.div(htvar_sqr_plus_one)
-        #    if r == S.Zero:
-        #        log.info('checkFinalEquation: divided %r**2+1, result: %r', htvar, q)
-        #        pfinal = q
-        #    else:
-        #        break
+        while pfinal!=S.Zero:
+            #q, r = pfinal.div(htvar_sqr_plus_one)
+            if pfinal.subs([(htvar,I)])==S.Zero:
+            #if r == S.Zero:
+            #    exec(ipython_str, globals, locals()
+                q = pfinal.div(htvar_sqr_plus_one)[0]
+                log.info('checkFinalEquation: divided %r**2+1, result: %r', htvar, q)
+                pfinal = q
+            else:
+                break
+        """
             
         # while sum(pfinal.degree_list()) > 0 and pfinal.TC() == S.Zero:
         #     pfinalnew = Poly(S.Zero, htvar)
@@ -9097,83 +9106,71 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             assert(len(nz_coeffs)>0)
 
             has_weird_sym = [c.has(I) or c==oo or c==-oo or self.checkIsNan(c) for c in nz_coeffs]
-
-            print has_weird_sym
-            
             if any(has_weird_sym):
                 log.info('checkFinalEquation: value has I/oo/-oo/nan:\n' + \
                          '        %r', nz_coeffs)
-                # continue
-                assert( any(has_weird_sym))
-            else:
-                assert( not any(has_weird_sym))
+                continue
 
-                print 'nz_coeffs = ', nz_coeffs
-                print 'has_weird_sym = ', has_weird_sym
-            
-                if Abs(nz_coeffs[0]) < thresh1:
-                    log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
-                             Abs(nz_coeffs[0]), thresh1)
-                    continue
+            if Abs(nz_coeffs[0]) < thresh1:
+                log.info('checkFinalEquation: precision comparison NOT passed: %r, %r\n' + \
+                         '        %r', \
+                         Abs(nz_coeffs[0]), thresh1, pfinal.terms())
+                continue
                 
-                #for degree in range(pfinal.degree(0), -1, -1):
-                #value = pfinaldict.get((degree,),S.Zero).subs(tosubs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf()
-                #if value.has(I): # check if has imaginary number
-                #    log.info('checkFinalEquation: value has imaginary part: %r', value)
-                #    coeffs = None
-                #    break
-                #else:
-                #    exec(ipython_str,globals(),locals())
-                #    coeffs.append(value)
-                #    # since coeffs[0] is normalized with the LC constant, can compare for precision
-                #    if len(coeffs) == 1 and Abs(coeffs[0]) < 2*(10.0**-self.precision):
-                #        log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
-                #                 Abs(coeffs[0]), 2*(10.0**-self.precision))
-                #        coeffs = None
-                #        break
-                
-                #if coeffs is None:
-                #    continue
+            #for degree in range(pfinal.degree(0), -1, -1):
+            #value = pfinaldict.get((degree,),S.Zero).subs(tosubs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf()
+            #if value.has(I): # check if has imaginary number
+            #    log.info('checkFinalEquation: value has imaginary part: %r', value)
+            #    coeffs = None
+            #    break
+            #else:
+            #    coeffs.append(value)
+            #    # since coeffs[0] is normalized with the LC constant, can compare for precision
+            #    if len(coeffs) == 1 and Abs(coeffs[0]) < 2*(10.0**-self.precision):
+            #        log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
+            #                 Abs(coeffs[0]), 2*(10.0**-self.precision))
+            #        coeffs = None
+            #        break
+            #if coeffs is None:
+            #    continue
             
-                if not all([c.is_number for c in nz_coeffs]):
-                    # cannot evaluate
-                    log.warn('checkFinalEquation: set found as True, as we cannot evaluate\n        %s', \
-                             "\n        ".join(str(x) for x in nz_coeffs if not x.is_number))
-                    found = True
-                    break
+            if not all([c.is_number for c in nz_coeffs]):
+                # cannot evaluate
+                log.warn('checkFinalEquation: set found as True, as we cannot evaluate\n        %s', \
+                         "\n        ".join(str(x) for x in nz_coeffs if not x.is_number))
+                found = True
+                break
 
-                # exact solution
-                realsolution = pfinal.gens[0].subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
+            # exact solution
+            realsolution = pfinal.gens[0].subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
 
-                print 'nz_coeffs = ', nz_coeffs            
-                assert( not any(has_weird_sym))
-                assert(nz_coeffs[0].has(nan) == False)
-            
-                coeffs = [0] * (deg+1)
-                for i, m in enumerate(ind_list):
-                    coeffs[m] = nz_coeffs[i]
+            # restore coefficient array
+            coeffs = [0] * (deg+1)
+            for i, m in enumerate(ind_list):
+                coeffs[m] = nz_coeffs[i]
 
-                print 'coeffs = ', coeffs
+            # compute residual first before calling expensive root finding
+            residual = Abs(polyval(coeffs, realsolution))
+            if residual < thresh3:
+                # compute roots by sympy's roots            
                 r = roots(coeffs).keys()
-                print 'r = ', r
-            
-                if any( [Abs(re(root)-realsolution) < thresh3 \
-                         and Abs(im(root)) < thresh2
+                if any( [Abs(Im(root))              < thresh2 and \
+                         Abs(Re(root)-realsolution) < thresh3 \
                          for root in r] ):
                     log.info('checkFinalEquation: precision comparison PASSED for root %r\n' + \
                              '        %r', realsolution, r)
                     found = True
                     break
                 else:
-                    # differences between roots and real solution can be large
-                    # when pfinal is a polynomial in one variable only
                     if any([not c.is_number for m,c in pfinal.terms()]):
                         log.info('checkFinalEquation: precision comparison NOT passed for root %r\n' + \
                                  '        %r', realsolution, r)
-                        #exec(ipython_str, globals(), locals())
+            else:
+                log.info('checkFinalEquation: residual too large for %r, ' + \
+                         'precision comparison NOT passed', realsolution) 
+                    
             """
-
-            # call numpy's polyroots to compute roots
+            # compute roots by numpy's polyroots
             # need to convert to float64 first, since X.evalf() is still a sympy object
             r = mpmath.polyroots(numpy.array(numpy.array(coeffs), numpy.float64)) 
             for root in r:
@@ -11256,7 +11253,7 @@ class AST:
         nonzerobranch = None
         anycondition  = None
         dictequations = None
-        thresh        = None # a threshold of 1e-6 breaks hiro ik
+        thresh        = None # a threshold of 1e-6 breaks Hiro IK
         equationsused = None
         
         def __init__(self, jointname, jointcheckeqs, zerobranch, nonzerobranch,thresh=None,anycondition=True):
