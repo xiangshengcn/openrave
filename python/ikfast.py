@@ -9022,18 +9022,40 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     @staticmethod
     def checkIsNan(tocheck):
         # for sympy's nan and numpy's, respectively
-        return tocheck==tocheck+1 or isnan(tocheck) 
+        return tocheck==tocheck+1 or isnan(tocheck)
+
+    @staticmethod
+    def checkFactorPmI(coeffs):
+        """
+        Divides a polynomial, defined by coeffs, by x**2+1 ([1, 0, 1]) 
+
+        and returns quotient and remainder in q, r.
+
+        check is True if residual is 0 and otherwise False
+
+        This avoids finding roots +I and -I for the polynomial.
+        """
+        
+        q = [0]*(len(coeffs)-2)
+        r = list(coeffs)
+        for i, m in enumerate(coeffs):
+            if i<len(coeffs)-2:
+                q[i] = r[i]
+                r[i+2] -= r[i]
+                r[i] = S.Zero
+        r = r[-2:]
+        check = all([c==S.Zero for c in r])
+        return q, r, check
 
     def checkFinalEquation(self, pfinal, tosubs = []):
         """
         Check an equation in one variable for validity
         """
 
-        log.info('checkFinalEquation for %r', pfinal)
+        # log.info('checkFinalEquation for %r', pfinal)
         
         assert(len(pfinal.gens)==1)
         htvar = pfinal.gens[0]
-        htvar_sqr_plus_one = Poly(htvar**2+1, htvar)
 
         # remove all factors of (var-0)
         p = [p[0] for p, c in pfinal.terms() if p[0]>0]
@@ -9046,6 +9068,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             pfinal = pfinalnew
 
         """
+        htvar_sqr_plus_one = Poly(htvar**2+1, htvar)
         # remove all factors of (var**2+1)
         while pfinal!=S.Zero:
             #q, r = pfinal.div(htvar_sqr_plus_one)
@@ -9068,7 +9091,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         # Check if leading coefficient (LC) is non-zero for at least one solution
         if pfinal.LC().evalf() == S.Zero:
-            log.info('checkFinalEquation: ZERO constant; returns NO valid solution')
+            log.info('checkFinalEquation:    ZERO constant; returns NO valid solution')
             return None
         elif pfinal.degree() == 0:
             log.info('checkFinalEquation: NONZERO constant; returns NO valid solution')
@@ -9087,7 +9110,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         deg = pfinal.degree()
         ind_list = [deg-m[0] for m,c in pfinal.terms()]
-        pfinaldict = pfinal.as_dict()
+        # pfinaldict = pfinal.as_dict()
 
         # thresholds
         thresh1 = 2*(10.0**-self.precision)
@@ -9107,14 +9130,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             has_weird_sym = [c.has(I) or c==oo or c==-oo or self.checkIsNan(c) for c in nz_coeffs]
             if any(has_weird_sym):
+                # some variable plugged in the denominator is 0 in test values, yielding +/-oo or nan
                 log.info('checkFinalEquation: value has I/oo/-oo/nan:\n' + \
                          '        %r', nz_coeffs)
                 continue
 
             if Abs(nz_coeffs[0]) < thresh1:
-                log.info('checkFinalEquation: precision comparison NOT passed: %r, %r\n' + \
-                         '        %r', \
-                         Abs(nz_coeffs[0]), thresh1, pfinal.terms())
+                # after plugging in test values, coefficient of highest order becomes 0
+                log.info('checkFinalEquation: precision comparison NOT passed: %r < %r', \
+                         Abs(nz_coeffs[0]), thresh1)
                 continue
                 
             #for degree in range(pfinal.degree(0), -1, -1):
@@ -9152,6 +9176,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # compute residual first before calling expensive root finding
             residual = Abs(polyval(coeffs, realsolution))
             if residual < thresh3:
+
+                # divide by (x**2+1) several times to get rid of roots +I, -I
+                while True:
+                    q, r, check = self.checkFactorPmI(coeffs)
+                    if check:
+                        coeffs = q
+                    else:
+                        break
+                
                 # compute roots by sympy's roots            
                 r = roots(coeffs).keys()
                 if any( [Abs(Im(root))              < thresh2 and \
@@ -9166,8 +9199,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         log.info('checkFinalEquation: precision comparison NOT passed for root %r\n' + \
                                  '        %r', realsolution, r)
             else:
-                log.info('checkFinalEquation: residual too large for %r, ' + \
-                         'precision comparison NOT passed', realsolution) 
+                pass
+                #log.info('checkFinalEquation: residual too large for %r, ' + \
+                #         'precision comparison NOT passed', realsolution) 
                     
             """
             # compute roots by numpy's polyroots
