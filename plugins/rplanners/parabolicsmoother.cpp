@@ -755,6 +755,8 @@ public:
             }
         }
         //====================================================================================================
+	RAVELOG_VERBOSE("saving the shortcut trajectory");
+	_DumpTrajectory(ptraj, _dumplevel);
         return _ProcessPostPlanners(RobotBasePtr(),ptraj);
     }
 

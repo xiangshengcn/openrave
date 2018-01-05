@@ -759,6 +759,7 @@ public:
                 return PS_Failed;
             }
         }
+	RAVELOG_VERBOSE("saving the shortcut trajectory");
         _DumpTrajectory(ptraj, _dumplevel);
 
 #ifdef SMOOTHER_TIMING_DEBUG
@@ -1784,7 +1785,7 @@ protected:
         else {
             randNum = RaveRandomInt();
         }
-        std::string filename = str(boost::format("%s/parabolicsmoother%d.traj.xml")%RaveGetHomeDirectory()%(randNum%1000));
+        std::string filename = str(boost::format("%s/parabolicsmoother2_%d.traj.xml")%RaveGetHomeDirectory()%(randNum%1000));
         ofstream f(filename.c_str());
         f << std::setprecision(RampOptimizer::g_nPrec);
         ptraj->serialize(f);
