@@ -182,10 +182,7 @@ ipython_str = 'ikfast_print_stack(); ' + \
               'from IPython.terminal import embed; ' + \
               'ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())'
 """
-When exec(ipython_str) does not work, use
-
-from IPython.terminal import embed;
-ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())
+exec(ipython_str, globals(), locals())
 """
             
 LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s ]\n' + \

@@ -217,14 +217,7 @@ ipython_str = 'ikfast_print_stack(); ' + \
               'ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())'
 
 """
-When exec(ipython_str) does not work, use
-
-exec(ipython_str) in globals(), locals()
-
-or
-
-from IPython.terminal import embed;
-ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())
+exec(ipython_str, globals(), locals())
 """
 
 def print_matrix(matrices, ind=None):
@@ -1450,7 +1443,7 @@ class IKFastSolver(AutoReloader):
                        self.codeComplexity(substitutedargs[1]) < 30 and \
                        (not substitutedargs[0].is_number or substitutedargs[0] == S.Zero) and \
                        (not substitutedargs[1].is_number or substitutedargs[1] == S.Zero):
-                            
+
                         sumeq = substitutedargs[0]**2 + substitutedargs[1]**2
 
                         testeq = sumeq if self.codeComplexity(sumeq) >= 400 \
@@ -1460,6 +1453,11 @@ class IKFastSolver(AutoReloader):
 
                         testeqmin = testeq if self.codeComplexity(testeq) < self.codeComplexity(testeq2) \
                                     else testeq2
+
+                        print substitutedargs[0]
+                        print substitutedargs[1]
+
+                        exec(ipython_str, globals(), locals())
 
                         if testeqmin.is_Mul:
                             checkforzeros += [arg for arg in testeqmin.args \
@@ -1564,7 +1562,7 @@ class IKFastSolver(AutoReloader):
         sol.score = 20000*sol.numsolutions()
         
         try:
-            log.info('ComputeSolutionComplexity: %r', sol)
+            # log.info('ComputeSolutionComplexity: %r', sol)
             # exec(ipython_str, globals(), locals())
             # multiby by 400 in order to prioritize equations with less solutions
             # TGN: remove all those hasattr(sol, ...) check, because they are always True
@@ -9025,7 +9023,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return tocheck==tocheck+1 or isnan(tocheck)
 
     @staticmethod
-    def checkFactorPmI(coeffs):
+    def checkFactorPmI(coeffs, thresh=1e-12):
         """
         Divides a polynomial, defined by coeffs, by x**2+1 ([1, 0, 1]) 
 
@@ -9043,7 +9041,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 q[i] = r[i]
                 r[i+2] -= r[i]
                 r[i] = S.Zero
-        r = r[-2:]
+        r = [c if Abs(c)>=thresh else S.Zero for c in r[-2:]]
         check = all([c==S.Zero for c in r])
         return q, r, check
 
@@ -9179,7 +9177,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
                 # divide by (x**2+1) several times to get rid of roots +I, -I
                 while True:
-                    q, r, check = self.checkFactorPmI(coeffs)
+                    q, rem, check = self.checkFactorPmI(coeffs)
                     if check:
                         coeffs = q
                     else:
