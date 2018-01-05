@@ -9014,6 +9014,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         raise self.CannotSolveError(('half-angle substitution for joint %s failed, ' + \
                                     '%d equations examined') % (varsym.var, len(polyeqs)))
 
+    @staticmethod
+    def checkIsNan(self, tocheck):
+        # for sympy's nan and numpy's, respectively
+        return tocheck==tocheck+1 or isnan(tocheck) 
+
     def checkFinalEquation(self, pfinal, tosubs = []):
         """
         Check an equation in one variable for validity
@@ -9090,21 +9095,28 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             
 
             assert(len(nz_coeffs)>0)
+
+            has_weird_sym = [c.has(I) or c==oo or c==-oo or self.checkIsNan(c) for c in nz_coeffs]
+
+            print has_weird_sym
             
-            if any([c.has(I) or c.has(oo) or c.has(-oo) or c.has(nan) for c in nz_coeffs]):
+            if any(has_weird_sym):
                 log.info('checkFinalEquation: value has I/oo/-oo/nan:\n' + \
                          '        %r', nz_coeffs)
-                exec(ipython_str, globals(), locals())
-                continue
+                # continue
+                assert( any(has_weird_sym))
+            else:
+                assert( not any(has_weird_sym))
 
-            assert( not any([c.has(I) or c.has(oo) or c.has(-oo) or c.has(nan) for c in nz_coeffs]))
+                print 'nz_coeffs = ', nz_coeffs
+                print 'has_weird_sym = ', has_weird_sym
             
-            if Abs(nz_coeffs[0]) < thresh1:
-                log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
-                         Abs(nz_coeffs[0]), thresh1)
-                continue
+                if Abs(nz_coeffs[0]) < thresh1:
+                    log.info('checkFinalEquation: precision comparison NOT passed: %r, %r', \
+                             Abs(nz_coeffs[0]), thresh1)
+                    continue
                 
-            #for degree in range(pfinal.degree(0), -1, -1):
+                #for degree in range(pfinal.degree(0), -1, -1):
                 #value = pfinaldict.get((degree,),S.Zero).subs(tosubs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf()
                 #if value.has(I): # check if has imaginary number
                 #    log.info('checkFinalEquation: value has imaginary part: %r', value)
@@ -9120,44 +9132,45 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 #        coeffs = None
                 #        break
                 
-            #if coeffs is None:
-            #    continue
+                #if coeffs is None:
+                #    continue
             
-            if not all([c.is_number for c in nz_coeffs]):
-                # cannot evaluate
-                log.warn('checkFinalEquation: set found as True, as we cannot evaluate\n        %s', \
-                         "\n        ".join(str(x) for x in nz_coeffs if not x.is_number))
-                found = True
-                break
+                if not all([c.is_number for c in nz_coeffs]):
+                    # cannot evaluate
+                    log.warn('checkFinalEquation: set found as True, as we cannot evaluate\n        %s', \
+                             "\n        ".join(str(x) for x in nz_coeffs if not x.is_number))
+                    found = True
+                    break
 
-            # exact solution
-            realsolution = pfinal.gens[0].subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
+                # exact solution
+                realsolution = pfinal.gens[0].subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()
 
-            print 'nz_coeffs = ', nz_coeffs            
-            assert( not any([c.has(I) or c.has(oo) or c.has(-oo) or c.has(nan) for c in nz_coeffs]))            
-
-            coeffs = [0] * (deg+1)
-            for i, m in enumerate(ind_list):
-                coeffs[m] = nz_coeffs[i]
-
-            print 'coeffs = ', coeffs
-            r = roots(coeffs).keys()
-            print 'r = ', r
+                print 'nz_coeffs = ', nz_coeffs            
+                assert( not any(has_weird_sym))
+                assert(nz_coeffs[0].has(nan) == False)
             
-            if any( [Abs(re(root)-realsolution) < thresh3 \
-                     and Abs(im(root)) < thresh2
-                     for root in r] ):
-                log.info('checkFinalEquation: precision comparison PASSED for root %r\n' + \
-                         '        %r', realsolution, r)
-                found = True
-                break
-            else:
-                # differences between roots and real solution can be large
-                # when pfinal is a polynomial in one variable only
-                if any([not c.is_number for m,c in pfinal.terms()]):
-                    log.info('checkFinalEquation: precision comparison NOT passed for root %r\n' + \
+                coeffs = [0] * (deg+1)
+                for i, m in enumerate(ind_list):
+                    coeffs[m] = nz_coeffs[i]
+
+                print 'coeffs = ', coeffs
+                r = roots(coeffs).keys()
+                print 'r = ', r
+            
+                if any( [Abs(re(root)-realsolution) < thresh3 \
+                         and Abs(im(root)) < thresh2
+                         for root in r] ):
+                    log.info('checkFinalEquation: precision comparison PASSED for root %r\n' + \
                              '        %r', realsolution, r)
-                    #exec(ipython_str, globals(), locals())
+                    found = True
+                    break
+                else:
+                    # differences between roots and real solution can be large
+                    # when pfinal is a polynomial in one variable only
+                    if any([not c.is_number for m,c in pfinal.terms()]):
+                        log.info('checkFinalEquation: precision comparison NOT passed for root %r\n' + \
+                                 '        %r', realsolution, r)
+                        #exec(ipython_str, globals(), locals())
             """
 
             # call numpy's polyroots to compute roots
