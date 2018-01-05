@@ -1438,26 +1438,32 @@ class IKFastSolver(AutoReloader):
                             substitutedargs.append(argeq2 if argeq2.is_Symbol else self.SimplifyAtan2(argeq2))
                         else:
                             substitutedargs.append(argeq2)
+                            
                     # has to be greater than 20 since some const coefficients can be simplified
-                    if self.codeComplexity(substitutedargs[0]) < 30 and \
-                       self.codeComplexity(substitutedargs[1]) < 30 and \
-                       (not substitutedargs[0].is_number or substitutedargs[0] == S.Zero) and \
-                       (not substitutedargs[1].is_number or substitutedargs[1] == S.Zero):
+                    s0 = substitutedargs[0]
+                    s1 = substitutedargs[1]
+                    
+                    if self.codeComplexity(s0) < 30 and \
+                       self.codeComplexity(s1) < 30 and \
+                       (not s0.is_number or s0 == S.Zero) and \
+                       (not s1.is_number or s1 == S.Zero):
 
-                        sumeq = substitutedargs[0]**2 + substitutedargs[1]**2
+                        g = gcd(s0, s1)
+                        s0 /= g
+                        s1 /= g
+                        
+                        if g.is_number:
+                            assert(g!=S.Zero)
+                            sumeq = s0**2 + s1**2
+                            testeq2 = abs(s0) + abs(s1)
+                        else:
+                            sumeq = (s0**2 + s1**2) * (g**2)
+                            testeq2 = (abs(s0)+abs(s1)) * abs(g)
 
                         testeq = sumeq if self.codeComplexity(sumeq) >= 400 \
                                  else self.SimplifyAtan2(sumeq.expand())
-                                    
-                        testeq2 = abs(substitutedargs[0]) + abs(substitutedargs[1])
-
                         testeqmin = testeq if self.codeComplexity(testeq) < self.codeComplexity(testeq2) \
                                     else testeq2
-
-                        print substitutedargs[0]
-                        print substitutedargs[1]
-
-                        exec(ipython_str, globals(), locals())
 
                         if testeqmin.is_Mul:
                             checkforzeros += [arg for arg in testeqmin.args \
@@ -1467,15 +1473,22 @@ class IKFastSolver(AutoReloader):
                                     
                         if checkforzeros[-1].evalf() == S.Zero:
                             raise self.CannotSolveError('Nonzero condition evaluates to 0. Never OK!!!')
-                        
-                        log.info('add atan2( %r, \n                   %r ) \n' \
-                                 + '        check zero ' \
-                                 #+ ': %r' \
-                                 , substitutedargs[0], substitutedargs[1] \
-                                 #, checkforzeros[-1]
-                        )
-                        # print checkforzeros
-                        # exec(ipython_str)
+
+                        if g.is_number:
+                            g = Abs(g)
+                            log.info('add atan2( %r, \n                   %r ) \n' \
+                                     + '        check zero ' \
+                                     #+ ': %r' \
+                                     , substitutedargs[0]/g, substitutedargs[1]/g \
+                                     #, checkforzeros[-1]
+                            )
+                        else:
+                            log.info('add atan2( %r, \n                   %r ) \n' \
+                                     + '        check zero ' \
+                                     #+ ': %r' \
+                                     , substitutedargs[0], substitutedargs[1] \
+                                     #, checkforzeros[-1]
+                            )
 
             # originally, is_Mul, is_Add, is_Pow
             checkforzeros += list(itertools.chain.from_iterable \
@@ -9089,7 +9102,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         # Check if leading coefficient (LC) is non-zero for at least one solution
         if pfinal.LC().evalf() == S.Zero:
-            log.info('checkFinalEquation:    ZERO constant; returns NO valid solution')
+            log.info('checkFinalEquation: ZERO constant; returns NO valid solution')
             return None
         elif pfinal.degree() == 0:
             log.info('checkFinalEquation: NONZERO constant; returns NO valid solution')
@@ -9129,8 +9142,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             has_weird_sym = [c.has(I) or c==oo or c==-oo or self.checkIsNan(c) for c in nz_coeffs]
             if any(has_weird_sym):
                 # some variable plugged in the denominator is 0 in test values, yielding +/-oo or nan
-                log.info('checkFinalEquation: value has I/oo/-oo/nan:\n' + \
-                         '        %r', nz_coeffs)
+                # log.info('checkFinalEquation: value has I/oo/-oo/nan:\n' + \
+                #          '        %r', nz_coeffs)
                 continue
 
             if Abs(nz_coeffs[0]) < thresh1:
@@ -9215,7 +9228,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if found:
             log.info('checkFinalEquation returns VALID solution')
         else:
-            log.info('checkFinalEquation returns NO valid solution')
+            pass
+            # log.info('checkFinalEquation returns NO valid solution')
             
         return pfinal if found else None
 
@@ -11087,6 +11101,17 @@ class AST:
             if self.jointeval is not None:
                 valid &= all([IKFastSolver.isValidSolution(e) for e in self.jointeval])
             return valid
+
+        @staticmethod
+        def clearConstantsForAbs(expr):
+            expr = factor(expr)
+            if expr.is_Mul:
+                c = reduce(mul, [arg for arg in expr.args if arg.is_number], 1)
+                if c==S.Zero:
+                    expr = S.Zero
+                else:
+                    expr /= c
+            return expr
         
         def getPresetCheckForZeros(self):
             # make sure that all the coefficients containing higher-order variables are not 0
@@ -11094,16 +11119,34 @@ class AST:
             for monom, coeff in self.poly.terms():
                 if monom[0] > 0:
                     if len(self.dictequations) > 0: # bug with sympy?
-                        zeroeq += abs(coeff.subs(self.dictequations))
+                        expr = coeff.subs(self.dictequations)
                     else:
-                        zeroeq += abs(coeff)
+                        expr = coeff
+                    new_expr = self.clearConstantsForAbs(expr)
+                    """
+                    if expr != new_expr:
+                        print expr
+                        print new_expr
+                        exec(ipython_str, globals(), locals())
+                    """
+                    zeroeq += abs(new_expr)
+
+                        
             if self.polybackup is not None:
                 for monom, coeff in self.polybackup.terms():
-                    if monom[0] > 0:
-                        if len(self.dictequations) > 0: # bug with sympy?
-                            zeroeq += abs(coeff.subs(self.dictequations))
-                        else:
-                            zeroeq += abs(coeff)
+                    if len(self.dictequations) > 0: # bug with sympy?
+                        expr = coeff.subs(self.dictequations)
+                    else:
+                        expr = coeff
+                    new_expr = self.clearConstantsForAbs(expr)
+                    """
+                    if expr != new_expr:
+                        print expr
+                        print new_expr
+                        exec(ipython_str, globals(), locals())
+                    """
+                    zeroeq += abs(new_expr)
+
             return [zeroeq]#self.poly.LC()]
         
         def getEquationsUsed(self):
