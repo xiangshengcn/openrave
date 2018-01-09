@@ -1448,10 +1448,13 @@ class IKFastSolver(AutoReloader):
                        (not s0.is_number or s0 == S.Zero) and \
                        (not s1.is_number or s1 == S.Zero):
 
-                        g = gcd(s0, s1)
-                        s0 /= g
-                        s1 /= g
-                        
+                        # sumeq = s0**2 + s1**2
+                        # testeq2 = abs(s0) + abs(s1)
+
+                        g  = gcd(s0, s1)
+                        s0 = cancel(s0/g)
+                        s1 = cancel(s1/g)
+
                         if g.is_number:
                             assert(g!=S.Zero)
                             sumeq = s0**2 + s1**2
@@ -1473,7 +1476,7 @@ class IKFastSolver(AutoReloader):
                                     
                         if checkforzeros[-1].evalf() == S.Zero:
                             raise self.CannotSolveError('Nonzero condition evaluates to 0. Never OK!!!')
-
+                        
                         if g.is_number:
                             g = Abs(g)
                             log.info('add atan2( %r, \n                   %r ) \n' \
@@ -9031,9 +9034,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     '%d equations examined') % (varsym.var, len(polyeqs)))
 
     @staticmethod
-    def checkIsNan(tocheck):
-        # for sympy's nan and numpy's, respectively
-        return tocheck==tocheck+1 or isnan(tocheck)
+    def checkIsNan(tocheck):  
+        if hasattr(tocheck, 'is_number'): # sympy's nan   
+            return tocheck == tocheck+1 if tocheck.is_number else False
+        else: # numpy's nan  
+            return isnan(tocheck)  
 
     @staticmethod
     def checkFactorPmI(coeffs, thresh=1e-12):
@@ -9102,14 +9107,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         # Check if leading coefficient (LC) is non-zero for at least one solution
         if pfinal.LC().evalf() == S.Zero:
-            log.info('checkFinalEquation: ZERO constant; returns NO valid solution')
+            # log.info('checkFinalEquation: ZERO constant; returns NO valid solution')
             return None
         elif pfinal.degree() == 0:
-            log.info('checkFinalEquation: NONZERO constant; returns NO valid solution')
+            # log.info('checkFinalEquation: NONZERO constant; returns NO valid solution')
             return None
         elif all([pfinal.LC().subs(tosubs).subs(self.globalsymbols).subs(testconsistentvalue).evalf()==S.Zero \
                 for testconsistentvalue in self.testconsistentvalues]):
-            log.info('checkFinalEquation: ZERO for all sets of consistent values; returns NO valid solution')
+            # log.info('checkFinalEquation: ZERO for all sets of consistent values; returns NO valid solution')
             return None
 
         # sanity check that polynomial can produce a solution and is not actually very small values
@@ -9148,8 +9153,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             if Abs(nz_coeffs[0]) < thresh1:
                 # after plugging in test values, coefficient of highest order becomes 0
-                log.info('checkFinalEquation: precision comparison NOT passed: %r < %r', \
-                         Abs(nz_coeffs[0]), thresh1)
+                # log.info('checkFinalEquation: precision comparison NOT passed: %r < %r', \
+                #          Abs(nz_coeffs[0]), thresh1)
                 continue
                 
             #for degree in range(pfinal.degree(0), -1, -1):
@@ -9201,14 +9206,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 if any( [Abs(Im(root))              < thresh2 and \
                          Abs(Re(root)-realsolution) < thresh3 \
                          for root in r] ):
-                    log.info('checkFinalEquation: precision comparison PASSED for root %r\n' + \
-                             '        %r', realsolution, r)
+                    # log.info('checkFinalEquation: precision comparison PASSED for root %r\n' + \
+                    #          '        %r', realsolution, r)
                     found = True
                     break
                 else:
                     if any([not c.is_number for m,c in pfinal.terms()]):
-                        log.info('checkFinalEquation: precision comparison NOT passed for root %r\n' + \
-                                 '        %r', realsolution, r)
+                        pass
+                    #     log.info('checkFinalEquation: precision comparison NOT passed for root %r\n' + \
+                    #              '        %r', realsolution, r)
             else:
                 pass
                 #log.info('checkFinalEquation: residual too large for %r, ' + \
@@ -11130,7 +11136,6 @@ class AST:
                         exec(ipython_str, globals(), locals())
                     """
                     zeroeq += abs(new_expr)
-
                         
             if self.polybackup is not None:
                 for monom, coeff in self.polybackup.terms():
