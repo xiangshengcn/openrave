@@ -1254,7 +1254,9 @@ class IKFastSolver(AutoReloader):
                     neweq2 = neweq
                 else:
                     #log.info('complexity: %d', self.codeComplexity(neweq))
+                    #print neweq
                     neweq2 = simplify(neweq)
+                    #print neweq2
                 if neweq2 != neweq:
                     neweq = self.SimplifyAtan2(neweq2)
                 else:
@@ -1408,6 +1410,58 @@ class IKFastSolver(AutoReloader):
             
         return exprs
 
+    @staticmethod
+    def mygcd(s0, s1):
+        g_expr  = S.One
+        g_const = S.One
+        while True:
+            g = gcd(s0, s1)
+            if g.is_number:
+                g_const *= g
+            else:
+                g_expr *= g
+            
+            if g == S.One:
+                break
+            else:
+                s0 = cancel(s0/g)
+                s1 = cancel(s1/g)
+
+        #print 'before factor: ', s0
+        #print s1
+        s0 = factor(s0)
+        s1 = factor(s1)
+        #print 'after factor: ', s0
+        #print s1
+
+        if s0.is_Mul and s1.is_Mul:
+            #exec(ipython_str, globals(), locals())
+            c1 = reduce(mul, [arg for arg in s1.args if arg.is_number], 1)
+            #print 'c1 = ', c1
+            g_const *= c1
+            s0 = cancel(s0/c1)
+            s1 = cancel(s1/c1)
+        else:
+            pass
+            #exec(ipython_str, globals(), locals())
+
+        #print 'exit mygcd: ', s0
+        #print s1
+            
+        return s0, s1, g_const, g_expr
+
+    """
+    def mygcd_frac(self, s0, s1):
+        s0_num, s0_denom = fraction(s0)
+        s1_num, s1_denom = fraction(s1)
+        s0_denom, s1_denom, g_const_denom, g_expr_denom = self.mygcd(s0_denom, s1_denom)
+        if not g_expr_denom == S.One:
+            return s0, s1
+        s0_num,   s1_num,   g_const_num,   g_expr_num = self.mygcd(s0_num, s1_num)
+        return s0_num/s0_denom, s1_num/s1_denom, \
+            g_const_num/g_const_denom, g_expr_num/g_expr_denom
+    """
+
     def checkForDivideByZero(self, eq):
         """
         Returns the equations to check for zero
@@ -1448,25 +1502,42 @@ class IKFastSolver(AutoReloader):
                        (not s0.is_number or s0 == S.Zero) and \
                        (not s1.is_number or s1 == S.Zero):
 
-                        # sumeq = s0**2 + s1**2
-                        # testeq2 = abs(s0) + abs(s1)
+                        # print 'old s0  = ', s0
+                        # print 'old s1  = ', s1
 
-                        g  = gcd(s0, s1)
-                        s0 = cancel(s0/g)
-                        s1 = cancel(s1/g)
+                        """
+                        sumeq = s0**2 + s1**2
+                        testeq2 = abs(s0) + abs(s1)
+                        """
 
-                        if g.is_number:
-                            assert(g!=S.Zero)
-                            sumeq = s0**2 + s1**2
+                        s0, s1, g_const, g_expr = self.mygcd(s0, s1)
+                        
+                        # print 'g_expr  = ', g_expr
+                        # print 'g_const = ', g_const
+                        # print 'new s0  = ', s0
+                        # print 'new s1  = ', s1
+
+                        #if not(g_const==S.One and g_expr==S.One):
+                        #    exec(ipython_str, globals(), locals())
+
+
+                        if g_expr.is_number:
+                            assert(g_expr !=S.Zero)
+                            assert(g_const!=S.Zero)
+                            sumeq   = s0**2 + s1**2
                             testeq2 = abs(s0) + abs(s1)
                         else:
-                            sumeq = (s0**2 + s1**2) * (g**2)
-                            testeq2 = (abs(s0)+abs(s1)) * abs(g)
+                            #sumeq   = (s0***2 + s1**2) * g_expr**2
+                            sumeq   = (s0*g_expr)**2 + (s1*g_expr)**2
+                            testeq2 = abs(s0*g_expr) + abs(s1*g_expr) #(abs(s0)+abs(s1)) * abs(g_cum)
+                        #"""
 
                         testeq = sumeq if self.codeComplexity(sumeq) >= 400 \
                                  else self.SimplifyAtan2(sumeq.expand())
                         testeqmin = testeq if self.codeComplexity(testeq) < self.codeComplexity(testeq2) \
                                     else testeq2
+
+                        # log.info('testeqmin = %r', testeqmin)
 
                         if testeqmin.is_Mul:
                             checkforzeros += [arg for arg in testeqmin.args \
@@ -1476,13 +1547,14 @@ class IKFastSolver(AutoReloader):
                                     
                         if checkforzeros[-1].evalf() == S.Zero:
                             raise self.CannotSolveError('Nonzero condition evaluates to 0. Never OK!!!')
-                        
-                        if g.is_number:
-                            g = Abs(g)
+
+                        """
+                        if g_cum.is_number:
+                            g_cum = Abs(g_cum)
                             log.info('add atan2( %r, \n                   %r ) \n' \
                                      + '        check zero ' \
                                      #+ ': %r' \
-                                     , substitutedargs[0]/g, substitutedargs[1]/g \
+                                     , substitutedargs[0]/g_cum, substitutedargs[1]/g_cum \
                                      #, checkforzeros[-1]
                             )
                         else:
@@ -1492,6 +1564,7 @@ class IKFastSolver(AutoReloader):
                                      , substitutedargs[0], substitutedargs[1] \
                                      #, checkforzeros[-1]
                             )
+                        """
 
             # originally, is_Mul, is_Add, is_Pow
             checkforzeros += list(itertools.chain.from_iterable \
@@ -7768,9 +7841,22 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     for arg in sumsquaresexpr.args:
                                         if arg.is_Symbol:
                                             sumsquaresexprstozero.append(arg)
+                            
                             if len(sumsquaresexprstozero) > 0:
-                                localsubstitutioneqs.append([sumsquaresexprstozero,checkzero,[(sumsquaresexpr,S.Zero) for sumsquaresexpr in sumsquaresexprstozero], []])
-                                handledconds += sumsquaresexprstozero
+                               log.info('%r', [sumsquaresexprstozero,checkzero, \
+                                               [(sumsquaresexpr,S.Zero) \
+                                                for sumsquaresexpr in sumsquaresexprstozero], []])
+
+                               toappend = [sumsquaresexprstozero, \
+                                           checkzero, \
+                                           [(sumsquaresexpr, S.Zero) \
+                                            for sumsquaresexpr in sumsquaresexprstozero], []]
+                               log.info('%r', toappend)
+                               
+                               localsubstitutioneqs.append(toappend)
+                                
+                               handledconds += sumsquaresexprstozero
+                                
                     for checksimplezeroexpr in checksimplezeroexprs:
                         #if checksimplezeroexpr.has(*othersolvedvars): # cannot do this check since sjX,cjX might be used
                         for othervar in othersolvedvars:
@@ -7842,7 +7928,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                         evalcond=fmod(cond+pi,2*pi)-pi
                                                     else:
                                                         evalcond=cond
-                                                    localsubstitutioneqs.append([[cond],evalcond,[(sothervar,sineq),(sin(othervar),sineq),(cothervar,coseq),(cos(othervar),coseq),(othervar,eq)], dictequations])
+
+                                                    toappend = [[cond], \
+                                                                evalcond, \
+                                                                [(sothervar, sineq), \
+                                                                 (sin(othervar), sineq), \
+                                                                 (cothervar,coseq), \
+                                                                 (cos(othervar),coseq), \
+                                                                 (othervar,eq)], \
+                                                                dictequations]
+                                                    log.info('%r', toappend)
+                                                    # exec(ipython_str,globals(),locals())
+                                                    
+                                                    localsubstitutioneqs.append(toappend)
+                                                    
                                                     handledconds.append(cond)
                                     elif s.jointevalsin is not None:
                                         for eq in s.jointevalsin:
@@ -7863,21 +7962,43 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                         dictequations.append((sym,eq))
                                                         #eq = sym
                                                     cond=abs(sothervar-eq.evalf(n=30)) + abs(sign(cothervar)-1)
+                                                    
                                                 if self.CheckExpressionUnique(handledconds, cond):
+                                                    
                                                     if self.IsHinge(othervar.name):
-                                                        evalcond=fmod(cond+pi,2*pi)-pi
+                                                        evalcond = fmod(cond+pi, 2*pi) - pi
                                                     else:
-                                                        evalcond=cond
+                                                        evalcond = cond
+                                                        
                                                     if isimaginary:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,S.Zero),(sin(othervar),S.Zero),(cothervar,S.One),(cos(othervar),S.One),(othervar,S.One)], dictequations])
+                                                        toappend = [[cond], \
+                                                                    evalcond, \
+                                                                    [(sothervar,     S.Zero), \
+                                                                     (sin(othervar), S.Zero), \
+                                                                     (cothervar,     S.One),  \
+                                                                     (cos(othervar), S.One),  \
+                                                                     (othervar,      S.One)], \
+                                                                    dictequations]
+                                                        localsubstitutioneqs.append(toappend)
                                                     else:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,eq),(sin(othervar),eq),(cothervar,sqrt(1-eq*eq).evalf(n=30)),(cos(othervar),sqrt(1-eq*eq).evalf(n=30)),(othervar,asin(eq).evalf(n=30))], dictequations])
+                                                        exec(ipython_str, globals(), locals())
+                                                        toappend = [[cond], \
+                                                                    evalcond, \
+                                                                    [(sothervar,     eq), \
+                                                                     (sin(othervar), eq), \
+                                                                     (cothervar,    sqrt(1-eq*eq).evalf(n=30)), \
+                                                                     (cos(othervar),sqrt(1-eq*eq).evalf(n=30)), \
+                                                                     (othervar, asin(eq).evalf(n=30))], \
+                                                                    dictequations]
+                                                        localsubstitutioneqs.append(toappend)
+                                                        
                                                     handledconds.append(cond)
                                                 # test when cos(othervar) < 0
                                                 if isimaginary:
                                                     cond = abs(sothervar) + abs((eq**2).evalf(n=30)) + abs(sign(cothervar)+1)
                                                 else:
-                                                    cond=abs(sothervar-eq.evalf(n=30))+abs(sign(cothervar)+1)
+                                                    cond = abs(sothervar-eq.evalf(n=30)) + abs(sign(cothervar)+1)
+                                                    
                                                 #cond=othervar-(pi-asin(eq).evalf(n=30))
                                                 if self.CheckExpressionUnique(handledconds, cond):
                                                     if self.IsHinge(othervar.name):
@@ -7885,54 +8006,124 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                     else:
                                                         evalcond=cond
                                                     if isimaginary:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,S.Zero),(sin(othervar),S.Zero),(cothervar,-S.One),(cos(othervar),-S.One),(othervar,pi.evalf(n=30))], dictequations])
+                                                        localsubstitutioneqs.append([[cond], \
+                                                                                     evalcond, \
+                                                                                     [(sothervar,      S.Zero), \
+                                                                                      (sin(othervar),  S.Zero), \
+                                                                                      (cothervar,     -S.One),  \
+                                                                                      (cos(othervar), -S.One),  \
+                                                                                      (othervar, pi.evalf(n=30))], \
+                                                                                     dictequations])
                                                     else:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,eq),(sin(othervar),eq),(cothervar,-sqrt(1-eq*eq).evalf(n=30)),(cos(othervar),-sqrt(1-eq*eq).evalf(n=30)),(othervar,(pi-asin(eq)).evalf(n=30))], dictequations])
+                                                        exec(ipython_str, globals(), locals())
+                                                        localsubstitutioneqs.append([[cond], \
+                                                                                     evalcond, \
+                                                                                     [(sothervar,     eq), \
+                                                                                      (sin(othervar), eq), \
+                                                                                      (cothervar,    -sqrt(1-eq*eq).evalf(n=30)), \
+                                                                                      (cos(othervar),-sqrt(1-eq*eq).evalf(n=30)), \
+                                                                                      (othervar, \
+                                                                                       (pi-asin(eq)).evalf(n=30))], \
+                                                                                     dictequations])
                                                     handledconds.append(cond)
+                                                    
                                     elif s.jointevalcos is not None:
                                         for eq in s.jointevalcos:
                                             eq = self.SimplifyAtan2(self._SubstituteGlobalSymbols(eq, originalGlobalSymbols))
-                                            if eq.is_number or (len(currentcases) <= 1 and not eq.has(*allothersolvedvars) and self.codeComplexity(eq) < 100):
+                                            if eq.is_number or (len(currentcases) <= 1 and \
+                                                                not eq.has(*allothersolvedvars) and \
+                                                                self.codeComplexity(eq) < 100):
+                                                
                                                 dictequations = []
                                                 # test when sin(othervar) > 0
-                                                # don't use acos(eq)!! since eq = (-pz**2/px**2)**(1/2), which would produce imaginary numbers
+                                                # don't use acos(eq)!! since eq = (-pz**2/px**2)**(1/2),
+                                                # which would produce imaginary numbers
                                                 # that's why check eq.evalf().has(I)
                                                 #cond=othervar-acos(eq).evalf(n=30)
-                                                isimaginary = self.AreAllImaginaryByEval(eq) or  eq.evalf().has(I)
+                                                isimaginary = self.AreAllImaginaryByEval(eq) or eq.evalf().has(I)
+                                                
                                                 if isimaginary:
-                                                    cond=abs(cothervar)+abs((eq**2).evalf(n=30)) + abs(sign(sothervar)-1)
+                                                    cond = abs(cothervar) + abs((eq**2).evalf(n=30)) + abs(sign(sothervar)-1)
                                                 else:
-                                                    if not eq.is_number and not eq.has(*allothersolvedvars):
-                                                        # not dependent on variables, so it could be in the form of atan(px,py), so convert to a global symbol since it never changes
+                                                    if not (eq.is_number or eq.has(*allothersolvedvars)):
+                                                        # not dependent on variables
+                                                        # so it could be in the form of atan(px,py),
+                                                        # so convert to a global symbol since it never changes
                                                         sym = self.gsymbolgen.next()
-                                                        dictequations.append((sym,eq))
+                                                        dictequations.append((sym, eq))
                                                         eq = sym
-                                                    cond=abs(cothervar-eq.evalf(n=30)) + abs(sign(sothervar)-1)
+                                                    cond = abs(cothervar-eq.evalf(n=30)) + abs(sign(sothervar)-1)
+                                                    
                                                 if self.CheckExpressionUnique(handledconds, cond):
+                                                    
                                                     if self.IsHinge(othervar.name):
-                                                        evalcond=fmod(cond+pi,2*pi)-pi
+                                                        evalcond = fmod(cond+pi, 2*pi) - pi
                                                     else:
-                                                        evalcond=cond
+                                                        evalcond = cond
+                                                        
                                                     if isimaginary:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,S.One),(sin(othervar),S.One),(cothervar,S.Zero),(cos(othervar),S.Zero),(othervar,(pi/2).evalf(n=30))], dictequations])
+                                                        toappend = [[cond], \
+                                                                    evalcond, \
+                                                                    [(sothervar,     S.One),  \
+                                                                     (sin(othervar), S.One),  \
+                                                                     (cothervar,     S.Zero), \
+                                                                     (cos(othervar), S.Zero), \
+                                                                     (othervar, (pi/2).evalf(n=30))], \
+                                                                    dictequations]
                                                     else:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,sqrt(1-eq*eq).evalf(n=30)),(sin(othervar),sqrt(1-eq*eq).evalf(n=30)),(cothervar,eq),(cos(othervar),eq),(othervar,acos(eq).evalf(n=30))], dictequations])
+                                                        toappend = [[cond], \
+                                                                    evalcond, \
+                                                                    [(sothervar,     sqrt(1-eq*eq).evalf(n=30)), \
+                                                                     (sin(othervar), sqrt(1-eq*eq).evalf(n=30)), \
+                                                                     (cothervar,     eq), \
+                                                                     (cos(othervar), eq), \
+                                                                     (othervar, acos(eq).evalf(n=30))], \
+                                                                    dictequations]
+                                                        
+                                                    log.info('%r', toappend)
+                                                    # exec(ipython_str,globals(),locals())
+                                                    localsubstitutioneqs.append(toappend)
+                                                        
                                                     handledconds.append(cond)
+                                                    
                                                 #cond=othervar+acos(eq).evalf(n=30)
                                                 if isimaginary:
-                                                    cond=abs(cothervar)+abs((eq**2).evalf(n=30)) + abs(sign(sothervar)+1)
+                                                    cond = abs(cothervar) + abs((eq**2).evalf(n=30)) + abs(sign(sothervar)+1)
                                                 else:
-                                                    cond=abs(cothervar-eq.evalf(n=30)) + abs(sign(sothervar)+1)
+                                                    cond = abs(cothervar-eq.evalf(n=30)) + abs(sign(sothervar)+1)
                                                 if self.CheckExpressionUnique(handledconds, cond):
                                                     if self.IsHinge(othervar.name):
-                                                        evalcond=fmod(cond+pi,2*pi)-pi
+                                                        evalcond = fmod(cond+pi,2*pi)-pi
                                                     else:
-                                                        evalcond=cond
+                                                        evalcond = cond
+                                                        
                                                     if isimaginary:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,-S.One),(sin(othervar),-S.One),(cothervar,S.Zero),(cos(othervar),S.Zero),(othervar,(-pi/2).evalf(n=30))], dictequations])
+                                                        toappend = [[cond], \
+                                                                    evalcond, \
+                                                                    [(sothervar,    -S.One),  \
+                                                                     (sin(othervar),-S.One),  \
+                                                                     (cothervar,     S.Zero), \
+                                                                     (cos(othervar), S.Zero), \
+                                                                     (othervar, (-pi/2).evalf(n=30))], \
+                                                                    dictequations]
+                                                        log.info('%r', toappend)
+                                                        localsubstitutioneqs.append(toappend)
                                                     else:
-                                                        localsubstitutioneqs.append([[cond],evalcond,[(sothervar,-sqrt(1-eq*eq).evalf(n=30)),(sin(othervar),-sqrt(1-eq*eq).evalf(n=30)),(cothervar,eq),(cos(othervar),eq),(othervar,-acos(eq).evalf(n=30))], dictequations])
+                                                        toappend = [[cond], \
+                                                                    evalcond, \
+                                                                    [(sothervar,     -sqrt(1-eq*eq).evalf(n=30)), \
+                                                                     (sin(othervar), -sqrt(1-eq*eq).evalf(n=30)), \
+                                                                     (cothervar,     eq), \
+                                                                     (cos(othervar), eq), \
+                                                                     (othervar, -acos(eq).evalf(n=30))], \
+                                                                    dictequations]
+                                                        log.info('%r', toappend)
+                                                        localsubstitutioneqs.append(toappend)
                                                     handledconds.append(cond)
+
+            if len(localsubstitutioneqs)>0:
+                log.info('%r', localsubstitutioneqs)
+                #exec(ipython_str, globals(), locals())
             flatzerosubstitutioneqs += localsubstitutioneqs
             zerosubstitutioneqs.append(localsubstitutioneqs)
             if not var in nextsolutions:
@@ -7983,7 +8174,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # count the number of rotation symbols seen in the current cases
             numRotSymbolsInCases = 0
             if self._iktype == 'transform6d' or self._iktype == 'rotation3d':
-                rotsymbols = set(self.Tee[:3,:3]).union([Symbol('new_r00'), Symbol('new_r01'), Symbol('new_r02'), Symbol('new_r10'), Symbol('new_r11'), Symbol('new_r12'), Symbol('new_r20'), Symbol('new_r21'), Symbol('new_r22')])
+                rotsymbols = set(self.Tee[:3,:3]).union([Symbol('new_r00'), Symbol('new_r01'), Symbol('new_r02'), \
+                                                         Symbol('new_r10'), Symbol('new_r11'), Symbol('new_r12'), \
+                                                         Symbol('new_r20'), Symbol('new_r21'), Symbol('new_r22')])
                 for var, eq in currentcasesubs:
                     if var in rotsymbols:
                         numRotSymbolsInCases += 1
@@ -8065,6 +8258,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 possiblesub.append((Symbol('%s%d%d'%(possiblevar.name[:-2], (row1+1)%3, col1)), S.Zero))
                                 possiblesub.append((Symbol('%s%d%d'%(possiblevar.name[:-2], (row1+2)%3, col1)), S.Zero))
                             checkexpr = [[cond],evalcond,possiblesub, []]
+                            log.info('%r', flatzerosubstitutioneqs)
+                            log.info('%r', checkexpr)
+                            # exec(ipython_str, globals(), locals())
                             flatzerosubstitutioneqs.append(checkexpr)
                             localsubstitutioneqs.append(checkexpr)
                             handledconds.append(cond)
@@ -8100,8 +8296,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 #cond2 += cond
                                 if self.CheckExpressionUnique(handledconds, cond+cond2):
                                     # if the variables are both part of the rotation matrix and both zeros, can deduce other rotation variables
-                                    if self._iktype == 'transform6d' and possiblevar in rotsymbols and possiblevalue == S.Zero and possiblevar2 in rotsymbols and possiblevalue2 == S.Zero:
+                                    if self._iktype == 'transform6d' and \
+                                       possiblevar in rotsymbols and \
+                                       possiblevalue == S.Zero and \
+                                       possiblevar2 in rotsymbols and \
+                                       possiblevalue2 == S.Zero:
+                                        
                                         checkexpr = [[cond+cond2],evalcond+evalcond2, possiblesub+possiblesub2, []]
+                                        log.info('%r', flatzerosubstitutioneqs)
+                                        log.info('%r', checkexpr)
+                                        # exec(ipython_str, globals(), locals())
                                         flatzerosubstitutioneqs.append(checkexpr)
                                         localsubstitutioneqs.append(checkexpr)
                                         handledconds.append(cond+cond2)
@@ -8161,6 +8365,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                         # shouldn't have any rotation vars
                                         if not possiblevar in rotsymbols and not possiblevar2 in rotsymbols:
                                             checkexpr = [[cond+cond2],evalcond+evalcond2, possiblesub+possiblesub2, []]
+                                            log.info('%r', flatzerosubstitutioneqs)
+                                            log.info('%r', checkexpr)
+                                            #exec(ipython_str, globals(), locals())
                                             flatzerosubstitutioneqs.append(checkexpr)
                                             localsubstitutioneqs.append(checkexpr)
                                             handledconds.append(cond+cond2)
@@ -8273,6 +8480,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             newtree += endbranchtree
                         zerobranches.append(([evalcond]+extrazerochecks,newtree,dictequations)) # what about extradictequations?
 
+                        # print flatzerosubstitutioneqs
                         log.info('depth = %d, c = %d, iter = %d/%d\n' \
                                  + '        add new cases: %s', \
                                  len(currentcases), scopecounter, iflatzerosubstitutioneqs, len(flatzerosubstitutioneqs), \
