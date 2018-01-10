@@ -6739,8 +6739,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         neweq, newchanged = _SimplifyRotationFcn(fcn, eq, changed, groups)
                         changed = changed or newchanged
                         if newchanged:
-#                            log.info('Number of operations changes from %d to %d' % \
-#                                     (eq.count_ops(), neweq.count_ops()))
+                            log.info('Number of operations changes from %d to %d' % \
+                                     (eq.count_ops(), neweq.count_ops()))
+
+                            if eq.count_ops() < neweq.count_ops():
+                                print eq
+                                print neweq
+                                exec(ipython_str, globals(), locals())
+                            
                             eq = neweq
 
                 except (PolynomialError, CoercionFailed), e:
@@ -6771,8 +6777,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # log.info("Formula unchanged: %r", eq)
             pass
         else:
-            log.info("%r\n --->   %r", origeq, eq) 
+            log.info("%r\n --->   %r", origeq, eq)
+            
         self.simplify_transform_dict[origeq] = eq
+        self.simplify_transform_dict[-origeq] = -eq
 
         return eq
 
@@ -6960,20 +6968,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         Recall
 
-[[[0, 3], [1, 4], [2, 5], 0],
- [[0, 1], [3, 4], [6, 7], 0],
- [[0, 6], [1, 7], [2, 8], 0],
- [[0, 2], [3, 5], [6, 8], 0],
- [[3, 6], [4, 7], [5, 8], 0],
- [[1, 2], [4, 5], [7, 8], 0],
+[[[0,  3], [1,  4], [2,  5],   0],
+ [[0,  1], [3,  4], [6,  7],   0],
+ [[0,  6], [1,  7], [2,  8],   0],
+ [[0,  2], [3,  5], [6,  8],   0],
+ [[3,  6], [4,  7], [5,  8],   0],
+ [[1,  2], [4,  5], [7,  8],   0],
 ------------------------- Above are _rotdotgroups
 ------------------------- Below are _rotposdotgroups
- [[0, 9], [3, 10], [6, 11], npx],
- [[0, 12], [1, 13], [2, 14], px],
- [[1, 9], [4, 10], [7, 11], npy],
- [[3, 12], [4, 13], [5, 14], py],
- [[2, 9], [5, 10], [8, 11], npz],
- [[6, 12], [7, 13], [8, 14], pz]]
+ [[0,  9], [3, 10], [6, 11], npx],
+ [[0, 12], [1, 13], [2, 14] , px],
+ [[1,  9], [4, 10], [7, 11], npy],
+ [[3, 12], [4, 13], [5, 14],  py],
+ [[2,  9], [5, 10], [8, 11], npz],
+ [[6, 12], [7, 13], [8, 14],  pz]]
 
         """
         if eq.is_Poly:
@@ -7103,33 +7111,33 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         Called by SimplifyTransform only.
 
-[[[3, 7], [6, 4], 2],
- [[6, 1], [0, 7], 5],
- [[0, 4], [3, 1], 8],
- [[1, 5], [2, 4], 6],
- [[2, 3], [0, 5], 7],
- [[0, 4], [1, 3], 8],
- [[4, 8], [7, 5], 0],
- [[7, 2], [1, 8], 3],
- [[1, 5], [4, 2], 6],
- [[4, 8], [5, 7], 0],
- [[5, 6], [3, 8], 1],
- [[3, 7], [4, 6], 2],
- [[6, 5], [3, 8], 1],
- [[0, 8], [6, 2], 4],
- [[3, 2], [0, 5], 7],
- [[2, 7], [1, 8], 3],
- [[0, 8], [2, 6], 4],
- [[1, 6], [0, 7], 5],
+[[[3,  7], [6,  4],  2],
+ [[6,  1], [0,  7],  5],
+ [[0,  4], [3,  1],  8],
+ [[1,  5], [2,  4],  6],
+ [[2,  3], [0,  5],  7],
+ [[0,  4], [1,  3],  8],
+ [[4,  8], [7,  5],  0],
+ [[7,  2], [1,  8],  3],
+ [[1,  5], [4,  2],  6],
+ [[4,  8], [5,  7],  0],
+ [[5,  6], [3,  8],  1],
+ [[3,  7], [4,  6],  2],
+ [[6,  5], [3,  8],  1],
+ [[0,  8], [6,  2],  4],
+ [[3,  2], [0,  5],  7],
+ [[2,  7], [1,  8],  3],
+ [[0,  8], [2,  6],  4],
+ [[1,  6], [0,  7],  5],
  [[3, 11], [6, 10], 16],
- [[6, 9], [0, 11], 17],
- [[0, 10], [3, 9], 18],
+ [[6,  9], [0, 11], 17],
+ [[0, 10], [3,  9], 18],
  [[4, 11], [7, 10], 19],
- [[7, 9], [1, 11], 20],
- [[1, 10], [4, 9], 21],
+ [[7,  9], [1, 11], 20],
+ [[1, 10], [4,  9], 21],
  [[5, 11], [8, 10], 22],
- [[8, 9], [2, 11], 23],
- [[2, 10], [5, 9], 24]]
+ [[8,  9], [2, 11], 23],
+ [[2, 10], [5,  9], 24]]
 
         """
 
@@ -7757,8 +7765,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self._CheckPreemptFn()
         self._scopecounter += 1
         scopecounter = int(self._scopecounter)
+        # remove solution that has infinite scores
         solutions = [s for s in solutions if s[0].score < oo and \
-                     s[0].checkValidSolution()] # remove infinite scores
+                     s[0].checkValidSolution()] 
         if len(solutions) == 0:
             raise self.CannotSolveError('No valid solutions')
             
@@ -7886,16 +7895,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             
                     checksimplezeroexprs = [checkzero]
                     if not checkzero.has(*allothersolvedvars):
+                        
                         sumsquaresexprs = self._GetSumSquares(checkzero)
+                        
                         if sumsquaresexprs is not None:
                             checksimplezeroexprs += sumsquaresexprs
                             sumsquaresexprstozero = []
-                            # [sumsquaresexpr for sumsquaresexpr in sumsquaresexprs if sumsquaresexpr.is_Symbol]
+                            #sumsquaresexprstozero = [sumsquaresexpr \
+                            #                         for sumsquaresexpr in sumsquaresexprs \
+                            #                         if sumsquaresexpr.is_Symbol]
+                            
                             for sumsquaresexpr in sumsquaresexprs:
                                 if sumsquaresexpr.is_Symbol:
                                     sumsquaresexprstozero.append(sumsquaresexpr)
                                 elif sumsquaresexpr.is_Mul:
-                                    exec(ipython_str, globals(), locals())
                                     for arg in sumsquaresexpr.args:
                                         if arg.is_Symbol:
                                             sumsquaresexprstozero.append(arg)
@@ -7927,9 +7940,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 for value in [S.Zero, pi/2, pi, -pi/2]:
                                     try:
                                         # doing (1/x).subs(x,0) produces a RuntimeError (infinite recursion...)
+                                        # TGN: may not need that many digits (used to be n=30)
                                         checkzerosub = checksimplezeroexpr.subs([(othervar,  value), \
-                                                                                 (sothervar, sin(value).evalf(n=30)), \
-                                                                                 (cothervar, cos(value).evalf(n=30))])
+                                                                                 (sothervar, sin(value).evalf(n=2)), \
+                                                                                 (cothervar, cos(value).evalf(n=2))])
                                         
                                         if self.isValidSolution(checkzerosub) and \
                                            checkzerosub.evalf(n=30) == S.Zero:
@@ -8324,11 +8338,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 sothervar = othervarobj.svar
                                 cothervar = othervarobj.cvar
                                 for value in [S.Zero, pi/2, pi, -pi/2]:
+                                    # TGN: may not need that many digits (used to be n=30)
                                     possiblesubs.append([(othervar,      value), \
-                                                         (sothervar,     sin(value).evalf(n=30)), \
-                                                         (sin(othervar), sin(value).evalf(n=30)), \
-                                                         (cothervar,     cos(value).evalf(n=30)), \
-                                                         (cos(othervar), cos(value).evalf(n=30))])
+                                                         (sothervar,     sin(value).evalf(n=2)), \
+                                                         (sin(othervar), sin(value).evalf(n=2)), \
+                                                         (cothervar,     cos(value).evalf(n=2)), \
+                                                         (cos(othervar), cos(value).evalf(n=2))])
                                     ishinge.append(True)
                                     
                     # all possiblesubs are present in checkzero
@@ -9418,21 +9433,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     '%d equations examined') % (varsym.var, len(polyeqs)))
 
     @staticmethod
-    def checkIsNan(tocheck):
-        """
-        Checks if TOCHECK is nan (Not A Number), either sympy's or numpy's.
-
-        Sympy's nan has field is_number with value True and statifies nan==nan+1.
-
-        Numpy has ISNAN method for checking its nan.
-        """
-        if hasattr(tocheck, 'is_number'): # sympy's nan   
-            return tocheck == tocheck+1 if tocheck.is_number else False
-        else: # numpy's nan  
-            return isnan(tocheck)  
-
-    @staticmethod
-    def checkFactorPmI(coeffs, thresh=1e-12):
+    def checkFactorPmI(coeffs, thresh = 1e-12):
         """
         Divides a polynomial, defined by coeffs, by x**2+1 ([1, 0, 1]) 
 
@@ -9457,13 +9458,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def checkFinalEquation(self, pfinal, tosubs = []):
         """
         Checks if solving the polynomial PFINAL (in one variable HTVAR) produces one *nonzero, real, valid* root
-        (meaning not oo, -oo, or nan) that is consistent with at least one set of consistent test values.
+        (meaning not oo, -oo, or nan) that is consistent with at least one consistent test value.
 
-        We factor out (HTVAR-0) and (HTVAR**2+1) before calling sympy's relatively expensive root-finding function ROOTS.
+        Other symbols in this polynomial are deemed as constants, so are subtituted for by test values in the same set.
+
+        Before calling sympy's relatively expensive root-finding function ROOTS, we factor out (HTVAR-0) and (HTVAR**2+1)
+        so the polynomial does not have roots 0, +I, -I.
    
-        Also we plug in the desired root and evaluate the residual before calling ROOTS.
+        Also before calling ROOTS, we plug in the desired root and evaluate the residual first.
 
-        The reason we do not use numpy's POLYROOTS is that we have to do type conversions.
+        The reason we do not use numpy's POLYROOTS is that we have to do two-way type conversions.
         """
 
         # log.info('checkFinalEquation for %r', pfinal)
@@ -9542,7 +9546,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
             assert(len(nz_coeffs)>0)
 
-            has_weird_sym = [c.has(I) or c==oo or c==-oo or self.checkIsNan(c) for c in nz_coeffs]
+            has_weird_sym = [not self.isValidSolution(c) for c in nz_coeffs]
             if any(has_weird_sym):
                 # some variable plugged in the denominator is 0 in test values, yielding +/-oo or nan
                 # log.info('checkFinalEquation: value has I/oo/-oo/nan:\n' + \
@@ -10706,9 +10710,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     @staticmethod
     def isValidSolution(expr):
         """
-        Returns True if solution does not contain any I, nan, or oo
+        Returns True if expr does not contain I, oo, -oo, or nan
         """
-        
+        if hasattr(expr, 'is_number'): # sympy's nan   
+            exprIsNaN = expr==expr+1 if expr.is_number else False
+        else: # numpy's nan  
+            exprIsNaN = isnan(expr)
+
+        return not (expr.has(I) or expr.has(oo) or expr.has(-oo) \
+                    or exprIsNaN)
+        """
         if expr.is_number:
             e = expr.evalf()
             return not (e.has(I) or isinf(e) or isnan(e))
@@ -10726,6 +10737,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         assert(0) # TGN: cannot reach here
         return True
+        """
 
     @staticmethod
     def _GetSumSquares(expr):
@@ -11351,9 +11363,12 @@ class AST:
         Otherwise solution is feasible only when all equations evaluate to NONZERO.
         """
 
-        def __init__(self, jointname, jointeval = None, \
-                     jointevalcos = None,jointevalsin = None, \
-                     AddPiIfNegativeEq = None, isHinge = True, \
+        def __init__(self, jointname, \
+                     jointeval    = None, \
+                     jointevalcos = None, \
+                     jointevalsin = None, \
+                     AddPiIfNegativeEq = None, \
+                     isHinge = True, \
                      thresh = 1e-6):
 
             self.jointname           = jointname
@@ -11366,7 +11381,7 @@ class AST:
             self.presetcheckforzeros = []
             self.dictequations       = []
             self.equationsused       = []
-            assert(self.checkValidSolution())
+            # assert(self.checkValidSolution())
             
         def subs(self,solsubs):
             if self.jointeval is not None:
@@ -11402,9 +11417,7 @@ class AST:
             return n
         
         def checkValidSolution(self):
-
             valid = True
-            
             if self.jointeval is not None:
                 valid &= all([IKFastSolver.isValidSolution(e) for e in self.jointeval])
             if self.jointevalsin is not None:
