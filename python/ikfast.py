@@ -1474,7 +1474,6 @@ class IKFastSolver(AutoReloader):
             self.check_div_zero_use += 1
             return self.check_div_zero_dict[eq]
         
-        import itertools
         checkforzeros = []
         try:
             if eq.is_Function:
@@ -1567,7 +1566,7 @@ class IKFastSolver(AutoReloader):
                         """
 
             # originally, is_Mul, is_Add, is_Pow
-            checkforzeros += list(itertools.chain.from_iterable \
+            checkforzeros += list(chain.from_iterable \
                                   ([self.checkForDivideByZero(arg) \
                                     for arg in eq.args \
                                     if not (arg.is_number or arg.is_Symbol)]))
@@ -7322,10 +7321,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def SolveAllEquations(self, AllEquations, \
                           curvars, othersolvedvars, \
                           solsubs, endbranchtree, \
-                          currentcases = None, \
-                          unknownvars = [], \
-                          currentcasesubs = None, \
-                          canguessvars = True):
+                          currentcases    = set(), \
+                          unknownvars     = [], \
+                          currentcasesubs = [], \
+                          canguessvars    = True):
         """
         If canguessvars is True, then we can guess variable values, prodived they satisfy required conditions
         """
@@ -7343,9 +7342,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         log.info('depth = %d, c = %d\n' + \
                  '        %s, %s\n' + \
                  '        cases = %s', \
-                 len(currentcases) if currentcases is not None else 0, \
+                 len(currentcases), \
                  self._scopecounter, othersolvedvars, curvars, \
-                 None if currentcases is None or len(currentcases) is 0 else \
+                 None if len(currentcases) is 0 else \
                  ("\n"+" "*16).join(str(x) for x in list(currentcases)))
 
         # solsubs = solsubs[:]
@@ -7691,7 +7690,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         neweq = preveq.subs(globalsymbols)
         while preveq != neweq:
             if not self.isValidSolution(neweq):
-                raise self.CannotSolveError('equation %r is not valid'%neweq)
+                raise self.CannotSolveError('equation %r is not valid' % neweq)
             
             preveq = neweq
             neweq = preveq.subs(globalsymbols)    
@@ -7712,9 +7711,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def AddSolution(self, solutions, AllEquations, \
                     curvars, othersolvedvars, \
                     solsubs, endbranchtree, \
-                    currentcases = None, \
-                    currentcasesubs = None, \
-                    unknownvars = None):
+                    currentcases    = set(), \
+                    currentcasesubs = [], \
+                    unknownvars     = []):
         """
         Take the least complex solution of a set of solutions and resume solving
         """
@@ -7725,10 +7724,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         solutions = [s for s in solutions if s[0].score < oo and \
                      s[0].checkValidSolution()] # remove infinite scores
         if len(solutions) == 0:
-            raise self.CannotSolveError('no valid solutions')
-        
-        if unknownvars is None:
-            unknownvars = []
+            raise self.CannotSolveError('No valid solutions')
             
         solutions.sort(lambda x, y: x[0].score-y[0].score)
         hasonesolution = False
@@ -7739,7 +7735,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if len(checkforzeros) == 0 and solution[0].numsolutions() == 1:
                 # did find a good solution, so take it. Make sure to check any zero branches
                 var = solution[1]
-                newvars=curvars[:]
+                newvars = curvars[:]
                 newvars.remove(var)
                 return [solution[0].subs(solsubs)] + \
                     self.SolveAllEquations(AllEquations, \
@@ -7781,7 +7777,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 usedsolutions.append((solution, var))
             else:
                 match = False
-                for usedsolution,usedvar in usedsolutions:
+                for usedsolution, usedvar in usedsolutions:
                     if len(solution.checkforzeros) == len(usedsolution.checkforzeros):
                         if not any([self.CheckExpressionUnique(usedsolution.checkforzeros, eq) \
                                     for eq in solution.checkforzeros]):
@@ -7793,19 +7789,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         # don't need more than three alternatives (used to be two, but then lookat barrettwam4 proved that wrong)
                         break
 
-        nextsolutions = dict()
-        allvars = []
-        for v in curvars:
-            allvars += self.getVariable(v).vars
-        allothersolvedvars = []
-        for v in othersolvedvars:
-            allothersolvedvars += self.getVariable(v).vars
+        allvars            = list(chain.from_iterable([self.getVariable(v).vars for v in curvars]))
+        allothersolvedvars = list(chain.from_iterable([self.getVariable(v).vars for v in othersolvedvars]))
+        
         lastbranch = []
-        prevbranch=lastbranch
-        if currentcases is None:
-            currentcases = set()
-        if currentcasesubs is None:
-            currentcasesubs = list()
+        prevbranch = []
+        nextsolutions = dict()
+            
         if self.degeneratecases is None:
             self.degeneratecases = self.DegenerateCases()
         handledconds = self.degeneratecases.GetHandledConditions(currentcases)
@@ -8511,10 +8501,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 #                 if not duplicatesub:
 #                     flatzerosubstitutioneqs.append([cond,evalcond,othervarsubs,dictequations])
 
-        if self._iktype == 'transform6d' or self._iktype == 'rotation3d':
-            trysubstitutions = self.ppsubs + self.npxyzsubs + self.rxpsubs
-        else:
-            trysubstitutions = self.ppsubs
+        trysubstitutions = self.ppsubs + self.npxyzsubs + self.rxpsubs \
+                           if self._iktype == 'transform6d' or \
+                              self._iktype == 'rotation3d' else \
+                              self.ppsubs
             
         log.debug('c = %d, %d zero-substitution(s)', scopecounter, len(flatzerosubstitutioneqs))
         
@@ -8751,8 +8741,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                        
 
         dummyvars = [self.getVariable(othervar) for othervar in othersolvedvars]
-        dummyvars = list(itertools.chain.from_iterable([[v.cvar, v.svar, v.var, v.htvar] \
-                                                        for v in dummyvars]))
+        dummyvars = list(chain.from_iterable([[v.cvar, v.svar, v.var, v.htvar] \
+                                              for v in dummyvars]))
 
         trigsubs = [(varsym0.svar**2,               1-varsym0.cvar**2),  \
                     (varsym0.svar**3, varsym0.svar*(1-varsym0.cvar**2)), \
@@ -9149,8 +9139,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         Called by SolvePairVariablesHalfAngle only
         """
 
-        import itertools
-        
         log.debug('solveVariablesLinearly:\n' + \
                   '        solvevariables  = %r\n' + \
                   '        othersolvedvars = %r', \
@@ -9168,9 +9156,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         #polyeqs = [peq[1] for peq in complexity]
         
         v = [self.getVariable(othervar) for othervar in othersolvedvars]
-        trigsubs            = list(itertools.chain.from_iterable([var.subs    for var in v]))
-        trigsubsinv         = list(itertools.chain.from_iterable([var.subsinv for var in v]))
-        othersolvedvarssyms = list(itertools.chain.from_iterable([var.vars    for var in v]))
+        trigsubs            = list(chain.from_iterable([var.subs    for var in v]))
+        trigsubsinv         = list(chain.from_iterable([var.subsinv for var in v]))
+        othersolvedvarssyms = list(chain.from_iterable([var.vars    for var in v]))
 
         symbolscheck = []
         for i,solvevar in enumerate(polyeqs[0].gens):
