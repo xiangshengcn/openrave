@@ -4627,17 +4627,23 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self.usinglapack = True
         return raghavansolutiontree+[coupledsolution]+endbranchtree,usedvars
 
-    def solveLiWoernleHiller(self,rawpolyeqs,solvejointvars,endbranchtree,AllEquationsExtra=[], currentcases=None, currentcasesubs=None):
+    def solveLiWoernleHiller(self,rawpolyeqs, \
+                             solvejointvars, \
+                             endbranchtree, \
+                             AllEquationsExtra = [], \
+                             currentcases = set(), \
+                             currentcasesubs = []):
         """Li-Woernle-Hiller procedure covered in 
         Jorge Angeles, "Fundamentals of Robotics Mechanical Systems", Springer, 2007.
         """
-        log.info('attempting li/woernle/hiller general ik method')
+        log.info('Attempt Li/Woernle/Hiller general IK method')
+        
         if len(rawpolyeqs[0][0].gens) <len(rawpolyeqs[0][1].gens):
             for peq in rawpolyeqs:
-                peq[0],peq[1] = peq[1],peq[0]
+                peq[0], peq[1] = peq[1], peq[0]
         
         originalsymbols = list(rawpolyeqs[0][0].gens)
-        symbolsubs = [(originalsymbols[i].subs(self.invsubs),originalsymbols[i]) for i in range(len(originalsymbols))]
+        symbolsubs = [(originalsymbols[i].subs(self.invsubs), originalsymbols[i]) for i in range(len(originalsymbols))]
         numsymbols = 0
         for solvejointvar in solvejointvars:
             for var in self.getVariable(solvejointvar).vars:
@@ -4645,11 +4651,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     numsymbols += 1
                     break
         if numsymbols != 3:
-            raise self.CannotSolveError('Li/Woernle/Hiller method requires 3 unknown variables, has %d'%numsymbols)
+            raise self.CannotSolveError('Li/Woernle/Hiller method requires 3 unknown variables; now there are %d' % numsymbols)
         
         if len(originalsymbols) != 6:
-            log.warn('symbols %r are not all rotational, is this really necessary?'%originalsymbols)
-            raise self.CannotSolveError('symbols %r are not all rotational, is this really necessary?'%originalsymbols)
+            log.warn('Symbols %r are not all rotational; is this really necessary?' % originalsymbols)
+            raise self.CannotSolveError('Symbols %r are not all rotational; is this really necessary?'%originalsymbols)
             
         # choose which leftvar can determine the singularity of the following equations!
         allowedindices = []
@@ -4659,15 +4665,17 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 assert( originalsymbols[i+1].name == 's'+originalsymbols[i].name[1:])
                 if 8 == __builtin__.sum([int(peq[0].has(originalsymbols[i],originalsymbols[i+1])) for peq in rawpolyeqs]):
                     allowedindices.append(i)
+                    
         if len(allowedindices) == 0:
-            log.warn('could not find any variable where number of equations is exacty 8, trying all possibilities')
+            log.warn('Could not find any variable where number of equations is exacty 8, trying all possibilities')
             for i in range(len(originalsymbols)):
                 # if first symbol is cjX, then next should be sjX
                 if originalsymbols[i].name[0] == 'c':
                     assert( originalsymbols[i+1].name == 's'+originalsymbols[i].name[1:])
                     allowedindices.append(i)
             #raise self.CannotSolveError('need exactly 8 equations of one variable')
-        log.info('allowed indices: %s', allowedindices)
+            
+        log.info('allowedindices = %s', allowedindices)
         for allowedindex in allowedindices:
             solutiontree = []
             checkforzeros = []
@@ -4696,24 +4704,37 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     p1dict=p1.as_dict()
                     r0 = polyeqs[i][1].as_expr()
                     r1 = polyeqs[j][1].as_expr()
-                    if self.equal(p0dict.get((1,0),S.Zero),-p1dict.get((0,1),S.Zero)) and self.equal(p0dict.get((0,1),S.Zero),p1dict.get((1,0),S.Zero)):
+                    if self.equal(p0dict.get((1,0),S.Zero),-p1dict.get((0,1),S.Zero)) and \
+                       self.equal(p0dict.get((0,1),S.Zero),p1dict.get((1,0),S.Zero)):
                         p0,p1 = p1,p0
                         p0dict,p1dict=p1dict,p0dict
                         r0,r1 = r1,r0
-                    if self.equal(p0dict.get((1,0),S.Zero),p1dict.get((0,1),S.Zero)) and self.equal(p0dict.get((0,1),S.Zero),-p1dict.get((1,0),S.Zero)):
+                    if self.equal(p0dict.get((1,0),S.Zero),p1dict.get((0,1),S.Zero)) and \
+                       self.equal(p0dict.get((0,1),S.Zero),-p1dict.get((1,0),S.Zero)):
                         # p0+tvar*p1, p1-tvar*p0
                         # subs: tvar*svar + cvar = 1, svar-tvar*cvar=tvar
-                        neweqs.append([Poly(p0dict.get((1,0),S.Zero) + p0dict.get((0,1),S.Zero)*tvar + p0.TC() + tvar*p1.TC(),*symbols), Poly(r0+tvar*r1,*othersymbols)])
-                        neweqs.append([Poly(p0dict.get((1,0),S.Zero)*tvar - p0dict.get((0,1),S.Zero) - p0.TC()*tvar + p1.TC(),*symbols), Poly(r1-tvar*r0,*othersymbols)])
+                        neweqs.append([Poly(p0dict.get((1,0),S.Zero) + \
+                                            p0dict.get((0,1), S.Zero)*tvar + p0.TC() + \
+                                            tvar*p1.TC(),*symbols), \
+                                       Poly(r0+tvar*r1,*othersymbols)])
+                        
+                        neweqs.append([Poly(p0dict.get((1,0),S.Zero)*tvar - \
+                                            p0dict.get((0,1),S.Zero) - \
+                                            p0.TC()*tvar + \
+                                            p1.TC(),*symbols), \
+                                       Poly(r1-tvar*r0,*othersymbols)])
+                        
                         unusedindices.remove(i)
                         unusedindices.remove(j)
                         break
             if len(neweqs) >= 8:
                 break
-            log.warn('allowedindex %d found %d equations where coefficients of equations match', allowedindex, len(neweqs))
+            log.warn('allowedindex %d found %d equations where coefficients of equations match', \
+                     allowedindex, len(neweqs))
             
         if len(neweqs) < 8:
-            raise self.CannotSolveError('found %d equations where coefficients of equations match! need at least 8'%len(neweqs))
+            raise self.CannotSolveError('found %d equations where coefficients of equations match! need at least 8' \
+                                        % len(neweqs))
 
         mysubs = []
         badjointvars = []
@@ -4790,7 +4811,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 # have to remove any common expressions between c and monomcoeff, or else equation can get huge
                                 num2, denom2 = fraction(cancel(c/monomcoeff))
                                 denom3, num3 = fraction(cancel(monomcoeff/c))
-                                if denom2.is_number and denom3.is_number and abs(denom2.evalf()) > abs(denom3.evalf()): # have to select one with least abs value, or else equation will skyrocket
+                                if denom2.is_number and denom3.is_number and abs(denom2.evalf()) > abs(denom3.evalf()):
+                                    # have to select one with least abs value, or else equation will skyrocket
                                     denom2 = denom3
                                     num2 = num3
                                 # have to be careful when multiplying or equation magnitude can get really skewed
@@ -4802,6 +4824,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     peq2[1] = peq2[1]*denom2 - num2*monomvalue
                                 hasreducedeqs = True
                                 break
+                            
             # see if there's two equations with two similar monomials on the left-hand side
             # observed problem: coefficients become extremely huge (100+ digits), need a way to simplify them
 #             for ipeq,peq in enumerate(neweqs):
@@ -4861,7 +4884,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         neweqs_full = []
         reducedeqs = []
         # filled with equations where one variable is singled out
-        reducedsinglevars = [None,None,None,None]
+        reducedsinglevars = [None, None, None, None]
         for ipeq, peq in enumerate(neweqs):
             peqcomb = Poly(peq[1].as_expr()-peq[0].as_expr(), peq[0].gens[:-1] + peq[1].gens)
             minimummonom = None
@@ -5346,9 +5369,18 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 try:
                     unknownvars = usedvars[:]
                     unknownvars.remove(curvar)
-                    jointtrees2=[]
-                    curvarsubs=self.getVariable(curvar).subs
-                    treefirst = self.SolveAllEquations(AllEquations,curvars=[curvar],othersolvedvars=self.freejointvars,solsubs=self.freevarsubs[:],endbranchtree=[AST.SolverSequence([jointtrees2])],unknownvars=unknownvars+[tvar], canguessvars=False, currentcases=currentcases, currentcasesubs=currentcasesubs)
+                    jointtrees2 = []
+                    curvarsubs = self.getVariable(curvar).subs
+                    treefirst = self.SolveAllEquations(AllEquations, \
+                                                       curvars = [curvar], \
+                                                       othersolvedvars = self.freejointvars, \
+                                                       solsubs = self.freevarsubs[:], \
+                                                       endbranchtree = [AST.SolverSequence([jointtrees2])], \
+                                                       unknownvars = unknownvars+[tvar], \
+                                                       canguessvars = False, \
+                                                       currentcases = currentcases, \
+                                                       currentcasesubs = currentcasesubs)
+                    
                     # solvable, which means we now have len(AllEquations)-1 with two variables, solve with half angles
                     halfanglesolution=self.SolvePairVariablesHalfAngle(raweqns=[eq.subs(curvarsubs) for eq in AllEquations],var0=unknownvars[0],var1=unknownvars[1],othersolvedvars=self.freejointvars+[curvar])[0]
                     # sometimes halfanglesolution can evaluate to all zeros (katana arm), need to catch this and go to a different branch
@@ -7339,6 +7371,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         self._scopecounter += 1
         scopecounter = int(self._scopecounter)
+
+        if currentcases is None:
+            exec(ipython_str, globals(), locals())
+            
         log.info('depth = %d, c = %d\n' + \
                  '        %s, %s\n' + \
                  '        cases = %s', \
@@ -7792,13 +7828,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         allvars            = list(chain.from_iterable([self.getVariable(v).vars for v in curvars]))
         allothersolvedvars = list(chain.from_iterable([self.getVariable(v).vars for v in othersolvedvars]))
         
-        lastbranch = []
-        prevbranch = []
+        prevbranch = lastbranch = []
         nextsolutions = dict()
             
         if self.degeneratecases is None:
             self.degeneratecases = self.DegenerateCases()
         handledconds = self.degeneratecases.GetHandledConditions(currentcases)
+        
         # one to one correspondence with usedsolutions and the SolverCheckZeros hierarchies
         # (used for cross product of equations later on)
         
@@ -7811,24 +7847,26 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         # iterate in reverse order and put the most recently processed solution at the front.
         # There is a problem with this algorithm transferring the degenerate cases correctly.
-        # Although the zeros of the first equation are checked, they are not added as conditions
-        # to the later equations, so that the later equations will also use variables as unknowns (even though they are determined to be specific constants). This is most apparent in rotations.
+        # Although the zeros of the first equation are checked, they are not added as conditions to the later equations,
+        # so that the later equations will also use variables as unknowns
+        # (even though they are determined to be specific constants). This is most apparent in rotations.
+        
         for solution, var in usedsolutions[::-1]:
             # there are divide by zeros, so check if they can be explicitly solved for joint variables
             checkforzeros = []
             localsubstitutioneqs = []
             for checkzero in solution.checkforzeros:
                 if checkzero.has(*allvars):
-                    log.info('ignoring special check for zero since it has symbols %s: %s', \
+                    log.info('Ignore special check for zero since it has symbols %s: %s', \
                              str(allvars), str(checkzero))
                     continue
                 
-                # bother trying to extract something if too complex
+                # Don't bother trying to extract something if too complex
                 # (takes a lot of time to check and most likely nothing will be extracted).
                 # 120 is from heuristics
                 checkzeroComplexity = self.codeComplexity(checkzero)
                 if checkzeroComplexity > 120: 
-                    log.warn('checkforzero too big (%d): %s', checkzeroComplexity, checkzero)
+                    log.warn('Checkforzero too big (%d): %s', checkzeroComplexity, checkzero)
                     # don't even add it if it is too big
                     if checkzeroComplexity < 500:
                         checkforzeros.append(checkzero)
@@ -7852,10 +7890,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         if sumsquaresexprs is not None:
                             checksimplezeroexprs += sumsquaresexprs
                             sumsquaresexprstozero = []
+                            # [sumsquaresexpr for sumsquaresexpr in sumsquaresexprs if sumsquaresexpr.is_Symbol]
                             for sumsquaresexpr in sumsquaresexprs:
                                 if sumsquaresexpr.is_Symbol:
                                     sumsquaresexprstozero.append(sumsquaresexpr)
                                 elif sumsquaresexpr.is_Mul:
+                                    exec(ipython_str, globals(), locals())
                                     for arg in sumsquaresexpr.args:
                                         if arg.is_Symbol:
                                             sumsquaresexprstozero.append(arg)
@@ -8564,9 +8604,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             for var, eq in chain(originalGlobalSymbols, dictequations):
                                 neweq = eq.subs(othervarsubs)
                                 if not self.isValidSolution(neweq):
-                                    raise self.CannotSolveError('equation %s is invalid ' + \
-                                                                'because of the following substitutions: ' + \
-                                                                '%s' % (eq, othervarsubs))
+                                    raise self.CannotSolveError(('equation %s is invalid ' + \
+                                                                 'because of the following substitutions: ' + \
+                                                                 '%s') % (eq, othervarsubs))
                                 
                                 if neweq == S.Zero:
                                     extradictequations.append((var, S.Zero))
