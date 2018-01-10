@@ -1412,6 +1412,10 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def mygcd(s0, s1):
+
+        if s0==S.Zero and s1==S.Zero:
+            return s0, s1, S.One, S.One
+        
         g_expr  = S.One
         g_const = S.One
         while True:
@@ -6742,11 +6746,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             log.info('Number of operations changes from %d to %d' % \
                                      (eq.count_ops(), neweq.count_ops()))
 
+                            """
                             if eq.count_ops() < neweq.count_ops():
                                 print eq
                                 print neweq
                                 exec(ipython_str, globals(), locals())
-                            
+                            """
                             eq = neweq
 
                 except (PolynomialError, CoercionFailed), e:

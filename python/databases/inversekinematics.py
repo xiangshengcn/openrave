@@ -1337,7 +1337,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                     raise InverseKinematicsError(u'failed to load ik')
                 
                 if options.iktests is not None:
-                    filename = [ arg for arg in args if 'zae' in arg or 'xml' in arg ]
+                    filename = [ arg for arg in args if '.zae' in arg or '.xml' in arg or '.dae' in arg ]
                     successrate, wrongrate = ikmodel.testik( iktests = options.iktests,\
                                                             jacobianthreshold = options.iktestjthresh, \
                                                             filename = filename[0] )

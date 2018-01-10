@@ -10,7 +10,7 @@ cp $CURR_IKFAST_DIR/databases/*.py $OPENRAVE_DIR/databases
 clear && clear
 
 DIRNAME=$1
-ZAEFILES=`sudo ls $DIRNAME/*.zae $DIRNAME/*.xml`
+ZAEFILES=`sudo ls $DIRNAME/*.zae $DIRNAME/*.xml $DIRNAME/*.dae`
 
 rm -f *.log /var/*.log *.out
 
