@@ -1,6 +1,5 @@
-18/01/10-15:23:19, --robot=../test/ikfastrobots/fail1.dae, 1000, 989, 0, 98.9, 0.000, 1.100, 4.400, runtime = 60.2s
-18/01/10-15:24:20, --robot=../test/ikfastrobots/fail1.robot.xml, 1000, 984, 0, 98.4, 0.000, 1.600, 5.700, runtime = 59.9s
-18/01/10-15:26:16, --robot=../test/ikfastrobots/fail2.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 5.900, runtime = 114.8s
-18/01/10-15:26:45, --robot=../test/ikfastrobots/fail3.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 4.400, runtime = 27.7s
-18/01/10-15:28:47, --robot=../test/ikfastrobots/fail4.dae, 1000, 7, 0, 0.7, 0.000, 99.300, 0.000, runtime = 117.3s
-18/01/10-15:29:07, --robot=../test/ikfastrobots/testik0.zae, 1000, 1000, 0, 100.0, 0.000, 0.000, 71.600, runtime = 18.6s
+18/01/11-11:01:40, --robot=robotfiles/barrettsegway.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 24.300, runtime = 37.8s
+18/01/11-11:03:00, --robot=robotfiles/barrettwam-dual.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 27.700, runtime = 40.9s
+18/01/11-11:03:57, --robot=robotfiles/barrett-wamhand.zae, 1000, 1000, 0, 100.0, 0.000, 0.000, 25.100, runtime = 37.9s
+18/01/11-11:04:55, --robot=robotfiles/barrettwam.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 25.000, runtime = 38.1s
+18/01/11-11:05:52, --robot=robotfiles/barrett-wam-sensors.zae, 1000, 999, 0, 99.9, 0.000, 0.100, 26.600, runtime = 37.8s

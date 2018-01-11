@@ -35,8 +35,39 @@ import os.path
 from os import getenv, makedirs
 import time
 
-import logging
-log = logging.getLogger('openravepy.databases')
+# ========== TGN's tools for studying how IKFast works ==========
+import logging, traceback
+def ikfast_print_stack():
+    tb = traceback.extract_stack()
+    pattern = '%-30s %5s %24s' 
+    print( '\n'+pattern % ('        FUNCTION','LINE', 'FILE      '))
+    keyword_of_interest = [ '__init__.py', 'ikfast.py', 'inversekinematics.py']
+    print('--------------------------------------------------------------')
+    for function_call in tb:
+        for keyword in keyword_of_interest:
+            if (keyword in function_call[0]) and (function_call[2] not in 'ikfast_print_stack'):
+                print(pattern % (function_call[2], function_call[1], keyword))
+                break
+
+ipython_str = 'ikfast_print_stack(); ' + \
+              'from IPython.terminal import embed; ' + \
+              'ipshell = embed.InteractiveShellEmbed(banner1="", config=embed.load_default_config())(local_ns=locals())'
+
+LOGGING_FORMAT = ' %(levelname)-6s [ LINE %(lineno)d : %(filename)s : %(funcName)s ]\n' + \
+                 '\t%(message)s\n'
+logging.basicConfig( format = LOGGING_FORMAT, \
+                     datefmt='%d-%m-%Y:%H:%M:%S', \
+                     level=logging.DEBUG)
+log = logging.getLogger('__init__')
+hdlr = logging.FileHandler('/var/tmp/ikfast-__init__.log')
+formatter = logging.Formatter(LOGGING_FORMAT)
+hdlr.setFormatter(formatter)
+log.addHandler(hdlr)
+
+"""
+exec(ipython_str, globals(), locals())
+"""
+# ========== End of TGN's tools  ==============
 
 try:
     import h5py
@@ -196,21 +227,31 @@ class DatabaseGenerator(metaclass.AutoReloader):
                 env.Load(options.robot,robotatts)
 
                 # TGN clears
-                os.system('clear'); os.system('clear')
+                os.system('clear'); # os.system('clear')
                 
-                # TODO: if exception is raised after this point, program exits with glibc double-link list corruption. most likely something in Load?
+                # TODO: if exception is raised after this point, program exits with glibc double-link list corruption.
+                # Most likely something in Load?
+                robot = None
                 if len(env.GetRobots()) > 0:
                     # get the first robot with DOF > 0
-                    robot = None
                     for robot in env.GetRobots():
                         if robot.GetDOF() > 0:
                             break
                     if robot is None or robot.GetDOF() == 0:
-                        raise openrave_exception('there is no robot with DOF > 0')
+                        raise openrave_exception('There is no robot with DOF > 0')
                     
                 elif allowkinbody:
                     robot = env.GetBodies()[0]
-                assert(robot is not None)
+                    
+                if robot is None:
+                    print('There is no robot in %s!\n' % options.robot)
+                    log.info('IK_COLLECTION :: NO_ROBOT %s', options.robot)
+                    assert(robot is not None)
+                else:
+                    pass
+                    # print('Found robot in %s. \n' % options.robot)
+                    # log.info('IK_COLLECTION :: FOUND_ROBOT %s', options.robot)
+
                 if hasattr(options,'manipname') and robot.IsRobot():
                     if options.manipname is None:
                         # prioritize manipulators with ik solvers
@@ -224,7 +265,7 @@ class DatabaseGenerator(metaclass.AutoReloader):
                                 break
             model = Model(robot=robot)
             destroyenv = False
-            return options,model
+            return options, model
         
         finally:
             if destroyenv:
@@ -237,12 +278,12 @@ class DatabaseGenerator(metaclass.AutoReloader):
         """run the database generator from the command line using
         """
         import sys
-        orgenv=env
+        orgenv = env
         destroyenv = orgenv is None
         env = None
         try:
             options,model = DatabaseGenerator.InitializeFromParser(Model,parser,orgenv,args,robotatts,defaultviewer,allowkinbody)
-            env=model.env
+            env = model.env
             if options.getfilename:
                 # prioritize first available
                 filename=model.getfilename(True)
@@ -251,6 +292,7 @@ class DatabaseGenerator(metaclass.AutoReloader):
                 print filename
                 openravepy_int.RaveDestroy()
                 sys.exit(0)
+                
             if options.gethas:
                 hasmodel=model.load()
                 if hasmodel:
@@ -258,14 +300,16 @@ class DatabaseGenerator(metaclass.AutoReloader):
                 print int(hasmodel)
                 openravepy_int.RaveDestroy()
                 sys.exit(not hasmodel)
+                
             if options.viewername is not None:
                 env.SetViewer(options.viewername)
+                
             if options.show:
                 if not model.load():
                     raise ValueError('failed to find cached model %s : %s'%(model.getfilename(True),model.getfilename(False)))
                 model.show(options=options)
                 return model
-            model.autogenerate(options=options)
+            model.autogenerate(options = options)
             return model
         finally:
             if destroyenv and env is not None:

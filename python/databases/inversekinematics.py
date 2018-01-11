@@ -171,7 +171,7 @@ def ikfast_print_stack():
     tb = traceback.extract_stack()
     pattern = '%-30s %5s %24s' 
     print( '\n'+pattern % ('        FUNCTION','LINE', 'FILE      '))
-    keyword_of_interest = [ 'ikfast_IKFastSolver.py', 'ikfast_AST.py', 'ikfast.py', 'inversekinematics.py']
+    keyword_of_interest = [ '__init__.py', 'ikfast.py', 'inversekinematics.py']
     print('--------------------------------------------------------------')
     for function_call in tb:
         for keyword in keyword_of_interest:
@@ -191,8 +191,8 @@ logging.basicConfig( format = LOGGING_FORMAT, \
                      datefmt='%d-%m-%Y:%H:%M:%S', \
                      level=logging.DEBUG)
 
-log = logging.getLogger('ikfast_generator_cpp')
-hdlr = logging.FileHandler('/var/tmp/inversekinematics.log')
+log = logging.getLogger('inversekinematics')
+hdlr = logging.FileHandler('/var/tmp/ikfast-inversekinematics.log')
 formatter = logging.Formatter(LOGGING_FORMAT)
 hdlr.setFormatter(formatter)
 log.addHandler(hdlr)
@@ -391,7 +391,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                     self.iksolver = RaveCreateIkSolver(self.env,self.manip.GetIkSolver().GetXMLId().split(' ',1)[0]+iksuffix) if self.manip.GetIkSolver() is not None else None
                 else:
                     if int(self.iktype) != int(iktype):
-                        raise InverseKinematicsError('ik does not match types %s!=%s'%(self.iktype,iktype))
+                        raise InverseKinematicsError('IK types do not match: %s!=%s'%(self.iktype,iktype))
                     
                     self.iksolver = RaveCreateIkSolver(self.env,ikname+iksuffix)
         if self.iksolver is not None and self.iksolver.Supports(self.iktype):
@@ -737,7 +737,8 @@ class InverseKinematicsModel(DatabaseGenerator):
                       forceikbuild = forceikbuild, \
                       outputlang = outputlang, \
                       ipython = ipython, \
-                      ikfastmaxcasedepth = ikfastmaxcasedepth)
+                      ikfastmaxcasedepth = ikfastmaxcasedepth, \
+                      options = options)
         self.save()
 
     def getIndicesFromJointNames(self,freejoints):
@@ -769,7 +770,8 @@ class InverseKinematicsModel(DatabaseGenerator):
                  avoidPrismaticAsFree = False, \
                  ipython = False, \
                  ikfastoptions = 0, \
-                 ikfastmaxcasedepth = 3):
+                 ikfastmaxcasedepth = 3, \
+                 options = None):
         """
         :param ikfastoptions: see IKFastSolver.generateIkSolver
         :param ikfastmaxcasedepth: the max level of degenerate cases to solve for
@@ -944,9 +946,29 @@ class InverseKinematicsModel(DatabaseGenerator):
             else:
                 self.solveindices, self.freeindices = self.GetDefaultIndices(avoidPrismaticAsFree=avoidPrismaticAsFree)
         self.solveindices = [i for i in self.manip.GetArmIndices() if not i in self.freeindices]
+
+
+        hdlr = logging.FileHandler('/var/tmp/ikfast-__init__.log')
+        hdlr.setFormatter(formatter)
+        log.addHandler(hdlr)
+
         if len(self.solveindices) != dofexpected:
-            raise InverseKinematicsError(u'Manipulator %(manip)s (indices=%(manipindices)r) joint indices to solve for (%(solveindices)r) is not equal to number of expected joints (%(dofexpected)d) for IK type %(iktype)s. Perhaps the manipulator base link %(baselink)s or end link %(endlink)s are not correct.'%{'manip':self.manip.GetName(),'manipindices':list(self.manip.GetArmIndices()), 'solveindices':list(self.solveindices), 'dofexpected':dofexpected, 'iktype':self.iktype.name, 'baselink':self.manip.GetBase().GetName(), 'endlink':self.manip.GetEndEffector().GetName()})
-        
+            log.info('IK_COLLECTION :: WRONG_IKTYPE %s', options.robot)
+            raise InverseKinematicsError((u'\n\nManipulator %(manip)s (indices=%(manipindices)r) joint indices ' + \
+                                         'to solve for (%(solveindices)r) is not equal to ' + \
+                                         'number of expected joints (%(dofexpected)d) for IK type %(iktype)s. ' + \
+                                         'Perhaps the manipulator base link %(baselink)s or end link %(endlink)s ' + \
+                                          'are not correct.') % \
+                                         {'manip' : self.manip.GetName(), \
+                                          'manipindices' : list(self.manip.GetArmIndices()), \
+                                          'solveindices' : list(self.solveindices), \
+                                          'dofexpected' : dofexpected, \
+                                          'iktype' : self.iktype.name, \
+                                          'baselink' : self.manip.GetBase().GetName(), \
+                                          'endlink' : self.manip.GetEndEffector().GetName()})
+        else:
+            log.info('IK_COLLECTION :: RIGHT_IKTYPE %s', options.robot)
+            
         if freeinc is not None:
             self.freeinc = freeinc
         if self.freeinc is None:
@@ -963,7 +985,7 @@ class InverseKinematicsModel(DatabaseGenerator):
         output_filename = self.getfilename(False)
         sourcedir = os.path.split(sourcefilename)[0]
         if forceikbuild or not os.path.isfile(sourcefilename):
-            log.info('creating ik file %s',sourcefilename)
+            log.info('Creating IK file %s',sourcefilename)
             try:
                 os.makedirs(sourcedir)
             except OSError:

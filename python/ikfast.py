@@ -194,17 +194,12 @@ import sys, copy, time, math, datetime
 import __builtin__
 
 # ========== TGN's tools for studying how IKFast works ==========
-import os
-def clc():
-    os.system('clear')
-    os.system('clear')
-
 import traceback
 def ikfast_print_stack():
     tb = traceback.extract_stack()
     pattern = '%-30s %5s %24s' 
     print( '\n'+pattern % ('        FUNCTION','LINE', 'FILE      '))
-    keyword_of_interest = [ 'ikfast_IKFastSolver.py', 'ikfast_AST.py', 'ikfast.py', 'inversekinematics.py']
+    keyword_of_interest = [ '__init__.py', 'ikfast.py', 'inversekinematics.py']
     print('--------------------------------------------------------------')
     for function_call in tb:
         for keyword in keyword_of_interest:
@@ -219,15 +214,6 @@ ipython_str = 'ikfast_print_stack(); ' + \
 """
 exec(ipython_str, globals(), locals())
 """
-
-def print_matrix(matrices, ind=None):
-    if ind is None:
-        ind = range(len(matrices))
-    for i in ind:
-        print i, ':',
-        print matrices[i]
-        print '\n',
-
 # ========== End of TGN's tools  ==============
 
 from optparse import OptionParser
@@ -311,7 +297,7 @@ logging.basicConfig( format  = LOGGING_FORMAT, \
                      datefmt = '%d-%m-%Y:%H:%M:%S', \
                      level   = logging.DEBUG) 
 log = logging.getLogger('ikfast') 
-hdlr = logging.FileHandler('/var/tmp/ikfast_IKFastSolver.log') 
+hdlr = logging.FileHandler('/var/tmp/ikfast-ikfast.log') 
 formatter = logging.Formatter(LOGGING_FORMAT) 
 hdlr.setFormatter(formatter) 
 log.addHandler(hdlr) 
