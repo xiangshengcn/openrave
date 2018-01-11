@@ -252,7 +252,13 @@ class InverseKinematicsModel(DatabaseGenerator):
                     geom.SetTransparency(tr)
                     
     _cachedKinematicsHash = None # manip.GetInverseKinematicsStructureHash() when the ik was built with
-    def __init__(self,robot=None,iktype=None,forceikfast=False,freeindices=None,freejoints=None,manip=None, checkpreemptfn=None):
+    def __init__(self, robot = None, iktype = None, \
+                 forceikfast = False, \
+                 freeindices = None, \
+                 freejoints = None, \
+                 manip = None, \
+                 checkpreemptfn = None, \
+                 options = None):
         """
         :param robot: if not None, will use the robot's active manipulator
         :param manip: if not None, will the manipulator, takes precedence over robot
@@ -265,9 +271,17 @@ class InverseKinematicsModel(DatabaseGenerator):
             robot = manip.GetRobot()
         else:
             manip = robot.GetActiveManipulator()
-        DatabaseGenerator.__init__(self,robot=robot)
+        DatabaseGenerator.__init__(self, robot = robot)
         self.manip = manip
         # check if robot manipulator has no static links (except the base)
+
+        if manip is None:
+            hdlr = logging.FileHandler('/var/tmp/ikfast-__init__.log')
+            hdlr.setFormatter(formatter)
+            log.addHandler(hdlr)
+            log.info('IK_COLLECTION :: NONE_MANIP %s', options.robot)
+            assert( manip is not None )
+        
         for link in robot.GetChain(manip.GetBase().GetIndex(),manip.GetEndEffector().GetIndex(),returnjoints=False)[1:]:
             for rigidlyattached in link.GetRigidlyAttachedLinks():
                 if rigidlyattached.IsStatic():
@@ -296,7 +310,8 @@ class InverseKinematicsModel(DatabaseGenerator):
             self.solveindices = None
         else:
             if not all([ifree in manip.GetArmIndices() for ifree in self.freeindices]):
-                raise InverseKinematicsError(u'not all free indices %r are part of the manipulator indices %r'%(self.freeindices, manip.GetArmIndices()))
+                raise InverseKinematicsError(u'not all free indices %r are part of the manipulator indices %r' % \
+                                             (self.freeindices, manip.GetArmIndices()))
             
             self.solveindices = [i for i in manip.GetArmIndices() if not i in self.freeindices]
         self.forceikfast = forceikfast
@@ -326,7 +341,10 @@ class InverseKinematicsModel(DatabaseGenerator):
         return clone
     
     def has(self):
-        return self.iksolver is not None and self.manip.GetIkSolver() is not None and self.manip.GetIkSolver().Supports(self.iktype) and self.iksolver.GetXMLId() == self.manip.GetIkSolver().GetXMLId()
+        return self.iksolver is not None and \
+            self.manip.GetIkSolver() is not None and \
+            self.manip.GetIkSolver().Supports(self.iktype) and \
+            self.iksolver.GetXMLId() == self.manip.GetIkSolver().GetXMLId()
     
     def save(self):
         statsfilename=self.getstatsfilename(False)
@@ -343,33 +361,43 @@ class InverseKinematicsModel(DatabaseGenerator):
         try:
             filename = self.getstatsfilename(True)
             if len(filename) == 0:
-                return checkforloaded and self.manip.GetIkSolver() is not None and self.manip.GetIkSolver().Supports(self.iktype) # might have ik already loaded
+                return checkforloaded and \
+                    self.manip.GetIkSolver() is not None and \
+                    self.manip.GetIkSolver().Supports(self.iktype) # might have ik already loaded
             with open(filename, 'r') as f:
                 modelversion,self.statistics,self.ikfeasibility,self.solveindices,self.freeindices,self.freeinc = pickle.load(f)
             if modelversion != self.getversion():
                 log.warn('version is wrong %s!=%s',modelversion,self.getversion())
-                return checkforloaded and self.manip.GetIkSolver() is not None  and self.manip.GetIkSolver().Supports(self.iktype) # might have ik already loaded
+                return checkforloaded and \
+                    self.manip.GetIkSolver() is not None and \
+                    self.manip.GetIkSolver().Supports(self.iktype) # might have ik already loaded
                 
         except Exception,e:
             log.warn(e)
-            return checkforloaded and self.manip.GetIkSolver() is not None and self.manip.GetIkSolver().Supports(self.iktype) # might have ik already loaded
+            return checkforloaded and \
+                self.manip.GetIkSolver() is not None and \
+                self.manip.GetIkSolver().Supports(self.iktype) # might have ik already loaded
             
         if self.ikfeasibility is not None:
             # ik is infeasible, but load successfully completed, so return success
             return True
         return self.setrobot(freeinc,*args,**kwargs)
+    
     def getversion(self):
         return int(self.ikfast.__version__, 16)
+    
     def getikname(self):
-        return 'ikfast ikfast.%s.%s.%s'%(self.manip.GetInverseKinematicsStructureHash(self.iktype),str(self.iktype),self.manip.GetName())
+        return 'ikfast ikfast.%s.%s.%s' % \
+            (self.manip.GetInverseKinematicsStructureHash(self.iktype),str(self.iktype),self.manip.GetName())
 
-    def setrobot(self,freeinc=None):
-        """Sets the ik solver on the robot.
+    def setrobot(self, freeinc = None):
+        """
+        Sets the IK solver for the robot.
         
         freeinc is a list of the delta increments of the freejoint values that can override the default values.
         """
         if freeinc is not None:
-            self.freeinc=freeinc
+            self.freeinc = freeinc
         if self.freeinc is not None:
             try:
                 iksuffix = ' ' + ' '.join(str(f) for f in self.freeinc)
@@ -411,14 +439,16 @@ class InverseKinematicsModel(DatabaseGenerator):
         
         return self.has()
     
-    def getDefaultFreeIncrements(self,freeincrot, freeinctrans):
-        """Returns a list of delta increments appropriate for each free index
+    def getDefaultFreeIncrements(self, freeincrot, freeinctrans):
+        """
+        Returns a list of delta increments appropriate for each free index
         """
         with self.env:
             values = []
             eetrans = self.manip.GetEndEffectorTransform()[0:3,3]
             armlength = 0
-            orderedarmindices = [j for j in self.robot.GetDependencyOrderedJoints() if j.GetJointIndex() in self.manip.GetArmIndices()]
+            orderedarmindices = [j for j in self.robot.GetDependencyOrderedJoints() \
+                                 if j.GetJointIndex() in self.manip.GetArmIndices()]
             for j in orderedarmindices[::-1]:
                 armlength += sqrt(sum((eetrans-j.GetAnchor())**2))
                 eetrans = j.GetAnchor()
@@ -463,11 +493,13 @@ class InverseKinematicsModel(DatabaseGenerator):
             jointanchors = []
             jointaxes = []
             jointtypes = []
+            
             for i, index in enumerate(self.manip.GetArmIndices()):
                 joint = robot.GetJointFromDOFIndex(index)
                 jointanchors.append(joint.GetAnchor())
                 jointaxes.append(joint.GetAxis(index-joint.GetDOFIndex()))
                 jointtypes.append(joint.GetType())
+                
             intersectingaxes = eye(N)
             for i in range(N):
                 for j in range(i+1,N):
@@ -502,6 +534,7 @@ class InverseKinematicsModel(DatabaseGenerator):
                             intersecting3axes[i+1] |= 1 << num3intersecting
                             log.info('found 3-intersection centered on index %d', remainingindices[i])
                             num3intersecting += 1
+                            
             for i in range(N - dofexpected):
                 # by default always choose the first
                 indextopop = 0
@@ -947,7 +980,6 @@ class InverseKinematicsModel(DatabaseGenerator):
                 self.solveindices, self.freeindices = self.GetDefaultIndices(avoidPrismaticAsFree=avoidPrismaticAsFree)
         self.solveindices = [i for i in self.manip.GetArmIndices() if not i in self.freeindices]
 
-
         hdlr = logging.FileHandler('/var/tmp/ikfast-__init__.log')
         hdlr.setFormatter(formatter)
         log.addHandler(hdlr)
@@ -1327,13 +1359,20 @@ class InverseKinematicsModel(DatabaseGenerator):
                     break
         else:
             iktype = IkParameterizationType.Transform6D
-        Model = lambda robot: InverseKinematicsModel(robot = robot,iktype = iktype,forceikfast = True)
-        robotatts={}
+
+        # call InverseKinematicsModel class constructor
+        Model = lambda robot: InverseKinematicsModel(robot = robot, \
+                                                     iktype = iktype, \
+                                                     forceikfast = True, \
+                                                     options = options)
+        robotatts = {}
         if not options.show:
             robotatts = {'skipgeometry':'1'}
 
-
-        model = DatabaseGenerator.RunFromParser(Model = Model, parser = parser, robotatts = robotatts, args = args, **kwargs)
+        model = DatabaseGenerator.RunFromParser(Model = Model, \
+                                                parser = parser, \
+                                                robotatts = robotatts, \
+                                                args = args, **kwargs)
         
         if options.iktests is not None or options.perftiming is not None:
             log.info('Testing the success rate of robot %s ', options.robot)
@@ -1354,7 +1393,8 @@ class InverseKinematicsModel(DatabaseGenerator):
                                                  iktype = model.iktype, \
                                                  forceikfast = True, \
                                                  freeindices = model.freeindices, \
-                                                 manip = manip)
+                                                 manip = manip, \
+                                                 options = options)
                 if not ikmodel.load(freeinc=options.freeinc):
                     raise InverseKinematicsError(u'failed to load ik')
                 
