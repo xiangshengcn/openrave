@@ -638,7 +638,7 @@ class IKFastSolver(AutoReloader):
         self.kinematicshash = kinematicshash
         self.testconsistentvalues = None
         self.maxcasedepth = 3 # the maximum depth of special/degenerate cases to process before system gives up
-        self.globalsymbols = [] # global symbols for substitutions
+        self.globalsymbols = {} # global symbols for substitutions
         self._scopecounter = 0 # a counter for debugging purposes that increaes every time a level changes
         self._dodebug = False
         self._ikfastoptions = 0
@@ -2044,7 +2044,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self.testconsistentvalues = None
 
         self.gsymbolgen = cse_main.numbered_symbols('gconst')
-        self.globalsymbols = []
         self._scopecounter = 0
 
 # before passing to the solver, set big numbers to constant variables, this will greatly reduce computation times
@@ -2113,7 +2112,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         chaintree = solvefn(self, LinksRaw, jointvars, isolvejointvars)
         if self.useleftmultiply:
             chaintree.leftmultiply(Tleft=self.multiplyMatrix(LinksLeft), Tleftinv=self.multiplyMatrix(LinksLeftInv[::-1]))
-        chaintree.dictequations += self.globalsymbols
+        chaintree.dictequations += self.globalsymbols.items()
         return chaintree
 
     def MatchSimilarFraction(self,num,numbersubs,matchlimit = 40):
@@ -2164,7 +2163,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 
             psubs = []
             for i in range(12):
-                psubs.append((self.pvars[i],T[i].subs(varsubs).subs(self.globalsymbols+valsubs)))
+                psubs.append((self.pvars[i],T[i].subs(varsubs).subs(self.globalsymbols).subs(valsubs)))
             for s,v in self.ppsubs+self.npxyzsubs+self.rxpsubs:
                 psubs.append((s,v.subs(psubs)))
                 
@@ -3287,7 +3286,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # has to be after SolveAllEquations...?
             for i in range(3):
                 for j in range(3):
-                    self.globalsymbols.append((Ree[i,j],T1sub[i,j]))
+                    self.globalsymbols[Ree[i,j]] = T1sub[i,j]
 
             if len(rottree) == 0:
                 raise self.CannotSolveError('could not solve for all rotation variables: %s:%s' % \
@@ -3305,7 +3304,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             for i in range(3):
                 for j in range(3):
                     removesymbols.add(Ree[i,j])
-            self.globalsymbols = [g for g in self.globalsymbols if not g[0] in removesymbols]
+            # self.globalsymbols = [g for g in self.globalsymbols if not g[0] in removesymbols]
+            self.globalsymbols = { k:self.globalsymbols[k] for k in self.globalsymbols if not k in removesymbols }
             
     def solveFullIK_6DGeneral(self, T0links, T1links, solvejointvars, endbranchtree, usesolvers=7):
         """Solve 6D equations of a general kinematics structure.
@@ -6666,7 +6666,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         # there can be global substitutions like pz = 0.
         # get those that do not start with gconst
-        transformsubstitutions = [(var, value) for var, value in self.globalsymbols \
+        transformsubstitutions = [(var, self.globalsymbols[var]) for var in self.globalsymbols \
                                   if var.is_Symbol and not var.name.startswith('gconst')]
 
         def _SimplifyRotationFcn(fcn, eq, changed, groups):
@@ -7761,15 +7761,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         Adds global symbols; returns True if we update an existing global symbol
 
-        TGN: use dictionary for self.globalsymbols
+        Use dictionary {} for self.globalsymbols.
+
+        Called by AddSolution only.
         """
-        for iglobal, gvarexpr in enumerate(self.globalsymbols):
-            if var == gvarexpr[0]:
-                self.globalsymbols[iglobal] = (var, eq)
-                return True
-            
-        self.globalsymbols.append((var, eq))
-        return False
+        # is_update = var in self.globalsymbols
+        self.globalsymbols[var] = eq
+        return # is_update
         
     def AddSolution(self, solutions, AllEquations, \
                     curvars, othersolvedvars, \
@@ -7830,7 +7828,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                currentcasesubs = currentcasesubs, \
                                                unknownvars = unknownvars)
 
-        originalGlobalSymbols = self.globalsymbols        
+        originalGlobalSymbols = self.globalsymbols
         # all solutions have check for zero equations
         # choose the variable with the shortest solution and compute (this is a conservative approach)
         usedsolutions = []
@@ -8258,7 +8256,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                         zerobranch = prevbranch,anycondition = True, \
                                                         thresh = solution.GetZeroThreshold())
                 # have to transfer the dictionary!
-                solvercheckzeros.dictequations = originalGlobalSymbols + solution.dictequations                    
+                solvercheckzeros.dictequations = originalGlobalSymbols.items() + solution.dictequations                    
                 solvercheckzeros.equationsused = AllEquations
                 solution.dictequations = []
                 prevbranch=[solvercheckzeros]
@@ -8287,7 +8285,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                               varlist, \
                                               othersolvedvars, \
                                               solsubs, \
-                                              originalGlobalSymbols, \
                                               endbranchtree))
 
             return prevbranch
@@ -8622,7 +8619,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         
                         if len(NewEquationsClean) > 0:
                             newcasesubs = currentcasesubs + othervarsubs
-                            self.globalsymbols = []
+                            # empty global symbols dictionary
+                            self.globalsymbols = {}
                             for casesub in newcasesubs:
                                 self._AddToGlobalSymbols(casesub[0], casesub[1])
                             extradictequations = []
@@ -8635,7 +8633,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                     extradictequations.append((s, neweq))
                                     self._AddToGlobalSymbols(s, neweq)
                                     
-                            for var, eq in chain(originalGlobalSymbols, dictequations):
+                            for var, eq in chain(originalGlobalSymbols.items(), dictequations):
                                 neweq = eq.subs(othervarsubs)
                                 if not self.isValidSolution(neweq):
                                     raise self.CannotSolveError(('equation %s is invalid ' + \
@@ -8691,7 +8689,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             finally:
                 # restore the global symbols
                 self.globalsymbols = originalGlobalSymbols
-                
+
         if len(zerobranches) > 0:
             branchconds = AST.SolverBranchConds(zerobranches + \
                                                 [(None, \
@@ -8700,7 +8698,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                                     for var, eq in currentcasesubs], \
                                                                    othersolvedvars, \
                                                                    solsubs, \
-                                                                   originalGlobalSymbols, \
                                                                    endbranchtree)], \
                                                 [])])
             branchconds.accumequations = accumequations
@@ -8712,7 +8709,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                for var, eq in currentcasesubs], \
                                               othersolvedvars, \
                                               solsubs, \
-                                              originalGlobalSymbols, \
                                               endbranchtree))
             
         return prevbranch
@@ -9555,8 +9551,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         thresh3 = 10.0**-(self.precision-2)
         
         for testconsistentvalue in self.testconsistentvalues:
-            globalsymbols = [(s, v.subs(self.globalsymbols).subs(testconsistentvalue).evalf()) \
-                             for s, v in self.globalsymbols]
+            globalsymbols = [(s, self.globalsymbols[s].subs(self.globalsymbols).subs(testconsistentvalue).evalf()) \
+                             for s in self.globalsymbols]
 
             # plug in test consistent values to evaluate all coefficients
             nz_coeffs = [ c.subs(tosubs).subs(globalsymbols+testconsistentvalue).evalf()/common.evalf() \
@@ -11916,18 +11912,18 @@ class AST:
         solsubs         = None # the substitutions of the solved variables
         endbranchtree   = None # a node that points to the end of the tree
         
-        def __init__(self, comment, \
+        def __init__(self, \
+                     comment, \
                      varsubs = list(), \
                      othersolvedvars = list(), \
                      solsubs = list(), \
-                     globalsymbols = list(), \
                      endbranchtree = None):
             
-            self.comment = comment
-            self.varsubs = list(varsubs)
+            self.comment         = comment
+            self.varsubs         = list(varsubs)
             self.othersolvedvars = list(othersolvedvars)
-            self.solsubs = list(solsubs)
-            self.endbranchtree = endbranchtree
+            self.solsubs         = list(solsubs)
+            self.endbranchtree   = endbranchtree
             
         def generate(self,generator):
             return generator.generateBreak(self)

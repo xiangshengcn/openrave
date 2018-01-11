@@ -1,2 +1,5 @@
-18/01/11-16:44:41, --robot=robotfiles/barrettsegway.robot.xml, 1000, 999, 0, 99.9, 0.000, 0.100, 26.800, runtime = 37.4s
-18/01/11-16:46:00, --robot=robotfiles/barrettwam-dual.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 27.200, runtime = 40.2s
+18/01/11-17:17:49, --robot=robotfiles/barrettsegway.robot.xml, 1000, 0, 0, 0.0, 0.000, 100.000, 0.000, runtime = 33.9s
+18/01/11-17:22:51, --robot=robotfiles/barrettsegway.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 26.100, runtime = 38.0s
+18/01/11-17:35:46, --robot=robotfiles/barrettsegway.robot.xml, 1000, 1000, 0, 100.0, 0.000, 0.000, 26.300, runtime = 37.7s
+18/01/11-18:02:00, --robot=robotfiles/barrett-wam.zae, 1000, 1000, 0, 100.0, 0.000, 0.000, 27.500, runtime = 37.5s
+18/01/11-18:02:43, --robot=robotfiles/cmu-permma.zae, 1000, 1000, 0, 100.0, 0.000, 0.000, 0.000, runtime = 35.9s
