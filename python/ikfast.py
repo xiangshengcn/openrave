@@ -641,10 +641,7 @@ class IKFastSolver(AutoReloader):
         self._scopecounter = 0 # a counter for debugging purposes that increaes every time a level changes
         self._dodebug = False
         self._ikfastoptions = 0
-        if precision is None:
-            self.precision=8
-        else:
-            self.precision=precision
+        self.precision = 8 if precision is None else precision
         self.kinbody = kinbody
         self._iktype = None # the current iktype processing
         self.axismap = {}
@@ -658,7 +655,7 @@ class IKFastSolver(AutoReloader):
                 self.axismap[name] = axis
                 self.axismapinv[idof] = name
 
-        # TGN adds the following
+        # =============== TGN adds the following ===============
         self.trigvars_subs = []
         self.trigsubs = []
         self.trigsubs_one = []         
@@ -679,15 +676,9 @@ class IKFastSolver(AutoReloader):
         # used by SimplifyAtan2 with incos == insin == False 
         self.simplify_atan2_dict = {} 
         self.simplify_atan2_use = 0
-
-        # poly_counter_rotnorm
-        self.poly_counter_rotnorm     = 0
-        self.poly_counter_rotnorm_new = 0
-        self.poly_counter_rotdot      = 0
-        self.poly_counter_rotcross    = 0
-
         # Variable class dictionary {formula: Variable class object}
         self.variable_obj = {}
+        # ================ End of TGN's addition ===============
         
     def _CheckPreemptFn(self, msg = u'', progress = 0.25):
         """
@@ -720,11 +711,8 @@ class IKFastSolver(AutoReloader):
             newargs = [self.ConvertRealToRationalEquation(subeq,precision) for subeq in eq.args]
             neweq = eq.func(*newargs)
         elif eq.is_number:
-            if eq.is_irrational:
-                # don't touch it since it could be pi!
-                neweq = eq
-            else:
-                neweq = self.convertRealToRational(eq,precision)
+            # don't touch it since it could be pi!
+            neweq = eq if eq.is_irrational else self.convertRealToRational(eq,precision)
         else:
             neweq = eq
         return neweq
@@ -756,7 +744,9 @@ class IKFastSolver(AutoReloader):
         """
         if axisAngleFromRotationMatrix is not None:
             Teval = T.evalf()
-            axisangle = axisAngleFromRotationMatrix([[Teval[0,0], Teval[0,1], Teval[0,2]], [Teval[1,0], Teval[1,1], Teval[1,2]], [Teval[2,0], Teval[2,1], Teval[2,2]]])
+            axisangle = axisAngleFromRotationMatrix([[Teval[0,0], Teval[0,1], Teval[0,2]], \
+                                                     [Teval[1,0], Teval[1,1], Teval[1,2]], \
+                                                     [Teval[2,0], Teval[2,1], Teval[2,2]]])
             angle = sqrt(axisangle[0]**2+axisangle[1]**2+axisangle[2]**2)
             if abs(angle) < 10**(-self.precision):
                 # rotation is identity
@@ -768,23 +758,47 @@ class IKFastSolver(AutoReloader):
                 accurateaxisangle = accurateaxisangle/accurateaxisangle.norm()
                 # angle is not a multiple of 90, can get long fractions. so check if there's any way to simplify it
                 if abs(angle-3*pi/2) < 10**(-self.precision+2):
-                    quat = [-S.One/sqrt(2), accurateaxisangle[0]/sqrt(2), accurateaxisangle[1]/sqrt(2), accurateaxisangle[2]/sqrt(2)]
+                    quat = [-S.One/sqrt(2), \
+                            accurateaxisangle[0]/sqrt(2), \
+                            accurateaxisangle[1]/sqrt(2), \
+                            accurateaxisangle[2]/sqrt(2)]
+                    
                 elif abs(angle-pi) < 10**(-self.precision+2):
                     quat = [S.Zero, accurateaxisangle[0], accurateaxisangle[1], accurateaxisangle[2]]
+                    
                 elif abs(angle-2*pi/3) < 10**(-self.precision+2):
-                    quat = [Rational(1,2), accurateaxisangle[0]*sqrt(3)/2, accurateaxisangle[1]*sqrt(3)/2, accurateaxisangle[2]*sqrt(3)/2]
+                    quat = [Rational(1,2), \
+                            accurateaxisangle[0]*sqrt(3)/2, \
+                            accurateaxisangle[1]*sqrt(3)/2, \
+                            accurateaxisangle[2]*sqrt(3)/2]
+                    
                 elif abs(angle-pi/2) < 10**(-self.precision+2):
-                    quat = [S.One/sqrt(2), accurateaxisangle[0]/sqrt(2), accurateaxisangle[1]/sqrt(2), accurateaxisangle[2]/sqrt(2)]
+                    quat = [S.One/sqrt(2), \
+                            accurateaxisangle[0]/sqrt(2), \
+                            accurateaxisangle[1]/sqrt(2), \
+                            accurateaxisangle[2]/sqrt(2)]
+                    
                 elif abs(angle-pi/3) < 10**(-self.precision+2):
-                    quat = [sqrt(3)/2, accurateaxisangle[0]/2, accurateaxisangle[1]/2, accurateaxisangle[2]/2]
+                    quat = [sqrt(3)/2, \
+                            accurateaxisangle[0]/2, \
+                            accurateaxisangle[1]/2, \
+                            accurateaxisangle[2]/2]
+                    
                 elif abs(angle-pi/4) < 10**(-self.precision+2):
                     # cos(pi/8) = sqrt(sqrt(2)+2)/2
                     # sin(pi/8) = sqrt(-sqrt(2)+2)/2
-                    quat = [sqrt(sqrt(2)+2)/2, sqrt(-sqrt(2)+2)/2*accurateaxisangle[0], sqrt(-sqrt(2)+2)/2*accurateaxisangle[1], sqrt(-sqrt(2)+2)/2*accurateaxisangle[2]]
+                    quat = [sqrt(sqrt(2)+2)/2, \
+                            sqrt(-sqrt(2)+2)/2*accurateaxisangle[0], \
+                            sqrt(-sqrt(2)+2)/2*accurateaxisangle[1], \
+                            sqrt(-sqrt(2)+2)/2*accurateaxisangle[2]]
+                    
                 elif abs(angle-pi/6) < 10**(-self.precision+2):
                  # cos(pi/12) = sqrt(2)/4+sqrt(6)/4
                     # sin(pi/12) = -sqrt(2)/4+sqrt(6)/4
-                    quat = [sqrt(2)/4+sqrt(6)/4, (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[0], (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[1], (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[2]]
+                    quat = [sqrt(2)/4+sqrt(6)/4, \
+                            (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[0], \
+                            (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[1], \
+                            (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[2]]
                 else:
                     # could not simplify further
                     #assert(0)
@@ -794,11 +808,10 @@ class IKFastSolver(AutoReloader):
             for i in range(3):
                 M[i,3] = self.convertRealToRational(T[i,3],self.precision)
             return M
-        
-        if isinstance(T, Matrix):
-            return self.normalizeRotation(Matrix(4,4,[x for x in T]))
+
         else:
-            return self.normalizeRotation(Matrix(4,4,[x for x in T.flat]))
+            return self.normalizeRotation(Matrix(4,4,[x for x in T])) if isinstance(T, Matrix) \
+                else self.normalizeRotation(Matrix(4,4,[x for x in T.flat]))
         
     def numpyVectorToSympy(self,v,precision=None):
         return Matrix(len(v),1,[self.convertRealToRational(x,precision) for x in v])
@@ -815,23 +828,32 @@ class IKFastSolver(AutoReloader):
         Returns 4x4 matrix with rotation component set
         """
         M = eye(4)
-        qq1 = 2*quat[1]*quat[1]
-        qq2 = 2*quat[2]*quat[2]
-        qq3 = 2*quat[3]*quat[3]
-        M[0,0] = 1 - qq2 - qq3
-        M[0,1] = 2*(quat[1]*quat[2] - quat[0]*quat[3])
-        M[0,2] = 2*(quat[1]*quat[3] + quat[0]*quat[2])
-        M[1,0] = 2*(quat[1]*quat[2] + quat[0]*quat[3])
-        M[1,1]= 1 - qq1 - qq3
-        M[1,2]= 2*(quat[2]*quat[3] - quat[0]*quat[1])
-        M[2,0] = 2*(quat[1]*quat[3] - quat[0]*quat[2])
-        M[2,1] = 2*(quat[2]*quat[3] + quat[0]*quat[1])
-        M[2,2] = 1 - qq1 - qq2
+        q0q1 = 2*quat[0]*quat[1]
+        q0q2 = 2*quat[0]*quat[2]
+        q0q3 = 2*quat[0]*quat[3]
+        q1q1 = 2*quat[1]*quat[1]
+        q1q2 = 2*quat[1]*quat[2]
+        q1q3 = 2*quat[1]*quat[3]
+        q2q2 = 2*quat[2]*quat[2]
+        q2q3 = 2*quat[2]*quat[3]
+        q3q3 = 2*quat[3]*quat[3]
+        M[0,0] = 1 - q2q2 - q3q3 # 1 - qq2 - qq3
+        M[0,1] = q1q2 - q0q3     # 2*(quat[1]*quat[2] - quat[0]*quat[3])
+        M[0,2] = q1q3 + q0q2     # 2*(quat[1]*quat[3] + quat[0]*quat[2])
+        M[1,0] = q1q2 + q0q3     # 2*(quat[1]*quat[2] + quat[0]*quat[3])
+        M[1,1] = 1 - q1q1 - q3q3 # 1 - qq1 - qq3
+        M[1,2] = q2q3 - q0q1     # 2*(quat[2]*quat[3] - quat[0]*quat[1])
+        M[2,0] = q1q3 - q0q2     # 2*(quat[1]*quat[3] - quat[0]*quat[2])
+        M[2,1] = q2q3 + q0q1     # 2*(quat[2]*quat[3] + quat[0]*quat[1])
+        M[2,2] = 1 - q1q1 - q2q2 # 1 - qq1 - qq2
         return M
 
     @staticmethod
     def rodrigues2(axis, cosangle, sinangle):
-        skewsymmetric = Matrix(3, 3, [S.Zero,-axis[2],axis[1],axis[2],S.Zero,-axis[0],-axis[1],axis[0],S.Zero])
+        skewsymmetric = Matrix(3, 3, \
+                               [  S.Zero, -axis[2],  axis[1], \
+                                 axis[2],   S.Zero, -axis[0], \
+                                -axis[1],  axis[0],  S.Zero])
         return eye(3) + sinangle * skewsymmetric + (S.One-cosangle)*skewsymmetric*skewsymmetric
 
     @staticmethod
@@ -848,10 +870,7 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def multiplyMatrix(Ts):
-        if len(Ts)==0:
-            return eye(4)
-        else:
-            return reduce(mul, Ts, 1)
+        return eye(4) if len(Ts)==0 else reduce(mul, Ts, 1)
     
     @staticmethod
     def equal(eq0, eq1):
@@ -859,7 +878,8 @@ class IKFastSolver(AutoReloader):
             eq0 = eq0.as_expr()
         if isinstance(eq1, Poly):
             eq1 = eq1.as_expr()
-        # return eq0-eq1 == S.Zero # TGN: BOLD move, see if it works. expand(eq0-eq1) == S.Zero
+        # return eq0-eq1 == S.Zero # TGN: see if it works.
+        # expand(eq0-eq1) == S.Zero
         check_zero = expand(eq0-eq1)
         # print 'finished check zero'
         return check_zero == S.Zero
@@ -1439,18 +1459,6 @@ class IKFastSolver(AutoReloader):
         #print s1
             
         return s0, s1, g_const, g_expr
-
-    """
-    def mygcd_frac(self, s0, s1):
-        s0_num, s0_denom = fraction(s0)
-        s1_num, s1_denom = fraction(s1)
-        s0_denom, s1_denom, g_const_denom, g_expr_denom = self.mygcd(s0_denom, s1_denom)
-        if not g_expr_denom == S.One:
-            return s0, s1
-        s0_num,   s1_num,   g_const_num,   g_expr_num = self.mygcd(s0_num, s1_num)
-        return s0_num/s0_denom, s1_num/s1_denom, \
-            g_const_num/g_const_denom, g_expr_num/g_expr_denom
-    """
 
     def checkForDivideByZero(self, eq):
         """
@@ -6719,7 +6727,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 try:
                     # if we can convert it to Poly, then we work with Poly
                     eq = Poly(eq, *self._rotpossymbols)
-                    self.poly_counter_rotdot += 1
                 
                     for fcn, groups in fcn_groups_pair:
                         #print '\n', fcn, '\n\n', eq, '\n'
@@ -6811,7 +6818,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             p = eq
         else:
             try:
-                self.poly_counter_rotnorm_new += 1
                 p = Poly(eq, *symbols)
             except (PolynomialError, CoercionFailed), e:
                 return None
@@ -6995,7 +7001,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             p = eq
         else:
             try:
-                self.poly_counter_rotcross += 1
                 p = Poly(eq, *symbols)
             except (PolynomialError, CoercionFailed), e:
                 return None
@@ -7157,7 +7162,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             p = eq
         else:
             try:
-                self.poly_counter_rotcross += 1                
                 p = Poly(eq, *symbols)
             except (PolynomialError, CoercionFailed), e:
                 return None
@@ -11262,7 +11266,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 # p = Poly(eq + 1234*group[3], group[0], group[1], group[2])
                 # p -= Poly(1234*group[3], *p.gens, domain = p.domain)
                 p = Poly(eq, *group[0:3])
-                self.poly_counter_rotnorm += 1
                 
             except (PolynomialError, CoercionFailed, ZeroDivisionError), e:
                 continue

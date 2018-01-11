@@ -6,7 +6,7 @@
       </geom>
     </body>
   </KinBody>
-  <robot  file="mitsubishi-pa10.zae"/>
+  <robot  file="robots_mitsubishi-pa10.zae"/>
   <KinBody>
     <joint name="dummy0" type="hinge" enable="false">
       <body>staticbase</body>
