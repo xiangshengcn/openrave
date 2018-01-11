@@ -624,7 +624,8 @@ class IKFastSolver(AutoReloader):
                 if handledcases == currentcases:
                     return True
             return False
-    
+
+    # Constructor of IKFastSolver
     def __init__(self, kinbody=None,kinematicshash='',precision=None, checkpreemptfn=None):
         """
         :param checkpreemptfn: checkpreemptfn(msg, progress) called periodically at various points in ikfast. Takes in two arguments to notify user how far the process has completed.
@@ -658,8 +659,6 @@ class IKFastSolver(AutoReloader):
         # =============== TGN adds the following ===============
         self.trigvars_subs = []
         self.trigsubs = []
-        self.trigsubs_one = []         
-        self.ppsubs_ext = []
 
         # used by checkpow {formula: int} 
         self.checkpow_expr_dict = {} 
@@ -1053,10 +1052,8 @@ class IKFastSolver(AutoReloader):
         """
         if expr.is_Add or expr.is_Mul: # TGN added expr.is_Mul
             return sum([1 for term in expr.args if term.has(var)])
-        elif expr.has(var):
-            return 1
         else:
-            return 0
+            return 1 if expr.has(var) else 0
     
     @staticmethod
     def isValidPowers(expr):
@@ -1088,8 +1085,9 @@ class IKFastSolver(AutoReloader):
         return M
     
     @staticmethod
-    def has(eqs,*sym):
-        """check if eqs depends on any variable in sym
+    def has(eqs, *sym):
+        """
+        Checks if eqs depends on any variable(s) in sym
         """
         return any([eq.has(*sym) for eq in eqs]) if len(sym) > 0 else False
 
@@ -1098,18 +1096,12 @@ class IKFastSolver(AutoReloader):
         for v in trigvars:
             if v not in self.trigvars_subs and self.IsHinge(v.name):
                 self.trigvars_subs.append(v)
-                log.info('add %s into self.trigsubs' % v)
+                log.info('Add %s into self.trigsubs' % v)
                 self.trigsubs.append((sin(v)**2, 1-cos(v)**2))
                 self.trigsubs.append((Symbol('s%s'%v.name)**2, \
                                       1-Symbol('c%s'%v.name)**2))
         return
     
-    def gen_trigsubs_one(self, trigvars): 
-        for v in trigvars: 
-            self.trigsubs_one.append((sin(v)**2+cos(v)**2, 1)) 
-            self.trigsubs_one.append((Symbol('s%s'%v.name)**2+Symbol('c%s'%v.name)**2, 1)) 
-        return
-
     def gen_variable_obj(self, trigvars):
         for v in trigvars:
             if v not in self.variable_obj:
@@ -1122,15 +1114,6 @@ class IKFastSolver(AutoReloader):
             self.gen_variable_obj([v])
         return self.variable_obj[v]
 
-    def gen_ppsubs_ext(self): 
-        px, py, pz = self.Tee[0:3,3] 
-        pp = self.pp 
-         
-        self.ppsubs_ext = [[px**2+py**2, pp-pz**2], \
-                           [py**2+pz**2, pp-px**2], \
-                           [pz**2+px**2, pp-py**2]] 
-        return 
-    
     def trigsimp_new(self, eq):
         """
         TGN's rewrite version of trigsimp: recursively subs sin**2 for 1-cos**2 for every trig var
@@ -2125,8 +2108,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         print('========================== END OF SETUP PRINT ================================\n')
         
         self.gen_trigsubs(jointvars)
-        self.gen_trigsubs_one(jointvars)         
-        self.gen_ppsubs_ext()
 
         # MAIN FUNCTION
         chaintree = solvefn(self, LinksRaw, jointvars, isolvejointvars)
@@ -3920,10 +3901,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 Reqs = []
                 for i in range(3):
                     
-                    # TGN: ensure curvars is a subset of self.trigvars_subs
-                    assert(len([z for z in othersolvedvars+rotvars if z in self.trigvars_subs]) == len(othersolvedvars+rotvars))
-                    # equivalent?
-                    assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars+rotvars]))
+                    # TGN: ensure othersolvedvars+rotvars is a subset of self.trigvars_subs
+                    assert(all([z in self.trigvars_subs for z in othersolvedvars+rotvars]))
                     
                     Reqs.append([self.trigsimp_new(Raccum[i,j]-R[i,j]) for j in range(3)])
                 for i in range(3):
@@ -6161,15 +6140,24 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             othereq *= (1+htvars[i]**2)**maxdenom[i]
         return eqnew, othereq, htvarsubsinv
     
-    def solveKohliOsvatic(self,rawpolyeqs,solvejointvars,endbranchtree, AllEquationsExtra=None, currentcases=None, currentcasesubs=None):
-        """Find a 16x16 matrix where the entries are linear with respect to the tan half-angle of one of the variables [Kohli1993]_. Takes in the 14 raghavan/roth equations.
-        
-        .. [Kohli1993] Dilip Kohli and M. Osvatic, "Inverse Kinematics of General 6R and 5R,P Serial Manipulators", Journal of Mechanical Design, Volume 115, Issue 4, Dec 1993.
+    def solveKohliOsvatic(self, \
+                          rawpolyeqs, \
+                          solvejointvars, \
+                          endbranchtree, \
+                          AllEquationsExtra = None, \
+                          currentcases = None, \
+                          currentcasesubs = None):
         """
-        log.info('attempting kohli/osvatic general ik method')
+        Find a 16x16 matrix where the entries are linear in tan(tj/2) [Kohli1993]. Takes in the 14 Raghavan-Roth equations.
+        
+        [Kohli1993] Dilip Kohli and M. Osvatic, "Inverse Kinematics of General 6R and 5R,P Serial Manipulators", 
+        Journal of Mechanical Design, Volume 115, Issue 4, Dec 1993.
+        """
+        
+        log.info('Attempting the Kohli-Osvatic general IK method')
         if len(rawpolyeqs[0][0].gens) < len(rawpolyeqs[0][1].gens):
             for peq in rawpolyeqs:
-                peq[0],peq[1] = peq[1],peq[0]
+                peq[0], peq[1] = peq[1], peq[0]
 
         symbols = list(rawpolyeqs[0][0].gens)
         othersymbols = list(rawpolyeqs[0][1].gens)
@@ -6191,7 +6179,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if len(eqs) <= 8:
                 break
         if len(eqs) > 8:
-            raise self.CannotSolveError('need 8 or less equations of one variable, currently have %d'%len(eqs))
+            raise self.CannotSolveError('Need <=8 equations in one variable; currently there are %d' % len(eqs))
         
         cvar = symbols[i]
         svar = symbols[i+1]
@@ -6302,7 +6290,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             except self.CannotSolveError,e:
                 pass
         
-        log.info('build final equations for symbols: %s',finaleqsymbols)
+        log.info('Build final equations for symbols: %s', finaleqsymbols)
         neweqs=[]
         for i in range(0,8,2):
             p0 = Poly(polyeqs[i][0],cvar,svar)
@@ -6321,7 +6309,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 neweqs.append([Poly(p0dict.get((1,0),S.Zero) + p0dict.get((0,1),S.Zero)*tvar + p0.TC() + tvar*p1.TC(),*symbols), Poly(r0+tvar*r1,*othersymbols)])
                 neweqs.append([Poly(p0dict.get((1,0),S.Zero)*tvar - p0dict.get((0,1),S.Zero) - p0.TC()*tvar + p1.TC(),*symbols), Poly(r1-tvar*r0,*othersymbols)])
         if len(neweqs) != 8:
-            raise self.CannotSolveError('coefficients of equations need to match! only got %d reduced equations'%len(neweqs))
+            raise self.CannotSolveError('Coefficients of equations need to match! only got %d reduced equations' % \
+                                        len(neweqs))
     
         for eq0,eq1 in neweqs:
             commondenom = Poly(S.One,*self.pvars)
@@ -6418,16 +6407,30 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if ileftvar > 0:
             raise self.CannotSolveError('solving equations dialytically succeeded with var index %d, unfortunately code generation supports only index 0'%ileftvar)
     
-        coupledsolution = AST.SolverCoeffFunction(jointnames=[v.name for v in usedvars],jointeval=[v[1] for v in dummysubs2],jointevalcos=[dummysubs[2*i][1] for i in range(len(usedvars))],jointevalsin=[dummysubs[2*i+1][1] for i in range(len(usedvars))],isHinges=[self.IsHinge(v.name) for v in usedvars],exportvar=dummys[0:3]+[dummyjk],exportcoeffeqs=exportcoeffeqs,exportfnname='solvedialyticpoly16lep',rootmaxdim=16)
+        coupledsolution = AST.SolverCoeffFunction(jointnames = [v.name for v in usedvars], \
+                                                  jointeval = [v[1] for v in dummysubs2], \
+                                                  jointevalcos = [dummysubs[2*i][1] for i in range(len(usedvars))], \
+                                                  jointevalsin = [dummysubs[2*i+1][1] for i in range(len(usedvars))], \
+                                                  isHinges = [self.IsHinge(v.name) for v in usedvars], \
+                                                  exportvar = dummys[0:3]+[dummyjk], \
+                                                  exportcoeffeqs = exportcoeffeqs, \
+                                                  exportfnname = 'solvedialyticpoly16lep', \
+                                                  rootmaxdim = 16)
         self.usinglapack = True
-        return [coupledsolution]+endbranchtree,usedvars
+        return [coupledsolution]+endbranchtree, usedvars
 
-    def solveDialytically(self,dialyticeqs,ileftvar,returnmatrix=False,getsubs=None):
-        """ Return the coefficients to solve equations dialytically (Salmon 1885) leaving out variable index ileftvar.
+    def solveDialytically(self, dialyticeqs, ileftvar, \
+                          returnmatrix = False, \
+                          getsubs = None):
+        """ 
+        Return the coefficients to solve equations dialytically (Salmon 1885) leaving out variable index ileftvar.
 
         Extract the coefficients of 1, leftvar**1, leftvar**2, ... of every equation
-        every len(dialyticeqs)*len(monoms) coefficients specify one degree of all the equations (order of monoms is specified in exportmonomorder
-        there should be len(dialyticeqs)*len(monoms)*maxdegree coefficients
+
+        Every len(dialyticeqs)*len(monoms) coefficients specify one degree of all the equations 
+        (order of monoms is specified in exportmonomorder
+
+        There should be len(dialyticeqs)*len(monoms)*maxdegree coefficients
 
         Method also checks if the equations are linearly dependent
         """
@@ -6452,7 +6455,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 mlist[0] += 1
                 allmonoms.add(tuple(mlist))
             
-            # check if any monoms are not expressed in this poly, and if so, add another poly with the monom multiplied, will this give bad solutions?
+            # check if any monoms are not expressed in this poly
+            # if so, add another poly with the monom multiplied, will this give bad solutions?
             for igen in range(len(peq.gens)):
                 if all([m[igen]==0 for m in peq.monoms()]):
                     log.debug('adding extra equation multiplied by %s', peq.gens[igen])
@@ -6496,7 +6500,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 Mall[degree][ipeq,allmonoms.index(tuple(mlist))] = c
                 Mallindices[degree][ipeq,allmonoms.index(tuple(mlist))] = exportindex
 
-            # check if any monoms are not expressed in this poly, and if so, add another poly with the monom multiplied, will this give bad solutions?
+            # check if any monoms are not expressed in this poly
+            # if so, add another poly with the monom multiplied, will this give bad solutions?
             for igen in range(len(peq.gens)):
                 if all([m[igen]==0 for m in peq.monoms()]):
                     for m,c in peq.terms():
@@ -6512,8 +6517,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         Mall[degree][ipeq,allmonoms.index(tuple(mlist))] = c
                         Mallindices[degree][ipeq,allmonoms.index(tuple(mlist))] = exportindex
 
-        # have to check that the determinant is not zero for several values of ileftvar! It is very common that
-        # some equations are linearly dependent and not solvable through this method.
+        # have to check that the determinant is not zero for several values of ileftvar!
+        # It is very common that some equations are linearly dependent and not solvable through this method.
         if self.testconsistentvalues is not None:
             linearlyindependent = False
             for itest,subs in enumerate(self.testconsistentvalues):
@@ -6634,10 +6639,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         Simplifies the coefficients of the polynomial with simplifyTransform and returns the new polynomial
         """
-        if peq == S.Zero:
-            return peq
-        
-        return peq.termwise(lambda m,c: self.SimplifyTransform(c))
+        return S.Zero if peq == S.Zero else peq.termwise(lambda m,c: self.SimplifyTransform(c))
 
     def SimplifyTransform(self, eq, othervars = None):
         """
@@ -7289,56 +7291,59 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             
         return True
 
-    def getCommonExpression(self, exprs, expr):
-        for i,exprtest in enumerate(exprs):
-            if self.equal(expr,exprtest):
-                return i
-        return None
-
-    def verifyAllEquations(self,AllEquations,unsolvedvars, solsubs, tree=None):
-        extrazerochecks=[]
-        for i in range(len(AllEquations)):
-            expr = AllEquations[i]
+    def verifyAllEquations(self, AllEquations, unsolvedvars, solsubs, \
+                           tree = None):        
+        extrazerochecks = []
+        for i, expr in enumerate(AllEquations):
             if not self.isValidSolution(expr):
-                raise self.CannotSolveError('verifyAllEquations: equation is not valid: %s'%(str(expr)))
+                raise self.CannotSolveError('verifyAllEquations: equation is not valid: %s' % (str(expr)))
             
-            if not expr.has(*unsolvedvars) and self.CheckExpressionUnique(extrazerochecks,expr):
-                extrazerochecks.append(self.removecommonexprs(expr.subs(solsubs).evalf(),onlygcd=False,onlynumbers=True))
+            if not expr.has(*unsolvedvars) and self.CheckExpressionUnique(extrazerochecks, expr):
+                extrazerochecks.append(self.removecommonexprs(expr.subs(solsubs).evalf(), \
+                                                              onlygcd = False, \
+                                                              onlynumbers = True))
+                
         if len(extrazerochecks) > 0:
-            return [AST.SolverCheckZeros('verify',extrazerochecks,tree,[AST.SolverBreak('verifyAllEquations')],anycondition=False)]
+            return [AST.SolverCheckZeros('verify', extrazerochecks, tree, \
+                                         [AST.SolverBreak('verifyAllEquations')], \
+                                         anycondition = False)]
         return tree
 
-    def PropagateSolvedConstants(self, AllEquations, othersolvedvars, unknownvars, constantSymbols=None):
+    def PropagateSolvedConstants(self, AllEquations, othersolvedvars, unknownvars, \
+                                 constantSymbols = None):
         """
-        Sometimes equations can be like "npz", or "pp-1", which means npz=0 and pp=1. Check for these constraints and apply them to the rest of the equations
-        Return a new set of equations
+        Sometimes equations can be like "npz" or "pp - 1", meaning npz = 0 and pp = 1. 
+        
+        We check these constraints and apply them to the rest of the equations.
+
+        Returns a new set of equations.
+
         :param constantSymbols: the variables to try to propagage, if None will use self.pvars
         """
-        if constantSymbols is not None:
-            constantSymbols = list(constantSymbols)
-        else:
-            constantSymbols = list(self.pvars)
+        constantSymbols = list(self.pvars if constantSymbols is None else constantSymbols)
+            
         for othersolvedvar in othersolvedvars:
             constantSymbols.append(othersolvedvar)
             if self.IsHinge(othersolvedvar.name):
                 constantSymbols.append(cos(othersolvedvar))
                 constantSymbols.append(sin(othersolvedvar))
+                
         newsubsdict = {}
         for eq in AllEquations:
             if not eq.has(*unknownvars) and eq.has(*constantSymbols):
                 try:
-                    reducedeq = self.SimplifyTransform(eq)
+                    # TGN: comment out this since it's unused
+                    # reducedeq = self.SimplifyTransform(eq)
+                    # eq = reduceeq ???
                     for constantSymbol in constantSymbols:
                         if eq.has(constantSymbol):
                             try:
-                                peq = Poly(eq,constantSymbol)
+                                peq = Poly(eq, constantSymbol)
                                 if peq.degree(0) == 1:
                                     # equation is only degree 1 in the variable, and doesn't have any solvevars multiplied with it
-                                    newsolution = solve(peq,constantSymbol)[0]
-                                    if constantSymbol in newsubsdict:
-                                        if self.codeComplexity(newsolution) < self.codeComplexity(newsubsdict[constantSymbol]):
-                                            newsubsdict[constantSymbol] = newsolution
-                                    else:
+                                    newsolution = solve(peq, constantSymbol)[0]
+                                    if constantSymbol not in newsubsdict or \
+                                       self.codeComplexity(newsolution) < self.codeComplexity(newsubsdict[constantSymbol]):
                                         newsubsdict[constantSymbol] = newsolution
                             except PolynomialError:
                                 pass
@@ -7354,9 +7359,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 numberSubstitutions.append((var,value))
             else:
                 otherSubstitutions.append((var,value))
+                
         NewEquations = []
         for ieq, eq in enumerate(AllEquations):
-            if 1:#not eq.has(*unknownvars):
+            if True: # not eq.has(*unknownvars):
                 neweq = eq.subs(numberSubstitutions).expand()
                 if neweq != S.Zero:
                     # don't expand here since otherSubstitutions could make it very complicated
@@ -7515,9 +7521,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             for eq in raweqns:
 
                 # TGN: ensure curvars is a subset of self.trigvars_subs
-                assert(len([z for z in curvars if z in self.trigvars_subs]) == len(curvars))
-                # equivalent?
-                assert(not any([(z not in self.trigvars_subs) for z in curvars]))
+                assert(all([z in self.trigvars_subs for z in curvars]))
 
                 # try dummyvar = var0 + var1
                 neweq = self.trigsimp_new(eq.subs(var0, dummyvar-var1).expand(trig=True))
@@ -7545,9 +7549,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 
                 for eq in raweqns:
                     # TGN: ensure curvars is a subset of self.trigvars_subs
-                    assert(len([z for z in curvars if z in self.trigvars_subs]) == len(curvars))
-                    # equivalent?
-                    assert(not any([(z not in self.trigvars_subs) for z in curvars]))
+                    assert(all([z in self.trigvars_subs for z in curvars]))
                         
                     neweq = self.trigsimp_new(eq.subs(var0, dummyvar + var1).expand(trig = True))
                     eq = neweq.subs(self.freevarsubs + solsubs)
@@ -7757,7 +7759,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     
     def _AddToGlobalSymbols(self, var, eq):
         """
-        Adds global symbols; returns True if replaced with an existing entry
+        Adds global symbols; returns True if we update an existing global symbol
+
+        TGN: use dictionary for self.globalsymbols
         """
         for iglobal, gvarexpr in enumerate(self.globalsymbols):
             if var == gvarexpr[0]:
@@ -9703,9 +9707,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     tempsolutions  = solve(eqnew, var)
 
                     # TGN: ensure curvars is a subset of self.trigvars_subs
-                    assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                    # equivalent?
-                    assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                    assert(all([z in self.trigvars_subs for z in othersolvedvars]))
                     
                     jointsolutions = [self.SimplifyTransform(self.trigsimp_new(s.subs(symbols))) \
                                       for s in tempsolutions]
@@ -9734,9 +9736,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         s2 = s.subs(symbols)
 
                         # TGN: ensure curvars is a subset of self.trigvars_subs
-                        assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                        # equivalent?
-                        assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                        assert(all([z in self.trigvars_subs for z in othersolvedvars]))
                     
                         s3 = self.trigsimp_new(s2)
                         s4 = self.SimplifyTransform(s3)
@@ -9933,10 +9933,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             break
                         # sometimes the returned simplest solution makes really gross approximations
 
-                        # TGN: ensure curvars is a subset of self.trigvars_subs
-                        assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                        # equivalent?
-                        assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                        # TGN: ensure othersolvedvars is a subset of self.trigvars_subs
+                        assert(all([z in self.trigvars_subs for z in othersolvedvars]))
                         
                         svarfracsimp_denom = self.SimplifyTransform(self.trigsimp_new(svarfrac[1]))
                         cvarfracsimp_denom = self.SimplifyTransform(self.trigsimp_new(cvarfrac[1]))
@@ -9956,10 +9954,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             #denom = self.gsymbolgen.next()
                             #solversolution.dictequations.append((denom,sign(svarfracsimp_denom)))
 
-                            # TGN: ensure curvars is a subset of self.trigvars_subs
-                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                            # equivalent?
-                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            # TGN: ensure othersolvedvars is a subset of self.trigvars_subs
+                            assert(all([z in self.trigvars_subs for z in othersolvedvars]))
                             
                             svarsolsimp = self.SimplifyTransform(self.trigsimp_new(svarfrac[0]))#*denom)
                             cvarsolsimp = self.SimplifyTransform(self.trigsimp_new(cvarfrac[0]))#*denom)
@@ -9973,10 +9969,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             expandedsol = atan2(svarsolsimp,cvarsolsimp) + pi/2*(-S.One + sign(svarfracsimp_denom))
                         else:
                             
-                            # TGN: ensure curvars is a subset of self.trigvars_subs
-                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                            # equivalent?
-                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            # TGN: ensure othersolvedvars is a subset of self.trigvars_subs
+                            assert(all([z in self.trigvars_subs for z in othersolvedvars]))
                             
                             svarfracsimp_num = self.SimplifyTransform(self.trigsimp_new(svarfrac[0]))
                             cvarfracsimp_num = self.SimplifyTransform(self.trigsimp_new(cvarfrac[0]))
@@ -10127,10 +10121,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         jointsolutions = []
                         
                         for s in tempsolutions:
-                            # TGN: ensure curvars is a subset of self.trigvars_subs
-                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                            # equivalent?
-                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            # TGN: ensure othersolvedvars is a subset of self.trigvars_subs
+                            assert(all([z in self.trigvars_subs for z in othersolvedvars]))
                             
                             s2 = self.trigsimp_new(s.subs(symbols+varsym.subsinv))
                             if self.isValidSolution(s2):
@@ -10164,10 +10156,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                          sqrt(1-varsym.svar**2)).expand(), \
                                               varsym.svar)
 
-                        # TGN: ensure curvars is a subset of self.trigvars_subs
-                        assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                        # equivalent?
-                        assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                        # TGN: ensure othersolvedvars is a subset of self.trigvars_subs
+                        assert(all([z in self.trigvars_subs for z in othersolvedvars]))
                         
                         jointsolutions = [self.SimplifyTransform(self.trigsimp_new(s.subs(symbols+varsym.subsinv), \
                                                                                )) \
@@ -10196,10 +10186,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         eqsub = s.subs(symbols)
                         if self.codeComplexity(eqsub) < 2000:
                             
-                            # TGN: ensure curvars is a subset of self.trigvars_subs
-                            assert(len([z for z in othersolvedvars if z in self.trigvars_subs]) == len(othersolvedvars))
-                            # equivalent?
-                            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars]))
+                            # TGN: ensure othersolvedvars is a subset of self.trigvars_subs
+                            assert(all([z not in self.trigvars_subs for z in othersolvedvars]))
                             
                             eqsub = self.SimplifyTransform(self.trigsimp_new(eqsub))
                         jointsolutions.append(eqsub)
@@ -10625,10 +10613,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         checkforzeros = []
         if domagicsquare:
 
-            # TGN: ensure curvars is a subset of self.trigvars_subs
-            assert(len([z for z in othersolvedvars+[var0,var1] if z in self.trigvars_subs]) == len(othersolvedvars+[var0,var1]))
-            # equivalent?
-            assert(not any([(z not in self.trigvars_subs) for z in othersolvedvars+[var0,var1]]))
+            # TGN: ensure othersolvedvars+[var0,var1] is a subset of self.trigvars_subs
+            assert(all([z in self.trigvars_subs for z in othersolvedvars+[var0,var1]]))
 
             # here is the magic transformation:
             finaleq = self.trigsimp_new(expand(((complexterms[0]**2+complexterms[1]**2) \

@@ -11,13 +11,13 @@
   </KinBody>
   <!-- left arm -->
   <Robot>
-    <Robot prefix="l_" file="schunk-lwa3.zae"></Robot>
+    <Robot prefix="l_" file="robots_schunk-lwa3.zae"></Robot>
     <RotationAxis>1 0 0 90</RotationAxis>
     <translation>0 -0.1 0.7</translation>
   </Robot>
   <!-- right arm -->
   <Robot>
-    <Robot prefix="r_" file="schunk-lwa3.zae"></Robot>
+    <Robot prefix="r_" file="robots_schunk-lwa3.zae"></Robot>
     <RotationAxis>1 0 0 -90</RotationAxis>
     <translation>0 0.1 0.7</translation>
   </Robot>
