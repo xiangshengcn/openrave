@@ -6722,15 +6722,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     self.poly_counter_rotdot += 1
                 
                     for fcn, groups in fcn_groups_pair:
-#                        print '\n', fcn, '\n\n', eq, '\n'
-#                        if self.codeComplexity(eq)>600:
-#                            print '\n', fcn, '\n', eq, '\n'
-#                            exec(ipython_str, globals(), locals())
+                        #print '\n', fcn, '\n\n', eq, '\n'
+                        #if self.codeComplexity(eq)>600:
+                        #    print '\n', fcn, '\n', eq, '\n'
+                        #    exec(ipython_str, globals(), locals())
                         neweq, newchanged = _SimplifyRotationFcn(fcn, eq, changed, groups)
                         changed = changed or newchanged
                         if newchanged:
-                            log.info('Number of operations changes from %d to %d' % \
-                                     (eq.count_ops(), neweq.count_ops()))
+                        #    log.info('Number of operations changes from %d to %d' % \
+                        #             (eq.count_ops(), neweq.count_ops()))
 
                             """
                             if eq.count_ops() < neweq.count_ops():
@@ -6886,12 +6886,18 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                         m3l[15] += 1 # 15 is index of pp
                                 
                                     m2 = tuple(m2l); m3 = tuple(m3l)
-                            
+
+                                    p = p.sub(Poly.from_dict({m0: c0, \
+                                                              m1: c0, \
+                                                              m2: c0, \
+                                                              m3:-c0}, *p.gens))
+                                    """
                                     p = p.\
                                         sub(Poly.from_dict({m0:c0}, *p.gens)). \
                                         sub(Poly.from_dict({m1:c0}, *p.gens)). \
                                         add(Poly.from_dict({m3:c0}, *p.gens)). \
                                         sub(Poly.from_dict({m2:c0}, *p.gens))
+                                    """
 
                                     changed = True
                                     usedindices.add(index0)
@@ -6931,7 +6937,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                         
                                     m2 = tuple(m2l); m3 = tuple(m3l)
                                     m4 = tuple(m4l); m5 = tuple(m5l)
+
+
+                                    p = p.sub(Poly.from_dict({m0: c0, \
+                                                              m1:-c0, \
+                                                              m2:-c0, \
+                                                              m3: c0, \
+                                                              m4: c0, \
+                                                              m5:-c0}, *p.gens))
                                     
+                                    """
                                     p = p.\
                                         sub(Poly.from_dict({m0:c0}, *p.gens)). \
                                         sub(Poly.from_dict({m1:c1}, *p.gens)). \
@@ -6939,6 +6954,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                         sub(Poly.from_dict({m3:c0}, *p.gens)). \
                                         sub(Poly.from_dict({m4:c0}, *p.gens)). \
                                         add(Poly.from_dict({m5:c0}, *p.gens))
+                                    """
                                 
                                     changed = True
                                     usedindices.add(index0)
@@ -7073,11 +7089,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 
                                 # there is a bug in sympy v0.6.7 polynomial adding here! 
                                 # TGN: Now > 0.7, so no problem now?
-                            
+
+                                p = p.sub(Poly.from_dict({m0: c0, \
+                                                          m1: c0, \
+                                                          m2: c0}, *p.gens))
+                                """
                                 p = p.\
                                     sub(Poly.from_dict({m0:c0}, *p.gens)). \
                                     sub(Poly.from_dict({m1:c1}, *p.gens)). \
                                     sub(Poly.from_dict({m2:c0}, *p.gens))
+                                """
 
                                 g3 = g[3] 
                                 if g3 != S.Zero: 
@@ -7159,9 +7180,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         rng_len_listterms = range(len_listterms)
 
         q = p
-
-#        if eq_comp>300:
-#            exec(ipython_str, globals(), locals())
         
         for cg in groups: # e.g. cg = [[3, 7], [6, 4], 2]
 
@@ -7218,18 +7236,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         
                             # there is a bug in sympy polynomial caching here! (0.6.7)
                             # TGN: Now > 0.7, so no problem now?
+
+                            p = p.sub(Poly.from_dict({m0: c0, \
+                                                      m1:-c0, \
+                                                      m2:-c0 if case==1 else c0}, *p.gens))
+                            """
                             p = p.\
                                 sub(Poly.from_dict({m0:c0}, *p.gens)).\
                                 sub(Poly.from_dict({m1:c1}, *p.gens)).\
                                 add(Poly.from_dict({m2:c0 if case==1 else c1}, *p.gens))
+                            """
                             changed = True
                             usedindices.add(index0)
                             usedindices.add(index1)
                             break
-
-        #if eq_comp>300:
-        #    exec(ipython_str, globals(), locals())
-
 
         return p if changed else None
 
