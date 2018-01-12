@@ -3204,7 +3204,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             #      with the same value each time, we can move its assignment to top
             #if epsilon is None:
             #    epsilon = 5*(10**-self.precision)
-            neweq = eq is abs(eq.evalf())>epsilon else S.Zero
+            neweq = eq if abs(eq.evalf())>epsilon else S.Zero
         else:
             neweq = eq
             
@@ -3327,17 +3327,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for tvar in transvars:
             solvedvarsubs += self.getVariable(tvar).subs
 
-        #"""
-        Ree = zeros((3,3))
-        for i in range(3):
-            for j in range(3):
-                Ree[i,j] = Symbol('new_r%d%d'%(i,j))
-        #"""
-                
+        Ree = [ Symbol('new_r%d%d'%(i,j)) for i in range(3) for j in range(3) ]
         try:
             T1sub = T1.subs(solvedvarsubs)
             othersolvedvars = self.freejointvars if solveRotationFirst else transvars+self.freejointvars
-            AllEquations = self.buildEquationsFromRotation(T0links, Ree, rotvars, othersolvedvars)
+            AllEquations = self.buildEquationsFromRotation(T0links, Matrix(3,3,Ree), rotvars, othersolvedvars)
             self.checkSolvability(AllEquations, rotvars, othersolvedvars)
             currotvars = rotvars[:]
             rottree += self.SolveAllEquations(AllEquations, \
@@ -3345,12 +3339,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                               othersolvedvars = othersolvedvars, \
                                               solsubs = self.freevarsubs[:], \
                                               endbranchtree = storesolutiontree)
+            
             # has to be after SolveAllEquations...?
-            for i in range(3):
-                for j in range(3):
-                    exec(ipython_str, globals(), locals())
-                    Reeij = Symbol('new_r%d%d' % (i, j))
-                    self.globalsymbols[Reeij] = T1sub[i,j]
+            T1rot =  [T1[i,j] for i in range(3) for j in range(3)]
+            self.globalsymbols.update(dict(izip(Ree, T1rot)))
 
             if len(rottree) == 0:
                 raise self.CannotSolveError('Cannot solve for all rotation variables: %s:%s' % \
@@ -3364,13 +3356,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         finally:
             # remove the Ree global symbols
-            removesymbols = set()
-            for i in range(3):
-                for j in range(3):
-                    exec(ipython_str, globals(), locals())
-                    removesymbols.add(Ree[i,j])
-            # self.globalsymbols = [g for g in self.globalsymbols if not g[0] in removesymbols]
-            self.globalsymbols = { k:self.globalsymbols[k] for k in self.globalsymbols if not k in removesymbols }
+            for Rij in Ree:
+                self.globalsymbols.pop(Rij, None)
+            # self.globalsymbols = { k:self.globalsymbols[k] for k in self.globalsymbols if not k in Ree }
             
     def solveFullIK_6DGeneral(self, T0links, T1links, solvejointvars, endbranchtree, usesolvers=7):
         """Solve 6D equations of a general kinematics structure.
@@ -3951,7 +3939,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                uselength = uselength)
 
     def buildEquationsFromRotation(self,T0links,Ree,rotvars,othersolvedvars):
-        """Ree is a 3x3 matrix
+        """
+        Ree is a 3x3 matrix
         """
         Raccum = Ree
         numvarsdone = 0
@@ -7813,14 +7802,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if globalsymbols is None:
             globalsymbols = self.globalsymbols
         preveq = eq
-        neweq = preveq.subs(globalsymbols)
-        while preveq != neweq:
-            if self.isValidSolution(neweq):
+        while True:
+            neweq = preveq.subs(globalsymbols)
+            if preveq == neweq:
+                return neweq
+            elif self.isValidSolution(neweq):
                 preveq = neweq
-                neweq = preveq.subs(globalsymbols)    
-            else:
+            else: # neweq is not valid
                 raise self.CannotSolveError('Equation %r is not valid' % neweq)
-        return neweq
     
     def _AddToGlobalSymbols(self, var, eq):
         """
@@ -10801,7 +10790,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     @staticmethod
     def isValidSolution(expr):
         """
-        Returns True if expr does not contain I, oo, -oo, or nan
+        Returns True if expr does NOT contain I, oo, -oo, or nan
         """
         if hasattr(expr, 'is_number'): # sympy's nan   
             exprIsNaN = expr==expr+1 if expr.is_number else False
@@ -10810,54 +10799,70 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         return not (expr.has(I) or expr.has(oo) or expr.has(-oo) \
                     or exprIsNaN)
-        """
-        if expr.is_number:
-            e = expr.evalf()
-            return not (e.has(I) or isinf(e) or isnan(e))
-        
-        elif expr.is_Mul:
-
-            expr_num    = sum([ num for num in expr.args if num.is_number ]) + Float(0)
-            expr_others = [ num for num in expr.args if not num.is_number ]
-
-            return (not (expr_num.has(I) or isinf(expr_num) or isnan(expr_num))) and \
-                all([IKFastSolver.isValidSolution(arg) for arg in expr_others])
-
-        else:
-            return all([IKFastSolver.isValidSolution(arg) for arg in expr.args])
-
-        assert(0) # TGN: cannot reach here
-        return True
-        """
 
     @staticmethod
     def _GetSumSquares(expr):
         """
-        if expr is a sum of squares, returns the list of individual expressions that were squared. 
-        otherwise returns None
+        If expr is a sum of squares, then this function returns the list of individual expressions 
+        that were squared. 
+        
+        Otherwise returns [].
+
+        Called by AddSolution only.
         """
         values = []
         if expr.is_Add:
             for arg in expr.args:
-                if arg.is_Pow and arg.exp.is_number and arg.exp > 0 and (arg.exp%2) == 0:
-                    values.append(arg.base)
+                if arg.is_Pow:
+                    if arg.exp.is_number and arg.exp > 0 and (arg.exp%2) == 0:
+                        values.append(arg.base)
+                    else:
+                        values = []
+                        break
+                elif arg.is_Mul:
+                    # call is_Mul branch
+                    toappend = IKFastSolver._GetSumSquares(arg)
+                    if len(toappend)>0:
+                        values += toappend
+                    else: # toappend is not sum of squares, nor is the whole expression
+                        values = []
+                        break
+                elif arg.is_number and arg>0:
+                    values.append(S.One)
                 else:
-                    return []
+                    values = []
+                    break
                 
         elif expr.is_Mul:
             values = IKFastSolver._GetSumSquares(expr.args[0])
             for arg in expr.args[1:]:
-                values2 = IKFastSolver._GetSumSquares(arg)
+                if len(values) == 0:
+                    break
+                values2 = IKFastSolver._GetSumSquares(arg) # recursion
                 if len(values2) > 0:
-                    values = [x*y for x,y in product(values,values2)]
-                else:
-                    values = [x*arg for x in values]
-            return values
-        
-        else:
-            if expr.is_Pow and expr.exp.is_number and expr.exp > 0 and (expr.exp%2) == 0:
-                values.append(expr.base)
-            
+                    values = [x*y for x, y in product(values, values2)]
+                else: # values2 is not sum of squares, nor is the whole expression
+                    values = []
+                    break
+
+                # Originally it was
+                #
+                #   values = [x*arg for x in values]
+                #
+                # TGN: above is weird because x**2*(x+y**2) would give x*(x+y**2);
+                #      expected result should be []? I modified this function
+
+        elif expr.is_Pow and expr.exp.is_number and expr.exp > 0 and (expr.exp%2) == 0:
+            values.append(expr.base)
+
+        elif expr.is_number and expr>0:
+            values.append(S.One)
+
+        # print expr, ', ', values
+        if len(values)>0:
+            values = list(set(values)) # make items unique
+        # exec(ipython_str, globals(), locals())
+
         return values
     
     @staticmethod
