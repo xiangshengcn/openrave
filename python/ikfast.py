@@ -1675,12 +1675,30 @@ class IKFastSolver(AutoReloader):
             # log.info('ComputeSolutionComplexity: %r', sol)
             # exec(ipython_str, globals(), locals())
             # multiby by 400 in order to prioritize equations with less solutions
-            # TGN: remove all those hasattr(sol, ...) check, because they are always True
+            #
+            # TGN: sol can be a SolverSolution class object or a SolverPolynomialRoots class object
+
+            """
+            if not (sol.__class__.__name__=='SolverSolution' or \
+                    sol.__class__.__name__=='SolverPolynomialRoots'):
+                print sol
+                exec(ipython_str, globals(), locals())
+
             if hasattr(sol,'jointeval') and sol.jointeval is not None:
                 subexprs = sol.jointeval
             elif hasattr(sol,'jointevalsin') and sol.jointevalsin is not None:
                 subexprs = sol.jointevalsin
             elif hasattr(sol,'jointevalcos') and sol.jointevalcos is not None:
+                subexprs = sol.jointevalcos
+            else:
+                return sol.score
+            """
+            
+            if sol.jointeval is not None:
+                subexprs = sol.jointeval
+            elif sol.jointevalsin is not None:
+                subexprs = sol.jointevalsin
+            elif sol.jointevalcos is not None:
                 subexprs = sol.jointevalcos
             else:
                 return sol.score
@@ -7335,7 +7353,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def verifyAllEquations(self, AllEquations, unsolvedvars, solsubs, \
                            tree = None):        
         extrazerochecks = []
-        for i, expr in enumerate(AllEquations):
+        for expr in AllEquations:
             if not self.isValidSolution(expr):
                 raise self.CannotSolveError('verifyAllEquations: equation is not valid: %s' % (str(expr)))
             
@@ -7791,11 +7809,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         preveq = eq
         neweq = preveq.subs(globalsymbols)
         while preveq != neweq:
-            if not self.isValidSolution(neweq):
-                raise self.CannotSolveError('equation %r is not valid' % neweq)
-            
-            preveq = neweq
-            neweq = preveq.subs(globalsymbols)    
+            if self.isValidSolution(neweq):
+                preveq = neweq
+                neweq = preveq.subs(globalsymbols)    
+            else:
+                raise self.CannotSolveError('Equation %r is not valid' % neweq)
         return neweq
     
     def _AddToGlobalSymbols(self, var, eq):
@@ -8754,9 +8772,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             
         return prevbranch
     
-    def GuessValuesAndSolveEquations(self, AllEquations, curvars, othersolvedvars, solsubs, endbranchtree, currentcases=None, unknownvars=None, currentcasesubs=None):
-        # perhaps there's a degree of freedom that is not trivial to compute?
-        # take the highest hinge variable and set it
+    def GuessValuesAndSolveEquations(self, AllEquations, \
+                                     curvars, \
+                                     othersolvedvars, \
+                                     solsubs, \
+                                     endbranchtree, \
+                                     currentcases = None, \
+                                     unknownvars = None, \
+                                     currentcasesubs = None):
+        
+        # There might be a degree of freedom but it is not trivial to compute.
+        # In this case we can try setting some "guess" value to a hinge variable.
+        # We try the highest hinge.
+        
         scopecounter = int(self._scopecounter)
         hingevariables = [curvar for curvar in sorted(curvars,reverse=True) if self.IsHinge(curvar.name)]
         if len(hingevariables) > 0 and len(curvars) >= 2:
@@ -8765,7 +8793,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             leftovervars.remove(curvar)
             newtree = [AST.SolverConditionedSolution([])]
             zerovalues = []
-            for jointeval in [S.Zero,pi/2,pi,-pi/2]:
+            
+            for jointeval in [S.Zero, pi/2, pi, -pi/2]:
                 checkzeroequations = []
                 NewEquations = []
                 for eq in AllEquations:
@@ -8775,15 +8804,18 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         # if zero, then can ignore
                         if neweq == S.Zero:
                             continue
-                        # if not zero, then a contradiciton, so jointeval is bad
-                        NewEquations = None
-                        break                        
+                        else:
+                            # contradiciton! so jointeval is bad
+                            NewEquations = None
+                            break                        
                     if neweq.has(*leftovervars):
                         NewEquations.append(neweq)
                     else:
                         checkzeroequations.append(neweq)
-                if NewEquations is None:
+                        
+                if NewEquations is None: # neweq != S.Zero above and jointeval is bad
                     continue
+                
                 # check to make sure all leftover vars are in scope
                 cansolve = True
                 for leftovervar in leftovervars:
@@ -8800,26 +8832,41 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 else:
                     # one value is enough
                     zerovalues.append(jointeval)
+                    
             if len(zerovalues) > 0:
                 # prioritize these solutions since they don't come with any extra checks
-                solution = AST.SolverSolution(curvar.name, jointeval=zerovalues, isHinge=self.IsHinge(curvar.name))
+                solution = AST.SolverSolution(curvar.name, \
+                                              jointeval = zerovalues, \
+                                              isHinge = self.IsHinge(curvar.name))
                 solution.FeasibleIsZeros = True
                 newtree = [solution]
             elif len(newtree[0].solversolutions) == 0:
                 # nothing found so remove the condition node
                 newtree = []
+                
             if len(newtree) > 0:
-                log.warn('c=%d, think there is a free variable, but cannot solve relationship, so setting variable %s', scopecounter, curvar)
-                newtree += self.SolveAllEquations(AllEquations, leftovervars, othersolvedvars+[curvar], solsubs+self.getVariable(curvar).subs, endbranchtree,currentcases=currentcases, currentcasesubs=currentcasesubs, unknownvars=unknownvars)
+                log.warn('c = %d; ' + \
+                         'we conjecture there is a free variable, but cannot figure it out by maths so set variable %s', \
+                         scopecounter, curvar)
+                newtree += self.SolveAllEquations(AllEquations, \
+                                                  leftovervars, \
+                                                  othersolvedvars+[curvar], \
+                                                  solsubs + self.getVariable(curvar).subs, \
+                                                  endbranchtree, \
+                                                  currentcases = currentcases, \
+                                                  currentcasesubs = currentcasesubs, \
+                                                  unknownvars = unknownvars)
                 return newtree
 
         if len(curvars) == 1:
-            log.info('have only one variable left %r and most likely it is not in equations %r', curvars[0], AllEquations)
-            solution = AST.SolverSolution(curvars[0].name, jointeval=[S.Zero], isHinge=self.IsHinge(curvars[0].name))
+            log.info('Have only one remaining variable %r and it is likely not in equations %r', curvars[0], AllEquations)
+            solution = AST.SolverSolution(curvars[0].name, \
+                                          jointeval = [S.Zero], \
+                                          isHinge = self.IsHinge(curvars[0].name))
             solution.FeasibleIsZeros = True
             return [solution]+endbranchtree
         
-        raise self.CannotSolveError('cannot find a good variable')
+        raise self.CannotSolveError('Cannot find a good variable to solve for')
     
     def SolvePairVariablesHalfAngle(self, raweqns, var0, var1, \
                                     othersolvedvars, tosubs = []):
