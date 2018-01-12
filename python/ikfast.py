@@ -686,9 +686,9 @@ class IKFastSolver(AutoReloader):
         if self._checkpreemptfn is not None:
             self._checkpreemptfn(msg, progress = progress)
     
-    def convertRealToRational(self, x,precision=None):
+    def convertRealToRational(self, x, precision = None):
         if precision is None:
-            precision=self.precision
+            precision = self.precision
         if Abs(x) < 10**-precision:
             return S.Zero
         r0 = Rational(str(round(Float(float(x),30),precision)))
@@ -697,27 +697,28 @@ class IKFastSolver(AutoReloader):
         r1 = 1/Rational(str(round(Float(1/float(x),30),precision)))
         return r0 if len(str(r0)) < len(str(r1)) else r1
 
-    def ConvertRealToRationalEquation(self, eq, precision=None):
+    def ConvertRealToRationalEquation(self, eq, precision = None):
         if eq.is_Add:
-            neweq = S.Zero
-            for subeq in eq.args:
-                neweq += self.ConvertRealToRationalEquation(subeq,precision)
+            neweq = sum([self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args])
         elif eq.is_Mul:
-            neweq = self.ConvertRealToRationalEquation(eq.args[0],precision)
-            for subeq in eq.args[1:]:
-                neweq *= self.ConvertRealToRationalEquation(subeq,precision)
+            neweq = reduce(mul, \
+                           [self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args], \
+                           1)
         elif eq.is_Function:
-            newargs = [self.ConvertRealToRationalEquation(subeq,precision) for subeq in eq.args]
+            newargs = [self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args]
             neweq = eq.func(*newargs)
         elif eq.is_number:
-            # don't touch it since it could be pi!
-            neweq = eq if eq.is_irrational else self.convertRealToRational(eq,precision)
+            # don't touch it since eq could be derived from pi!
+            neweq = eq if eq.is_irrational else self.convertRealToRational(eq, precision)
         else:
             neweq = eq
         return neweq
     
     def normalizeRotation(self,M):
-        """error from openrave can be on the order of 1e-6 (especially if they are defined diagonal to some axis)
+        """
+        Error from openrave can be on the order of 1e-6 (especially if they are defined diagonal to some axis)
+
+        Called by RoundMatrix only.
         """
         right = Matrix(3,1,[self.convertRealToRational(x,self.precision-3) for x in M[0,0:3]])
         right = right/right.norm()
@@ -739,8 +740,12 @@ class IKFastSolver(AutoReloader):
         return Matrix(4,4,[x for x in T.flat])
     
     def RoundMatrix(self, T):
-        """given a sympy matrix, will round the matrix and snap all its values to 15, 30, 45, 60, and 90 degrees.
         """
+        Given a sympy matrix, we round the matrix and snap all its values to 15, 30, 45, 60, and 90 degrees.
+
+        Called by forwardKinematicsChain and solveFullIK_TranslationAxisAngle4D only.
+        """
+
         if axisAngleFromRotationMatrix is not None:
             Teval = T.evalf()
             axisangle = axisAngleFromRotationMatrix([[Teval[0,0], Teval[0,1], Teval[0,2]], \
@@ -752,60 +757,89 @@ class IKFastSolver(AutoReloader):
                 M = eye(4)
             else:
                 axisangle = axisangle/angle
-                log.debug('rotation angle: %f, axis=[%f,%f,%f]', (angle*180/pi).evalf(),axisangle[0],axisangle[1],axisangle[2])
-                accurateaxisangle = Matrix(3,1,[self.convertRealToRational(x,self.precision-3) for x in axisangle])
+                log.debug('Rotation angle: %f, axis = [%f, %f, %f]', \
+                          (angle*180/pi).evalf(), axisangle[0], axisangle[1], axisangle[2])
+                accurateaxisangle = Matrix(3,1,\
+                                           [self.convertRealToRational(x, self.precision-3) \
+                                            for x in axisangle])
+                # normailize
                 accurateaxisangle = accurateaxisangle/accurateaxisangle.norm()
-                # angle is not a multiple of 90, can get long fractions. so check if there's any way to simplify it
+                
+                # angle is not a multiple of 90, can get long fractions.
+                # so check if there's any way to simplify it
+                #
+                # So far we consider angles 3*pi/2, pi, 2*pi/3, pi/2, pi/3, pi/4, pi/6
+                
                 if abs(angle-3*pi/2) < 10**(-self.precision+2):
+                    # cos(3*pi/4) = -1/sqrt(2)
+                    # sin(3*pi/4) =  1/sqrt(2)
                     quat = [-S.One/sqrt(2), \
                             accurateaxisangle[0]/sqrt(2), \
                             accurateaxisangle[1]/sqrt(2), \
                             accurateaxisangle[2]/sqrt(2)]
                     
                 elif abs(angle-pi) < 10**(-self.precision+2):
+                    # cos(pi/2) = 0
+                    # sin(pi/2) = 1
+                    
                     quat = [S.Zero, accurateaxisangle[0], accurateaxisangle[1], accurateaxisangle[2]]
                     
                 elif abs(angle-2*pi/3) < 10**(-self.precision+2):
+                    # cos(pi/3) = 1/2
+                    # sin(pi/3) = sqrt(3)/2
+
+                    sin_angle = sqrt(3)/2
                     quat = [Rational(1,2), \
-                            accurateaxisangle[0]*sqrt(3)/2, \
-                            accurateaxisangle[1]*sqrt(3)/2, \
-                            accurateaxisangle[2]*sqrt(3)/2]
+                            accurateaxisangle[0]*sin_angle, \
+                            accurateaxisangle[1]*sin_angle, \
+                            accurateaxisangle[2]*sin_angle  ]
                     
                 elif abs(angle-pi/2) < 10**(-self.precision+2):
+                    # cos(pi/4) = 1/sqrt(2)
+                    # sin(pi/4) = 1/sqrt(2)
+                    
                     quat = [S.One/sqrt(2), \
                             accurateaxisangle[0]/sqrt(2), \
                             accurateaxisangle[1]/sqrt(2), \
-                            accurateaxisangle[2]/sqrt(2)]
+                            accurateaxisangle[2]/sqrt(2)  ]
                     
                 elif abs(angle-pi/3) < 10**(-self.precision+2):
+                    # cos(pi/6) = sqrt(3)/2
+                    # sin(pi/6) = 1/2
+                    
                     quat = [sqrt(3)/2, \
                             accurateaxisangle[0]/2, \
                             accurateaxisangle[1]/2, \
-                            accurateaxisangle[2]/2]
+                            accurateaxisangle[2]/2  ]
                     
                 elif abs(angle-pi/4) < 10**(-self.precision+2):
-                    # cos(pi/8) = sqrt(sqrt(2)+2)/2
-                    # sin(pi/8) = sqrt(-sqrt(2)+2)/2
-                    quat = [sqrt(sqrt(2)+2)/2, \
-                            sqrt(-sqrt(2)+2)/2*accurateaxisangle[0], \
-                            sqrt(-sqrt(2)+2)/2*accurateaxisangle[1], \
-                            sqrt(-sqrt(2)+2)/2*accurateaxisangle[2]]
+                    # cos(pi/8) = sqrt(2+sqrt(2))/2
+                    # sin(pi/8) = sqrt(2-sqrt(2))/2
+
+                    sin_angle = sqrt(2-sqrt(2))/2
+                    quat = [sqrt(2+sqrt(2))/2, \
+                            accurateaxisangle[0]*sin_angle, \
+                            accurateaxisangle[1]*sin_angle, \
+                            accurateaxisangle[2]*sin_angle  ]
                     
                 elif abs(angle-pi/6) < 10**(-self.precision+2):
-                 # cos(pi/12) = sqrt(2)/4+sqrt(6)/4
-                    # sin(pi/12) = -sqrt(2)/4+sqrt(6)/4
-                    quat = [sqrt(2)/4+sqrt(6)/4, \
-                            (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[0], \
-                            (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[1], \
-                            (-sqrt(2)/4+sqrt(6)/4)*accurateaxisangle[2]]
+                    # cos(pi/12) = (sqrt(6)+sqrt(2))/4
+                    # sin(pi/12) = (sqrt(6)-sqrt(2))/4
+
+                    sin_angle = (sqrt(6)-sqrt(2))/4
+                    quat = [(sqrt(6)+sqrt(2))/4, \
+                            accurateaxisangle[0]*sin_angle, \
+                            accurateaxisangle[1]*sin_angle, \
+                            accurateaxisangle[2]*sin_angle  ]
                 else:
                     # could not simplify further
                     #assert(0)
                     return self.normalizeRotation(T)
                 
                 M = self.GetMatrixFromQuat(quat)
+                
             for i in range(3):
-                M[i,3] = self.convertRealToRational(T[i,3],self.precision)
+                M[i,3] = self.convertRealToRational(T[i,3], self.precision)
             return M
 
         else:
@@ -865,7 +899,12 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def affineSimplify(T):
-        return Matrix(T.shape[0],T.shape[1],[trigsimp(x.expand()) for x in T])
+        """
+        Called by forwardKinematicsChain and solveFullIK_6DGeneral
+        """
+        return Matrix(T.shape[0], \
+                      T.shape[1], \
+                      [trigsimp_new(x.expand()) for x in T])
 
     @staticmethod
     def multiplyMatrix(Ts):
@@ -893,17 +932,18 @@ class IKFastSolver(AutoReloader):
                 # TGN: what's j100?
                 return True
             
-            log.info('IsHinge returns false for variable %s'% axisname)
-            return False # dummy joint most likely for angles
-        
-        return self.axismap[axisname].joint.IsRevolute(self.axismap[axisname].iaxis)
+            else:
+                log.info('IsHinge returns False for variable %s'% axisname)
+                return False # dummy joint most likely for angles
+        else:
+            return self.axismap[axisname].joint.IsRevolute(self.axismap[axisname].iaxis)
 
     def IsPrismatic(self,axisname):
         if axisname[0]!='j' or not axisname in self.axismap:
-            log.info('IsPrismatic returns false for variable %s' % axisname)
+            log.info('IsPrismatic returns False for variable %s' % axisname)
             return False # dummy joint most likely for angles
-        
-        return self.axismap[axisname].joint.IsPrismatic(self.axismap[axisname].iaxis)
+        else:
+            return self.axismap[axisname].joint.IsPrismatic(self.axismap[axisname].iaxis)
 
     def forwardKinematicsChain(self, chainlinks, chainjoints):
         """
@@ -1070,18 +1110,25 @@ class IKFastSolver(AutoReloader):
         
     @staticmethod
     def rotateDirection(sourcedir,targetdir):
+        # normalize
         sourcedir /= sqrt(sourcedir.dot(sourcedir))
         targetdir /= sqrt(targetdir.dot(targetdir))
+        # cross product
         rottodirection = sourcedir.cross(targetdir)
+        # angle is from sourcedir to targetdir
         fsin = sqrt(rottodirection.dot(rottodirection))
         fcos = sourcedir.dot(targetdir)
         M = eye(4)
         if fsin > 1e-6:
-            M[0:3,0:3] = IKFastSolver.rodrigues(rottodirection*(1/fsin),atan2(fsin,fcos))
+            M[0:3,0:3] = IKFastSolver.rodrigues(rottodirection/fsin,atan2(fsin,fcos)) # *(1/fsin)
         elif fcos < 0: # hand is flipped 180, rotate around x axis
             rottodirection = Matrix(3,1,[S.One,S.Zero,S.Zero])
             rottodirection -= sourcedir * sourcedir.dot(rottodirection)
             M[0:3,0:3] = IKFastSolver.rodrigues(rottodirection.normalized(), atan2(fsin, fcos))
+        else:
+            # TGN: so M = eye(4) when fsin in [0,1e-6] and fcos>=0??
+            pass
+        
         return M
     
     @staticmethod

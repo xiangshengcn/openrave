@@ -1,0 +1,301 @@
+def ikfast_print_stack():
+    from openravepy.metaclass import AutoReloader
+    class AutoReloader:
+    def isinf(x): return _isinf(float(x))
+    def isnan(x): return _isnan(float(x))
+    def permutations(iterable, r=None):
+def Pow_eval_subs(self, old, new):
+def trigsimp_custom(self, **args):
+class fmod(function.Function):
+class atan2check(atan2):
+
+class GinacUtils:
+    def ConvertToGinac(eq,localsymbolmap):
+    def ConvertFromGinac(geq):
+    def ConvertMatrixToGinac(M,name='M', localsymbolmap={}):
+    def GetPolyTermsFromGinac(geq, gothersymbols, othersymbols):
+    def SolveUpperTriangular(gA, gB, name='X'):
+
+class IKFastSolver(AutoReloader):
+    class CannotSolveError(Exception):
+        def __init__(self,value=u''):
+        def __unicode__(self):
+        def __str__(self):
+        def __repr__(self):
+        def __eq__(self, r):
+        def __ne__(self, r):
+    class IKFeasibilityError(Exception):
+        def __init__(self,equations,checkvars):
+        def __str__(self):
+    class JointAxis:
+    class Variable:
+        def __init__(self, var):
+        def getsubs(self,value):
+    class DegenerateCases:
+        def __init__(self):
+        def Clone(self):
+        def AddCasesWithConditions(self,newconds,currentcases):
+        def AddCases(self,currentcases):
+        def RemoveCases(self, currentcases):
+        def GetHandledConditions(self,currentcases):
+        def CheckCases(self,currentcases):
+    def __init__(self, kinbody=None,kinematicshash='',precision=None, checkpreemptfn=None):
+    def _CheckPreemptFn(self, msg = u'', progress = 0.25):
+    def convertRealToRational(self, x,precision=None):
+    def ConvertRealToRationalEquation(self, eq, precision=None):
+    def normalizeRotation(self,M):
+    def GetMatrixFromNumpy(self,T):
+    def RoundMatrix(self, T):
+    def numpyVectorToSympy(self,v,precision=None):
+    def rodrigues(axis, angle):
+    def GetMatrixFromQuat(quat):
+    def rodrigues2(axis, cosangle, sinangle):
+    def affineInverse(affinematrix):
+    def affineSimplify(T):
+    def multiplyMatrix(Ts):
+    def equal(eq0, eq1):
+    def chop(self, expr, precision = None):
+    def IsHinge(self, axisname):
+    def IsPrismatic(self,axisname):
+    def forwardKinematicsChain(self, chainlinks, chainjoints):
+    def countVariables(self, expr, var):
+    def isValidPowers(expr):
+    def rotateDirection(sourcedir,targetdir):
+    def has(eqs, *sym):
+    def gen_trigsubs(self, trigvars):
+    def gen_variable_obj(self, trigvars):
+    def getVariable(self, v):
+    def trigsimp_new(self, eq):
+    def trigsimp(self, eq, trigvars):
+    def SimplifyAtan2(self, eq, \
+    def codeComplexity(self, expr):
+    def ComputePolyComplexity(self, peq):
+    def sortComplexity(self, exprs):
+    def mygcd(s0, s1):
+    def checkForDivideByZero(self, eq):
+    def checkpow(self, expr, sexprs, unsolvedvars):
+    def ComputeSolutionComplexity(self, sol, solvedvars, unsolvedvars):
+    def checkSolvability(self, AllEquations, checkvars, othervars):
+    def checkSolvabilityReal(self, AllEquations, checkvars, othervars):
+    def writeIkSolver(self, chaintree, lang = None):
+            def _CheckPreemtCodeGen(msg, progress):
+    def generateIkSolver(self, baselink, eelink, \
+    def MatchSimilarFraction(self,num,numbersubs,matchlimit = 40):
+    def ComputeConsistentValues(self,jointvars,T,numsolutions=1,subs=None):
+    def solveFullIK_Direction3D(self,LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One])):
+    def solveFullIK_Lookat3D(self,LinksRaw, jointvars, isolvejointvars,rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One]),rawmanippos=Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
+    def solveFullIK_Rotation3D(self,LinksRaw, jointvars, isolvejointvars, Rbaseraw=eye(3)):
+    def solveFullIK_TranslationLocalGlobal6D(self,LinksRaw, jointvars, isolvejointvars, Tmanipraw=eye(4)):
+    def solveFullIK_Translation3D(self,LinksRaw, jointvars, isolvejointvars, rawmanippos=Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
+    def _solveFullIK_Translation3D(self,LinksRaw, jointvars, isolvejointvars, manippos,check=True):
+    def solveFullIK_TranslationXY2D(self,LinksRaw, jointvars, isolvejointvars, rawmanippos=Matrix(2,1,[S.Zero,S.Zero])):
+    def solveFullIK_TranslationXYOrientation3D(self,LinksRaw, jointvars, isolvejointvars, rawmanippos=Matrix(2,1,[S.Zero,S.Zero]), rawangle=S.Zero):
+    def solveFullIK_Ray4D(self,LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One]),rawmanippos=Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
+    def solveFullIK_TranslationDirection5D(self, LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One]),rawmanippos=Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
+    def solve5DIntersectingAxes(self, T0links, manippos, D, solvejointvars, endbranchtree):
+    def solveFullIK_6D(self, LinksRaw, jointvars, isolvejointvars,Tmanipraw=eye(4)):
+    def TestIntersectingAxes(self,solvejointvars,Links,LinksInv,endbranchtree):
+    def _ExtractTranslationsOutsideOfMatrixMultiplication(self, Links, LinksInv, solvejointvars):
+    def iterateThreeIntersectingAxes(self, solvejointvars, Links, LinksInv):
+    def RoundEquationTerms(self, eq, epsilon=None):
+    def RoundPolynomialTerms(self,peq,epsilon):
+    def iterateThreeNonIntersectingAxes(self, solvejointvars, Links, LinksInv):
+    def solve6DIntersectingAxes(self, T0links, T1links, transvars, rotvars, solveRotationFirst, endbranchtree):
+    def solveFullIK_6DGeneral(self, T0links, T1links, solvejointvars, endbranchtree, usesolvers=7):
+    def solveFullIK_TranslationAxisAngle4D(self, LinksRaw, jointvars, isolvejointvars, \
+    def buildEquationsFromTwoSides(self, leftside, rightside, usedvars, uselength = True):
+    def buildEquationsFromPositions(self, T1links, T1linksinv, transvars, othersolvedvars, \
+    def buildEquationsFromRotation(self,T0links,Ree,rotvars,othersolvedvars):
+    def buildRaghavanRothEquationsFromMatrix(self, T0, T1, solvejointvars, \
+    def CheckEquationForVarying(self, eq):
+    def buildRaghavanRothEquationsOld(self,p0,p1,l0,l1,solvejointvars):
+    def buildRaghavanRothEquations(self,p0, p1, l0, l1, solvejointvars, \
+    def reduceBothSides(self,polyeqs):
+    def reduceBothSidesInverseMatrix(self,leftsideeqs,rightsideeqs):
+    def reduceBothSidesSymbolically(self,*args,**kwargs):
+    def reduceBothSidesSymbolicallyDelayed(self,leftsideeqs,rightsideeqs,maxsymbols=10,usesymbols=True):
+            def _returnequations():
+        def _computereducedequations():
+    def solveManochaCanny(self,rawpolyeqs,solvejointvars,endbranchtree, AllEquationsExtra=None, currentcases=None, currentcasesubs=None):
+    def solveLiWoernleHiller(self,rawpolyeqs, \
+    def ConvertSinCosEquationToHalfTan(self, eq, convertvars):
+    def ConvertHalfTanEquationToSinCos(self, eq, convertvars):
+    def solveKohliOsvatic(self, \
+    def solveDialytically(self, dialyticeqs, ileftvar, \
+    def SubstituteGinacEquations(self,dictequations, valuesubs, localsymbolmap):
+    def SimplifyTransformPoly(self, peq):
+    def SimplifyTransform(self, eq, othervars = None):
+        def _SimplifyRotationFcn(fcn, eq, changed, groups):
+    def _SimplifyRotationNorm_new(self, eq, symbols, groups):
+    def _SimplifyRotationDot(self, eq, symbols, groups):
+    def _SimplifyRotationCross(self, eq, symbols, groups):
+    def CheckExpressionUnique(self, exprs, expr, \
+    def verifyAllEquations(self, AllEquations, unsolvedvars, solsubs, \
+    def PropagateSolvedConstants(self, AllEquations, othersolvedvars, unknownvars, \
+    def SolveAllEquations(self, AllEquations, \
+    def _SubstituteGlobalSymbols(self, eq, globalsymbols = None):
+    def _AddToGlobalSymbols(self, var, eq):
+    def AddSolution(self, solutions, AllEquations, \
+    def GuessValuesAndSolveEquations(self, AllEquations, curvars, othersolvedvars, solsubs, endbranchtree, currentcases=None, unknownvars=None, currentcasesubs=None):
+    def SolvePairVariablesHalfAngle(self, raweqns, var0, var1, \
+    def _createSimplifyFn(self,vars,varsubs,varsubsinv):
+    def solveVariablesLinearly(self, polyeqs, othersolvedvars, maxsolvabledegree = 4):
+    def solveSingleVariableLinearly(self,raweqns,solvevar,othervars,maxnumeqs=2,douniquecheck=True):
+    def solveHighDegreeEquationsHalfAngle(self, lineareqs, varsym, tosubs = []):
+    def checkFactorPmI(coeffs, thresh = 1e-12):
+    def checkFinalEquation(self, pfinal, tosubs = []):
+    def solveSingleVariable(self, raweqns, \
+    def SolvePrismaticHingePairVariables(self, raweqns, var0,var1,othersolvedvars,unknownvars=None):
+    def SolvePairVariables(self, raweqns, var0, var1, \
+    def isValidSolution(expr):
+    def _GetSumSquares(expr):
+    def recursiveFraction(expr):
+    def groupTerms(expr, vars, symbolgen = None):
+    def replaceNumbers(expr, symbolgen = None):
+    def frontnumbers(eq):
+    def IsAnyImaginaryByEval(self, eq):
+    def AreAllImaginaryByEval(self, eq):
+    def IsDeterminantNonZeroByEval(self, A, evalfirst=True):
+    def removecommonexprs(eq, \
+    def det_bareis(M, *vars, **kwargs):
+    def LUdecompositionFF(self,*vars):
+    def sequence_cross_product(*sequences):
+    def tolatex(e):
+    def GetSolvers():
+    def _SimplifyRotationNorm(self, eq, symbols, groups):
+
+class AST:
+    """Abstarct Syntax Tree class definitions specific for evaluating complex math equations.
+    class SolverBase(object):
+        def GetChildrenOfType(self, classinstance):
+        def GetZeroThreshold(self):
+    class SolverSolution(SolverBase):
+        def __init__(self, jointname, \
+        def subs(self,solsubs):
+        def generate(self, generator):
+        def end(self, generator):
+        def numsolutions(self):
+        def checkValidSolution(self):
+        def getPresetCheckForZeros(self):
+        def getEquationsUsed(self):
+        def GetZeroThreshold(self):
+        def printSolution(self):
+    class SolverPolynomialRoots(SolverBase):
+        def __init__(self, jointname, poly=None, jointeval=None,isHinge=True):
+        def numsolutions(self):
+        def subs(self,solsubs):
+        def generate(self, generator):
+        def end(self, generator):
+        def checkValidSolution(self):
+        def clearConstantsForAbs(expr):
+        def getPresetCheckForZeros(self):
+        def getEquationsUsed(self):
+        def GetZeroThreshold(self):
+    class SolverCoeffFunction(SolverBase):
+        def __init__(self, jointnames, \
+        def numsolutions(self):
+        def subs(self,solsubs):
+        def generate(self, generator):
+        def end(self, generator):
+        def checkValidSolution(self):
+        def getPresetCheckForZeros(self):
+        def getEquationsUsed(self):
+    class SolverMatrixInverse(SolverBase):
+        def __init__(self, A, Asymbols):
+        def subs(self,solsubs):
+        def generate(self, generator):
+        def end(self, generator):
+        def checkValidSolution(self):
+        def getsubs(self,psubs):
+    class SolverConditionedSolution(SolverBase):
+        def __init__(self, solversolutions):
+        def subs(self,solsubs):
+        def generate(self, generator):
+        def end(self, generator):
+        def GetChildrenOfType(self, classinstance):
+        def GetZeroThreshold(self):
+    class SolverBranchConds(SolverBase):
+        def __init__(self, jointbranches):
+        def generate(self, generator):
+        def end(self, generator):
+        def GetChildrenOfType(self, classinstance):
+        def GetZeroThreshold(self):
+    class SolverCheckZeros(SolverBase):
+        def __init__(self, jointname, jointcheckeqs, zerobranch, nonzerobranch,thresh=None,anycondition=True):
+        def generate(self, generator):
+        def end(self, generator):
+        def getPresetCheckForZeros(self):
+        def checkValidSolution(self):
+        def numsolutions(self):
+        def subs(self,solsubs):
+        def getEquationsUsed(self):
+        def GetChildrenOfType(self, classinstance):
+        def GetZeroThreshold(self):
+    class SolverFreeParameter(SolverBase):
+        def __init__(self, jointname, jointtree):
+        def generate(self, generator):
+        def end(self, generator):
+        def GetChildrenOfType(self, classinstance):
+    class SolverRotation(SolverBase):
+        def __init__(self, T, jointtree):
+        def generate(self, generator):
+        def end(self, generator):
+    class SolverFunction(SolverBase):
+        def __init__(self, name, jointtree):
+        def generate(self, generator):
+        def end(self, generator):
+        def GetChildrenOfType(self, classinstance):
+    class SolverStoreSolution(SolverBase):
+        def __init__(self, alljointvars, checkgreaterzero = None, isHinge = None):
+        def generate(self, generator):
+        def end(self, generator):
+    class SolverSequence(SolverBase):
+        def __init__(self, jointtrees):
+        def generate(self, generator):
+        def end(self, generator):
+        def GetChildrenOfType(self, classinstance):
+    class SolverBreak(SolverBase):
+        def __init__(self, \
+        def generate(self,generator):
+        def end(self,generator):
+        def checkValidSolution(self):
+    class SolverIKChainTransform6D(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Tee, jointtree,Tfk = None):
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self,Tleft,Tleftinv):
+    class SolverIKChainRotation3D(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Ree, jointtree, Rfk = None):
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self, Tleft, Tleftinv):
+    class SolverIKChainTranslation3D(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Pee, jointtree, Pfk = None):
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self,Tleft,Tleftinv):
+    class SolverIKChainTranslationXY2D(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Pee, jointtree, Pfk = None):
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self, Tleft, Tleftinv):
+    class SolverIKChainDirection3D(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Dee, jointtree, Dfk = None):
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self, Tleft, Tleftinv):
+    class SolverIKChainRay(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Pee, Dee, jointtree, \
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self,Tleft,Tleftinv):
+    class SolverIKChainLookat3D(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Pee, jointtree, \
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self,Tleft,Tleftinv):
+    class SolverIKChainAxisAngle(SolverBase):
+        def __init__(self, solvejointvars, freejointvars, Pee, angleee, jointtree, \
+        def generate(self, generator):
+        def end(self, generator):
+        def leftmultiply(self,Tleft,Tleftinv):
