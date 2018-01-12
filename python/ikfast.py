@@ -526,10 +526,12 @@ class IKFastSolver(AutoReloader):
     """
 
     class CannotSolveError(Exception):
-        """thrown when ikfast fails to solve a particular set of equations with the given knowns and unknowns
         """
-        def __init__(self,value=u''):
+        Thrown when ikfast fails to solve a particular set of equations with the given knowns and unknowns
+        """
+        def __init__(self,value = u''):
             self.value = value
+            
         def __unicode__(self):
             return u'%s: %s'%(self.__class__.__name__, self.value)
         
@@ -546,11 +548,15 @@ class IKFastSolver(AutoReloader):
             return self.value != r.value
         
     class IKFeasibilityError(Exception):
-        """thrown when it is not possible to solve the IK due to robot not having enough degrees of freedom. For example, a robot with 5 joints does not have 6D IK
+        """
+        Thrown when the IK problem is infeasible because the robot does not have enough degrees of freedom. 
+
+        For example, a robot with 5 joints does not have 6D IK.
         """
         def __init__(self,equations,checkvars):
-            self.equations=equations
-            self.checkvars=checkvars
+            self.equations = equations
+            self.checkvars = checkvars
+            
         def __str__(self):
             s = "Not enough equations to solve for variables %s!\n" + \
                 "This means that EITHER\n" + \
@@ -626,7 +632,10 @@ class IKFastSolver(AutoReloader):
             return False
 
     # Constructor of IKFastSolver
-    def __init__(self, kinbody=None,kinematicshash='',precision=None, checkpreemptfn=None):
+    def __init__(self, kinbody = None, \
+                 kinematicshash = '', \
+                 precision = None, \
+                 checkpreemptfn = None):
         """
         :param checkpreemptfn: checkpreemptfn(msg, progress) called periodically at various points in ikfast. Takes in two arguments to notify user how far the process has completed.
         """
@@ -1678,21 +1687,8 @@ class IKFastSolver(AutoReloader):
             #
             # TGN: sol can be a SolverSolution class object or a SolverPolynomialRoots class object
 
-            """
-            if not (sol.__class__.__name__=='SolverSolution' or \
-                    sol.__class__.__name__=='SolverPolynomialRoots'):
-                print sol
-                exec(ipython_str, globals(), locals())
-
-            if hasattr(sol,'jointeval') and sol.jointeval is not None:
-                subexprs = sol.jointeval
-            elif hasattr(sol,'jointevalsin') and sol.jointevalsin is not None:
-                subexprs = sol.jointevalsin
-            elif hasattr(sol,'jointevalcos') and sol.jointevalcos is not None:
-                subexprs = sol.jointevalcos
-            else:
-                return sol.score
-            """
+            assert(sol.__class__.__name__=='SolverSolution' or \
+                   sol.__class__.__name__=='SolverPolynomialRoots'):
             
             if sol.jointeval is not None:
                 subexprs = sol.jointeval
@@ -2130,7 +2126,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 #             self.globalsymbols += numbersubs
 
         self.Teeleftmult = self.multiplyMatrix(LinksLeft) # the raw ee passed to the ik solver function
-        self._CheckPreemptFn(progress=0.01)
+        self._CheckPreemptFn(progress = 0.01)
 
         print('========================= START OF SETUP PRINT ===============================\n')
         info_to_print =  ['ifreejointvars',
@@ -9343,8 +9339,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         return [solution]
 
+    """
     def _createSimplifyFn(self, varsubs, varsubsinv):
+        # called by SolvePairVariablesHalfAngle but commented out
         return lambda eq: self.trigsimp_new(eq.subs(varsubsinv)).subs(varsubs)
+    """
                 
     def solveVariablesLinearly(self, polyeqs, othersolvedvars, maxsolvabledegree = 4):
         """
