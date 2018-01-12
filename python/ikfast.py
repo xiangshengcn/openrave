@@ -2606,6 +2606,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             rawpolyeqs2 = [None]*len(solvejointvars)
             coupledsolutions = None
             endbranchtree2 = []
+
+            # Try Li&Woernle&Hiller, Kohli&Osvatic, and (commented out) Manocha&Canny solvers
             for solvemethod in [self.solveLiWoernleHiller, self.solveKohliOsvatic]:#, self.solveManochaCanny]:
                 if coupledsolutions is not None:
                     break
@@ -3362,14 +3364,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # self.globalsymbols = { k:self.globalsymbols[k] for k in self.globalsymbols if not k in Ree }
             
     def solveFullIK_6DGeneral(self, T0links, T1links, solvejointvars, endbranchtree, usesolvers=7):
-        """Solve 6D equations of a general kinematics structure.
-        This method only works if there exists 3 consecutive joints that do not always intersect!
+        """
+        Solve 6D equations of a general kinematics structure.
+
+        Will try Li&Woernle&Hiller (1), Kohli&Osvatic (10), and Manocha&Canny (100) solvers.
+
+        These methode work only if there exists a set of 3 non-intersecting consecutive joints.
         """
         self._iktype = 'transform6d'
         rawpolyeqs2 = [None,None]
         coupledsolutions = None
         leftovervarstree = []
         origendbranchtree = endbranchtree
+        
         solvemethods = []
         if usesolvers & 1:
             solvemethods.append(self.solveLiWoernleHiller)
@@ -3377,6 +3384,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             solvemethods.append(self.solveKohliOsvatic)
         if usesolvers & 4:
             solvemethods.append(self.solveManochaCanny)
+            
         for solvemethod in solvemethods:
             if coupledsolutions is not None:
                 break
@@ -4506,12 +4514,24 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         return numsymbolcoeffs, _computereducedequations
     
-    def solveManochaCanny(self,rawpolyeqs,solvejointvars,endbranchtree, AllEquationsExtra=None, currentcases=None, currentcasesubs=None):
-        """Solves the IK equations using eigenvalues/eigenvectors of a 12x12 quadratic eigenvalue problem. Method explained in
-        
-        Dinesh Manocha and J.F. Canny. "Efficient inverse kinematics for general 6R manipulators", IEEE Transactions on Robotics and Automation, Volume 10, Issue 5, Oct 1994.
+    def solveManochaCanny(self, \
+                          rawpolyeqs, \
+                          solvejointvars, \
+                          endbranchtree, \
+                          AllEquationsExtra = None, \
+                          currentcases = None, \
+                          currentcasesubs = None):
         """
-        log.info('attempting manocha/canny general ik method')
+        Solves the IK equations by solving a 12x12 quadratic eigenvalue problem. 
+
+        Method explained in
+        
+        Dinesh Manocha and J.F. Canny. "Efficient inverse kinematics for general 6R manipulators", 
+        IEEE Transactions on Robotics and Automation, Volume 10, Issue 5, Oct 1994.
+
+        Called by solveFullIK_6DGeneral and (commented out) solveFullIK_TranslationDirection5D
+        """
+        log.info('Attempt Manocha-Canny general IK method')
         PolyEquations, raghavansolutiontree = self.reduceBothSides(rawpolyeqs)
         # find all equations with zeros on the left side
         RightEquations = []
@@ -4665,10 +4685,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                              AllEquationsExtra = [], \
                              currentcases = set(), \
                              currentcasesubs = []):
-        """Li-Woernle-Hiller procedure covered in 
-        Jorge Angeles, "Fundamentals of Robotics Mechanical Systems", Springer, 2007.
         """
-        log.info('Attempt Li/Woernle/Hiller general IK method')
+        Li-Woernle-Hiller procedure covered in 
+        
+        Jorge Angeles, "Fundamentals of Robotics Mechanical Systems", Springer, 2007.
+
+        Called by solveFullIK_6DGeneral and solveFullIK_TranslationDirection5D
+        """
+        log.info('Attempt the Li-Woernle-Hiller general IK method')
         
         if len(rawpolyeqs[0][0].gens) <len(rawpolyeqs[0][1].gens):
             for peq in rawpolyeqs:
@@ -6106,7 +6130,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return preprocesssolutiontree+solutiontree+endbranchtree,usedvars
 
     def ConvertSinCosEquationToHalfTan(self, eq, convertvars):
-        """converts all the sin/cos of variables to half-tangents. Returns two equations (poly, denominator)
+        """
+        Converts all the sin/cos of variables to half-tangents. Returns two equations (poly, denominator)
+
+        Called by solveLiWoernleHiller.
         """
         cossinvars = []
         htvarsubs = []
@@ -6152,7 +6179,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return eqnew, othereq, htvarsubsinv
 
     def ConvertHalfTanEquationToSinCos(self, eq, convertvars):
-        """converts all the sin/cos of variables to half-tangents. Returns two equations (poly, denominator)
+        """
+        Converts all the sin/cos of variables to half-tangents. Returns two equations (poly, denominator)
+
+        Not called by any function.
         """
         assert(0)
         cossinvars = []
@@ -6207,9 +6237,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         [Kohli1993] Dilip Kohli and M. Osvatic, "Inverse Kinematics of General 6R and 5R,P Serial Manipulators", 
         Journal of Mechanical Design, Volume 115, Issue 4, Dec 1993.
+
+        Called by solveFullIK_6DGeneral and solveFullIK_TranslationDirection5D
         """
         
-        log.info('Attempting the Kohli-Osvatic general IK method')
+        log.info('Attempt the Kohli-Osvatic general IK method')
         if len(rawpolyeqs[0][0].gens) < len(rawpolyeqs[0][1].gens):
             for peq in rawpolyeqs:
                 peq[0], peq[1] = peq[1], peq[0]
