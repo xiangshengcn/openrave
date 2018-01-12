@@ -9157,7 +9157,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 
         dictequations = []
         if pfinals is None:
-            #simplifyfn = self._createSimplifyFn(self.freejointvars,self.freevarsubs,self.freevarsubsinv)
+            #simplifyfn = self._createSimplifyFn(self.freevarsubs, self.freevarsubsinv)
             for newreducedeqs in combinations(polyeqs, 2):
                 try:
                     Mall = None
@@ -9284,7 +9284,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         
         return [solution]
 
-    def _createSimplifyFn(self,vars,varsubs,varsubsinv):
+    def _createSimplifyFn(self, varsubs, varsubsinv):
         return lambda eq: self.trigsimp_new(eq.subs(varsubsinv)).subs(varsubs)
                 
     def solveVariablesLinearly(self, polyeqs, othersolvedvars, maxsolvabledegree = 4):
@@ -11490,6 +11490,7 @@ class AST:
             self.dictequations = [(s,v.subs(solsubs)) for s,v in self.dictequations]
             self.presetcheckforzeros = [e.subs(solsubs) for e in self.presetcheckforzeros]
             self.equationsused = [e.subs(solsubs) for e in self.equationsused]
+            
             if not self.checkValidSolution():
                 raise IKFastSolver.CannotSolveError('substitutions produce invalid results')
             return self
@@ -11548,13 +11549,23 @@ class AST:
         checkforzeros        = None
         postcheckforzeros    = None # fail if any zero
         postcheckfornonzeros = None # fail if any nonzero
-        postcheckforNumDenom = None # list of (A,B) pairs where Ax=B was used. Fail if A==0&&B!=0
+        postcheckforNumDenom = None # list of (A,B) pairs where Ax=B was used. Fail if A==0 && B!=0
         postcheckforrange    = None # checks that value is within [-1,1]
         dictequations        = None
-        postcheckforzerosThresh = 1e-8 # threshold for checking postcheckforzeros. if abs(val) <= postcheckforzerosThresh: skip
-        postcheckfornonzerosThresh = 1e-8 # threshold for checking postcheckfornonzeros. if abs(val) > postcheckfornonzerosThresh: skip
-        postcheckforrangeThresh = 1e-8 # threshold for checking postcheckforrange. if  val <= -1-postcheckforrangeThresh || val > 1+postcheckforrangeThresh: skip
-        postcheckforNumDenomThresh = 1e-8 # threshold for checking postcheckforNumDenom: if abs(val[0]) <= postcheckforNumDenomThresh && abs(val[1]) > postcheckforNumDenomThresh: skip
+        
+        # threshold for checking postcheckforzeros.
+        # if abs(val) <= postcheckforzerosThresh: skip
+        postcheckforzerosThresh    = 1e-8
+        # threshold for checking postcheckfornonzeros.
+        # if abs(val) > postcheckfornonzerosThresh: skip
+        postcheckfornonzerosThresh = 1e-8
+        # threshold for checking postcheckforrange.
+        # if val <= -1-postcheckforrangeThresh || val > 1+postcheckforrangeThresh: skip
+        postcheckforrangeThresh    = 1e-8
+        # threshold for checking postcheckforNumDenom.
+        # if abs(val[0]) <= postcheckforNumDenomThresh && abs(val[1]) > postcheckforNumDenomThresh: skip
+        postcheckforNumDenomThresh = 1e-8
+        
         isHinge = True
         FeasibleIsZeros = False
         AddHalfTanValue = False
@@ -11667,7 +11678,9 @@ class AST:
             return self.postcheckforzerosThresh # not really sure...
         
     class SolverCoeffFunction(SolverBase):
-        """Evaluate a set of coefficients and pass them to a custom function which will then return all possible values of the specified variables in jointnames.
+        """
+        Evaluates a set of coefficients and pass them to a custom function 
+        which will then return all possible values of the specified variables in jointnames.
         """
         jointnames = None
         jointeval = None
@@ -11694,7 +11707,7 @@ class AST:
                      jointevalcos = None, \
                      jointevalsin = None):
             
-            self.jointnames=jointnames
+            self.jointnames = jointnames
             self.jointeval = jointeval
             self.isHinges = isHinges
             self.exportvar = exportvar
@@ -11751,15 +11764,20 @@ class AST:
             return self.equationsused
 
     class SolverMatrixInverse(SolverBase):
-        """Take the inverse of a large matirx and set the coefficients of the inverse to the symbols in Asymbols.
+        """
+        Take the inverse of a large matrix and set the coefficients of the inverse to the symbols in Asymbols.
+
+        Used by reduceBothSidesInverseMatrix and solveLiWoernleHiller.
         """
         A = None
         Asymbols = None # has to be same size as B
         checkforzeros = None
+        
         def __init__(self, A, Asymbols):
             self.A = A
             self.Asymbols = Asymbols
-        def subs(self,solsubs):
+            
+        def subs(self, solsubs):
             return self
         def generate(self, generator):
             return generator.generateMatrixInverse(self)
@@ -11767,12 +11785,14 @@ class AST:
             return generator.endMatrixInverse(self)
         def checkValidSolution(self):
             return True
-        def getsubs(self,psubs):
+        
+        def getsubs(self, psubs):
             Asub = self.A.subs(psubs)
             d = Asub.det()
             if d == S.Zero:
                 raise IKFastSolver.CannotSolveError('determinant for matrix is zero')
-            
+
+            # TGN: need to figure out a better way to handle this
             Anew = Asub.inv()
             subs = []
             for i in range(self.A.shape[0]):
@@ -11782,10 +11802,13 @@ class AST:
             return subs
 
     class SolverConditionedSolution(SolverBase):
-        """set solutions based on evaluating equations
+        """
+        Set solutions based on evaluating equations
         """
         dictequations = None
-        solversolutions = None # a list of solutions. If the solution's checkforzeros evaluates to all zeros, then that solution us used
+        solversolutions = None
+        # a list of solutions. If the solution's checkforzeros evaluate to all zeros, then that solution is used
+        # TGN: what does this sentence mean?
         thresh=0.000001
         def __init__(self, solversolutions):
             self.solversolutions = solversolutions
@@ -11842,7 +11865,9 @@ class AST:
         thresh        = None # a threshold of 1e-6 breaks Hiro IK
         equationsused = None
         
-        def __init__(self, jointname, jointcheckeqs, zerobranch, nonzerobranch,thresh=None,anycondition=True):
+        def __init__(self, jointname, jointcheckeqs, zerobranch, nonzerobranch, \
+                     thresh = None, \
+                     anycondition = True):
             self.jointname = jointname
             self.jointcheckeqs = jointcheckeqs
             self.zerobranch = zerobranch
@@ -11877,10 +11902,10 @@ class AST:
         
         def subs(self,solsubs):
             for branch in self.nonzerobranch:
-                if hasattr(branch,'subs'):
+                if hasattr(branch, 'subs'):
                     branch.subs(solsubs)
             for branch in self.zerobranch:
-                if hasattr(branch,'subs'):
+                if hasattr(branch, 'subs'):
                     branch.subs(solsubs)
             return self
         
@@ -11960,7 +11985,8 @@ class AST:
             return nodes
         
     class SolverStoreSolution(SolverBase):
-        """Called when all the unknowns have been solved to add a solution.
+        """
+        Called when all the unknowns have been solved to add a solution.
         """
         alljointvars = None
         checkgreaterzero = None # used for final sanity checks to ensure IK solution is consistent
@@ -11971,7 +11997,7 @@ class AST:
         def __init__(self, alljointvars, checkgreaterzero = None, isHinge = None):
             self.alljointvars = alljointvars
             self.checkgreaterzero = checkgreaterzero
-            self.isHinge=isHinge
+            self.isHinge = isHinge
             if isHinge is None:
                 log.warn('SolverStoreSolution.isHinge is not initialized')
                 self.isHinge = [True]*len(self.alljointvars)
@@ -12004,7 +12030,9 @@ class AST:
             return nodes
         
     class SolverBreak(SolverBase):
-        """Terminates this scope"""
+        """
+        Terminates this scope
+        """
         comment         = None # a comment for the reason of the break
         varsubs         = None # variable substitutions that were valid at the break
         othersolvedvars = None # the solved variables already
@@ -12041,7 +12069,8 @@ class AST:
         Tee = None
         dictequations = None
         
-        def __init__(self, solvejointvars, freejointvars, Tee, jointtree,Tfk = None):
+        def __init__(self, solvejointvars, freejointvars, Tee, jointtree, \
+                     Tfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Tee = Tee
@@ -12055,9 +12084,9 @@ class AST:
         def end(self, generator):
             return generator.endChain(self)
         
-        def leftmultiply(self,Tleft,Tleftinv):
-            self.Tfk = Tleft*self.Tfk
-            self.Tee = Tleftinv*self.Tee
+        def leftmultiply(self, Tleft, Tleftinv):
+            self.Tfk = Tleft * self.Tfk
+            self.Tee = Tleftinv * self.Tee
 
     class SolverIKChainRotation3D(SolverBase):
         solvejointvars = None
@@ -12267,7 +12296,7 @@ class AST:
 
 if __name__ == '__main__':
     import openravepy
-    parser = OptionParser(description="""IKFast: The Robot Kinematics Compiler                                             
+    parser = OptionParser(description = """IKFast: The Robot Kinematics Compiler                                             
 Software License Agreement (Lesser GPL v3). 
 Copyright (C) 2009-2011 Rosen Diankov. 
 IKFast is distributed in the hope that it will be useful,
@@ -12281,25 +12310,27 @@ Example usage for 7 DOF Barrett WAM where the 3rd joint is a free parameter:
 
 python ikfast.py --robot=robots/barrettwam.robot.xml --baselink=0 --eelink=7 --savefile=ik.cpp --freeindex=2
 
-""",version=__version__)
-    parser.add_option('--robot', action='store', type='string', dest='robot',default=None,
-                      help='robot file (COLLADA or OpenRAVE XML)')
-    parser.add_option('--savefile', action='store', type='string', dest='savefile',default='ik.cpp',
-                      help='filename where to store the generated c++ code')
-    parser.add_option('--baselink', action='store', type='int', dest='baselink',
-                      help='base link index to start extraction of ik chain')
-    parser.add_option('--eelink', action='store', type='int', dest='eelink',
-                      help='end effector link index to end extraction of ik chain')
-    parser.add_option('--freeindex', action='append', type='int', dest='freeindices',default=[],
-                      help='Optional joint index specifying a free parameter of the manipulator. If not specified, assumes all joints not solving for are free parameters. Can be specified multiple times for multiple free parameters.')
-    parser.add_option('--iktype', action='store', dest='iktype',default='transform6d',
-                      help='The iktype to generate the ik for. Possible values are: %s'%(', '.join(name for name,fn in IKFastSolver.GetSolvers().iteritems())))
-    parser.add_option('--maxcasedepth', action='store', type='int', dest='maxcasedepth',default=3,
-                      help='The max depth to go into degenerate cases. If ikfast file is too big, try reducing this, (default=%default).')
-    parser.add_option('--lang', action='store',type='string',dest='lang',default='cpp',
-                      help='The language to generate the code in (default=%default), available=('+','.join(name for name,value in CodeGenerators.iteritems())+')')
-    parser.add_option('--debug','-d', action='store', type='int',dest='debug',default=logging.INFO,
-                      help='Debug level for python nose (smaller values allow more text).')
+""", version = __version__)
+    
+    parser.add_option('--robot', action = 'store', type = 'string', dest = 'robot',default = None,
+                      help = 'robot file (COLLADA or OpenRAVE XML)')
+    
+    parser.add_option('--savefile', action = 'store', type = 'string', dest = 'savefile',default = 'ik.cpp',
+                      help = 'filename where to store the generated c++ code')
+    parser.add_option('--baselink', action = 'store', type = 'int', dest = 'baselink',
+                      help = 'base link index to start extraction of ik chain')
+    parser.add_option('--eelink', action = 'store', type = 'int', dest = 'eelink',
+                      help = 'end effector link index to end extraction of ik chain')
+    parser.add_option('--freeindex', action = 'append', type = 'int', dest = 'freeindices',default = [],
+                      help = 'Optional joint index specifying a free parameter of the manipulator. If not specified, assumes all joints not solving for are free parameters. Can be specified multiple times for multiple free parameters.')
+    parser.add_option('--iktype', action = 'store', dest = 'iktype',default = 'transform6d',
+                      help = 'The iktype to generate the ik for. Possible values are: %s'%(', '.join(name for name,fn in IKFastSolver.GetSolvers().iteritems())))
+    parser.add_option('--maxcasedepth', action = 'store', type = 'int', dest = 'maxcasedepth',default = 3,
+                      help = 'The max depth to go into degenerate cases. If ikfast file is too big, try reducing this, (default=%default).')
+    parser.add_option('--lang', action = 'store',type = 'string',dest = 'lang',default = 'cpp',
+                      help = 'The language to generate the code in (default=%default), available=('+','.join(name for name,value in CodeGenerators.iteritems())+')')
+    parser.add_option('--debug','-d', action = 'store', type = 'int',dest = 'debug',default = logging.INFO,
+                      help = 'Debug level for python nose (smaller values allow more text).')
     
     (options, args) = parser.parse_args()
     if options.robot is None or options.baselink is None or options.eelink is None:
@@ -12312,19 +12343,22 @@ python ikfast.py --robot=robots/barrettwam.robot.xml --baselink=0 --eelink=7 --s
     log.addHandler(handler)
     log.setLevel(options.debug)
 
-    solvefn=IKFastSolver.GetSolvers()[options.iktype.lower()]
+    solvefn = IKFastSolver.GetSolvers()[options.iktype.lower()]
     if options.robot is not None:
         try:
-            env=openravepy.Environment()
-            kinbody=env.ReadRobotXMLFile(options.robot)
+            env = openravepy.Environment()
+            kinbody = env.ReadRobotXMLFile(options.robot)
             env.Add(kinbody)
-            solver = IKFastSolver(kinbody,kinbody)
+            solver = IKFastSolver(kinbody, kinbody)
             solver.maxcasedepth = options.maxcasedepth
-            chaintree = solver.generateIkSolver(options.baselink,options.eelink,options.freeindices,solvefn=solvefn)
-            code=solver.writeIkSolver(chaintree,lang=options.lang)
+            chaintree = solver.generateIkSolver(options.baselink, \
+                                                options.eelink, \
+                                                options.freeindices, \
+                                                solvefn = solvefn)
+            code = solver.writeIkSolver(chaintree, lang = options.lang)
         finally:
             openravepy.RaveDestroy()
 
     if len(code) > 0:
-        with open(options.savefile,'w') as f:
+        with open(options.savefile, 'w') as f:
             f.write(code)
