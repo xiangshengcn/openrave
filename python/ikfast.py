@@ -2765,8 +2765,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         dirtree.append(AST.SolverFunction('innerfn', self.verifyAllEquations(AllEquations,rotvars,solsubs,localdirtree)))
         return transtree
 
-    def solveFullIK_6D(self, LinksRaw, jointvars, isolvejointvars,Tmanipraw=eye(4)):
-        """Solves the full 6D translation + rotation IK
+    def solveFullIK_6D(self, LinksRaw, jointvars, isolvejointvars, \
+                       Tmanipraw = eye(4)):
+        """
+        Default IK solver.
+
+        Solves the full 6D translation + rotation IK
         """
         self._iktype = 'transform6d'
         Tgripper = eye(4)
@@ -3370,6 +3374,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         Will try Li&Woernle&Hiller (1), Kohli&Osvatic (10), and Manocha&Canny (100) solvers.
 
         These methode work only if there exists a set of 3 non-intersecting consecutive joints.
+
+        Called by solveFullIK_6D only.
         """
         self._iktype = 'transform6d'
         rawpolyeqs2 = [None,None]
@@ -3987,9 +3993,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def buildRaghavanRothEquationsFromMatrix(self, T0, T1, solvejointvars, \
                                              simplify = True, \
                                              currentcasesubs = None):
-        """Builds the 14 equations using only 5 unknowns. Method explained in [Raghavan1993]_. Basically take the position and one column/row so that the least number of variables are used.
+        """
+        Builds the 14 equations using only 5 unknowns. 
+
+        Method explained in [Raghavan1993]_. Basically take the position and one column/row so that the least number of variables are used.
 
         .. [Raghavan1993] M Raghavan and B Roth, "Inverse Kinematics of the General 6R Manipulator and related Linkages",  Journal of Mechanical Design, Volume 115, Issue 3, 1993.
+
+        Called by solveFullIK_6DGeneral only.
 
         """
         p0 = T0[0:3,3]
@@ -4019,7 +4030,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
     def CheckEquationForVarying(self, eq):
         return eq.has('vj0px') or eq.has('vj0py') or eq.has('vj0pz')
-    
+
+    """
     def buildRaghavanRothEquationsOld(self,p0,p1,l0,l1,solvejointvars):
         eqs = []
         for i in range(3):
@@ -4075,9 +4087,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     polyeqs[i][j] = self.SimplifyTransformPoly(poly1)
         # remove all fractions? having big integers could blow things up...
         return polyeqs
+    """
     
     def buildRaghavanRothEquations(self,p0, p1, l0, l1, solvejointvars, \
                                    simplify = True, currentcasesubs = None):
+        """
+        Called by buildRaghavanRothEquationsFromMatrix and solveFullIK_TranslationDirection5D.
+        """
         trigsubs = []
         polysubs = []
         polyvars = []
@@ -4154,12 +4170,20 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         log.info('computed in %fs', time.time()-starttime)
         # prune any that have varying symbols
         # remove all fractions? having big integers could blow things up...
-        return [[peq0, peq1] for peq0, peq1 in polyeqs if peq0 is not None and peq1 is not None and not self.CheckEquationForVarying(peq0) and not self.CheckEquationForVarying(peq1)]
+        return [[peq0, peq1] for peq0, peq1 in polyeqs \
+                if peq0 is not None and \
+                peq1 is not None and \
+                not self.CheckEquationForVarying(peq0) and \
+                not self.CheckEquationForVarying(peq1)]
 
     def reduceBothSides(self,polyeqs):
-        """Reduces a set of equations in 5 unknowns to a set of equations with 3 unknowns by solving for one side with respect to another.
+        """
+        Reduces a set of equations in 5 unknowns to a set of equations with 3 unknowns by 
+        solving for one side with respect to another.
+        
         The input is usually the output of buildRaghavanRothEquations.
         """
+        
         usedvars = [polyeqs[0][0].gens, polyeqs[0][1].gens]
         reducedelayed = []
         for j in range(2):
@@ -6178,12 +6202,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             othereq *= (1+htvars[i]**2)**maxdenom[i]
         return eqnew, othereq, htvarsubsinv
 
+    """
     def ConvertHalfTanEquationToSinCos(self, eq, convertvars):
-        """
-        Converts all the sin/cos of variables to half-tangents. Returns two equations (poly, denominator)
+        # Converts all the sin/cos of variables to half-tangents. Returns two equations (poly, denominator)
+        # Not called by any function.
 
-        Not called by any function.
-        """
         assert(0)
         cossinvars = []
         htvarsubs = []
@@ -6224,6 +6247,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for i in range(len(convertvars)):
             othereq *= (1+htvars[i]**2)**maxdenom[i]
         return eqnew, othereq, htvarsubsinv
+    """
     
     def solveKohliOsvatic(self, \
                           rawpolyeqs, \
@@ -6519,7 +6543,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
         There should be len(dialyticeqs)*len(monoms)*maxdegree coefficients
 
-        Method also checks if the equations are linearly dependent
+        Method also checks if the equations are linearly dependent.
+
+        Called by solveManochaCanny, solveLiWoernleHiller, solveKohliOsvatic, SolvePairVariablesHalfAngle
         """
         self._CheckPreemptFn(progress = 0.12)
         if len(dialyticeqs) == 0:
