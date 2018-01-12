@@ -1732,7 +1732,7 @@ class IKFastSolver(AutoReloader):
                     sexprs += sexpr.args
                     
                 elif not self.isValidSolution(sexpr):
-                    log.warn('not valid: %s', sexpr)
+                    log.warn('Solution %s is not valid; set sol.score = oo', sexpr)
                     sol.score = oo # infinity
                     
                 else:
@@ -1767,7 +1767,7 @@ class IKFastSolver(AutoReloader):
 
     def checkSolvabilityReal(self, AllEquations, checkvars, othervars):
         """
-        Returns true if there are enough equations to solve for checkvars
+        Returns True if there are enough equations to solve for checkvars
         """
         subs = []
         checksymbols = []
@@ -1787,7 +1787,8 @@ class IKFastSolver(AutoReloader):
             eqs = [eq.subs(self.globalsymbols).subs(subs).subs(psubvalues) for eq in AllEquations]
             usedsymbols = [s for s in checksymbols if self.has(eqs,s)]
             eqs = [Poly(eq,*usedsymbols) for eq in eqs if eq != S.Zero]
-            # check if any equations have monos of degree more than 1, if yes, then quit with success since 0.6.7 sympy solver will freeze
+            # check if any equations have monos of degree more than 1
+            # if so, then quit with success since 0.6.7 sympy solver will freeze
             numhigherpowers = 0
             for eq in eqs:
                 for monom in eq.monoms():
@@ -1830,7 +1831,7 @@ class IKFastSolver(AutoReloader):
             else:
                 lang = CodeGenerators.keys()[0]
                 
-        log.info('generating %s code...'%lang)
+        log.info('Generating %s code...' % lang)
         
         if self._checkpreemptfn is not None:
             import weakref
@@ -2174,18 +2175,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         chaintree.dictequations += self.globalsymbols.items()
         return chaintree
 
-    def MatchSimilarFraction(self,num,numbersubs,matchlimit = 40):
-        """returns None if no appropriate match found
+    def MatchSimilarFraction(self, num, numbersubs, matchlimit = 40):
+        """
+        Returns None if no appropriate match found
         """
         for c,v in numbersubs:
-            if self.equal(v,num):
+            if self.equal(v, num):
                 return c
         
         # nothing matched, so check gcd
         largestgcd = S.One
         retnum = None
         for c,v in numbersubs:
-            curgcd = gcd(v,num)
+            curgcd = gcd(v, num)
             if len(str(curgcd)) > len(str(largestgcd)):
                 newfraction = (num/v)
                 if len(str(newfraction)) <= matchlimit:
@@ -3171,7 +3173,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         transvars.append(solvejointvar)
                         
                 if len(rotvars) == 3 and len(transvars) == 3:
-                    log.info('found 3 consecutive intersecting axes links[%d:%d]\n' + \
+                    log.info('Found 3 consecutive intersecting axes links [%d : %d]\n' + \
                              '        rotn_vars = %s\n' + \
                              '        trns_vars = %s', \
                              startindex, endindex, rotvars,transvars)
@@ -3188,14 +3190,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             epsilon = 5*(10**-self.precision)
 
         if eq.is_Add: # ..+..-..+..
-            neweq = S.Zero
-            for subeq in eq.args:
-                neweq += self.RoundEquationTerms(subeq,epsilon)
+            neweq = sum([self.RoundEquationTerms(subeq, epsilon) for subeq in eq.args])
                 
         elif eq.is_Mul: # ..*../..*..
-            neweq = self.RoundEquationTerms(eq.args[0],epsilon)
-            for subeq in eq.args[1:]:
-                neweq *= self.RoundEquationTerms(subeq,epsilon)
+            neweq = reduce(mul, [self.RoundEquationTerms(subeq, epsilon) for subeq in eq.args], 1)
                 
         elif eq.is_Function: # for sin, cos, etc.
             newargs = [self.RoundEquationTerms(subeq,epsilon) for subeq in eq.args]
@@ -3206,16 +3204,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             #      with the same value each time, we can move its assignment to top
             #if epsilon is None:
             #    epsilon = 5*(10**-self.precision)
-            if abs(eq.evalf()) <= epsilon: # <= or < ?
-                # print "rounding ", eq.evalf(), " to S.Zero"
-                neweq = S.Zero
-            else:
-                neweq = eq
+            neweq = eq is abs(eq.evalf())>epsilon else S.Zero
         else:
-            neweq=eq
+            neweq = eq
+            
         return neweq
 
-    def RoundPolynomialTerms(self,peq,epsilon):
+    def RoundPolynomialTerms(self, peq, epsilon):
         terms = {}
         for monom, coeff in peq.terms():
             if not coeff.is_number or abs(coeff) > epsilon:
@@ -3227,31 +3222,40 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
     def iterateThreeNonIntersectingAxes(self, solvejointvars, Links, LinksInv):
         """
-        check for three consecutive non-intersecting axes.
-        if several points exist, so have to choose one that is least complex?
+        This generator searches for three consecutive non-intersecting axes.
+
+        If several sets exist, then should we choose the least complex one?
+
+        Called by solveFullIK_6D only.
         """
-        ilinks = [i for i,Tlink in enumerate(Links) if self.has(Tlink,*solvejointvars)]
+        ilinks = [i for i, Tlink in enumerate(Links) if self.has(Tlink, *solvejointvars)]
         usedindices = []
-        for imode in range(2):
-            for i in range(len(ilinks)-2):
-                if i in usedindices:
-                    continue
-                startindex = ilinks[i]
-                endindex = ilinks[i+2]+1
-                p0 = self.multiplyMatrix(Links[ilinks[i]:ilinks[i+1]])[0:3,3]
-                p1 = self.multiplyMatrix(Links[ilinks[i+1]:ilinks[i+2]])[0:3,3]
-                has0 = self.has(p0,*solvejointvars)
-                has1 = self.has(p1,*solvejointvars)
-                if (imode == 0 and has0 and has1) or (imode == 1 and (has0 or has1)):
-                    T0links = Links[startindex:endindex]
-                    T1links = LinksInv[:startindex][::-1]
-                    T1links.append(self.Tee)
-                    T1links += LinksInv[endindex:][::-1]
-                    usedindices.append(i)
-                    usedvars = [var for var in solvejointvars if any([self.has(T0,var) for T0 in T0links])]
-                    log.info('Found 3 consecutive non-intersecting axes links [%d : %d]\n' + \
-                             '        vars = %s',startindex,endindex,str(usedvars))
-                    yield T0links, T1links
+        # TGN: in original code there is "for imode in range(2)" but not used at all
+        for i in range(len(ilinks)-2):
+            if i in usedindices:
+                continue
+            startindex = ilinks[i]
+            endindex   = ilinks[i+2]+1
+            p0 = self.multiplyMatrix(Links[ilinks[i  ]:ilinks[i+1]])[0:3,3]
+            p1 = self.multiplyMatrix(Links[ilinks[i+1]:ilinks[i+2]])[0:3,3]
+            has0 = self.has(p0, *solvejointvars)
+            has1 = self.has(p1, *solvejointvars)
+            
+            if has0 and has1:
+                # T0 reads A_s, A_{s+1}, ... , A_{e-1}
+                T0links = Links[startindex:endindex]
+                
+                # T1 reads inv(A_{s-1}), ..., inv(A_1), inv(A_0), Tee, inv(A_{n-1}), ..., inv(A_e)
+                T1links = LinksInv[:startindex][::-1]
+                T1links.append(self.Tee)
+                T1links += LinksInv[endindex:][::-1]
+
+                # prod(T0) = prod(T1) as A_0*A_1*...*A_s*...*A_e*...A_{n-1} = Tee
+                usedindices.append(i)
+                usedvars = [var for var in solvejointvars if any([self.has(T0,var) for T0 in T0links])]
+                log.info('Found 3 consecutive non-intersecting axes links [%d : %d]\n' + \
+                         '        vars = %s', startindex, endindex, str(usedvars))
+                yield T0links, T1links
 
     def solve6DIntersectingAxes(self, T0links, T1links, transvars, rotvars, solveRotationFirst, endbranchtree):
         """
@@ -3312,24 +3316,23 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                             # else transvars+rotvars, \
                                             self.freevarsubs[:], transtree)
 
-        # exec(ipython_str)
-
-        solvertree = []
         solvedvarsubs = self.freevarsubs[:]
         #if solveRotationFirst:
         #    # can even get here?? it is either None or False
         #    assert(0)
         #    storesolutiontree = transtree
         #else:
-        solvertree += transtree
+        solvertree = transtree
         storesolutiontree = endbranchtree
         for tvar in transvars:
             solvedvarsubs += self.getVariable(tvar).subs
-                
+
+        #"""
         Ree = zeros((3,3))
         for i in range(3):
             for j in range(3):
                 Ree[i,j] = Symbol('new_r%d%d'%(i,j))
+        #"""
                 
         try:
             T1sub = T1.subs(solvedvarsubs)
@@ -3345,10 +3348,12 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # has to be after SolveAllEquations...?
             for i in range(3):
                 for j in range(3):
-                    self.globalsymbols[Ree[i,j]] = T1sub[i,j]
+                    exec(ipython_str, globals(), locals())
+                    Reeij = Symbol('new_r%d%d' % (i, j))
+                    self.globalsymbols[Reeij] = T1sub[i,j]
 
             if len(rottree) == 0:
-                raise self.CannotSolveError('could not solve for all rotation variables: %s:%s' % \
+                raise self.CannotSolveError('Cannot solve for all rotation variables: %s:%s' % \
                                             (str(freevar), str(freevalue)))
 
             #if solveRotationFirst:
@@ -3362,6 +3367,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             removesymbols = set()
             for i in range(3):
                 for j in range(3):
+                    exec(ipython_str, globals(), locals())
                     removesymbols.add(Ree[i,j])
             # self.globalsymbols = [g for g in self.globalsymbols if not g[0] in removesymbols]
             self.globalsymbols = { k:self.globalsymbols[k] for k in self.globalsymbols if not k in removesymbols }
