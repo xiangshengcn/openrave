@@ -900,11 +900,13 @@ class IKFastSolver(AutoReloader):
     @staticmethod
     def affineSimplify(T):
         """
-        Called by forwardKinematicsChain and solveFullIK_6DGeneral
+        Called by forwardKinematicsChain and solveFullIK_6DGeneral only.
+
+        Uses sympy's trigsimp, not the class method.
         """
         return Matrix(T.shape[0], \
                       T.shape[1], \
-                      [trigsimp_new(x.expand()) for x in T])
+                      [trigsimp(x.expand()) for x in T])
 
     @staticmethod
     def multiplyMatrix(Ts):
@@ -1120,7 +1122,7 @@ class IKFastSolver(AutoReloader):
         fcos = sourcedir.dot(targetdir)
         M = eye(4)
         if fsin > 1e-6:
-            M[0:3,0:3] = IKFastSolver.rodrigues(rottodirection/fsin,atan2(fsin,fcos)) # *(1/fsin)
+            M[0:3,0:3] = IKFastSolver.rodrigues(rottodirection/fsin, atan2(fsin,fcos)) # *(1/fsin)
         elif fcos < 0: # hand is flipped 180, rotate around x axis
             rottodirection = Matrix(3,1,[S.One,S.Zero,S.Zero])
             rottodirection -= sourcedir * sourcedir.dot(rottodirection)
@@ -1221,7 +1223,9 @@ class IKFastSolver(AutoReloader):
 
         incos == True or insin == True ONLY in recursive calls 
  
-        In primitive calls, incos == insin == False 
+        Primitive calls are by checkForDivideByZero and AddSolution only.
+
+        In primitive calls, incos == insin == False
         """
 
         if eq.is_number:
@@ -1252,10 +1256,7 @@ class IKFastSolver(AutoReloader):
         # incos/insin indicates whether eq is inside cos/sin
         if eq.is_Add:
             if incos:
-                lefteq = eq.args[1]
-                if len(eq.args) > 2:
-                    for ieq in range(2,len(eq.args)):
-                        lefteq += eq.args[ieq]
+                lefteq = sum([arg for arg in eq.args[1:]])
                 # cos(a+b) = cos(a)*cos(b) - sin(a)*sin(b)         
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
@@ -1265,11 +1266,8 @@ class IKFastSolver(AutoReloader):
                 processed = True
                 
             elif insin:
-                lefteq = eq.args[1]
-                if len(eq.args) > 2:
-                    for ieq in range(2,len(eq.args)):
-                        lefteq += eq.args[ieq]
-                # sin(a+b) = cos(a)*sin(b) + sin(a)*cos(b) 
+                lefteq = sum([arg for arg in eq.args[1:]])
+                # sin(a+b) = cos(a)*sin(b) + sin(a)*cos(b)
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
                         self.SimplifyAtan2(lefteq,     insin = True) + \
@@ -1425,19 +1423,15 @@ class IKFastSolver(AutoReloader):
         return complexity
     
     def ComputePolyComplexity(self, peq):
-        """peq is a polynomial
         """
-        complexity = 0
-        for monoms,coeff in peq.terms():
-            coeffcomplexity = self.codeComplexity(coeff)
-            for m in monoms:
-                if m > 1:
-                    complexity += 2
-                elif m > 0:
-                    complexity += 1
-            complexity += coeffcomplexity + 1
-        return complexity
-    
+        peq is a polynomial
+        Called by solveFullIK_6DGeneral only.
+        """
+        assert(peq.is_Poly)
+        return sum([ self.codeComplexity(coeff) + 1 + \
+                     sum([2 if m>1 else m for m in monoms]) \
+                     for monoms, coeff in peq.terms() ])
+
     def sortComplexity(self, exprs):
 
         if len(exprs)>2:
