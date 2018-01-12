@@ -3230,32 +3230,33 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         ilinks = [i for i, Tlink in enumerate(Links) if self.has(Tlink, *solvejointvars)]
         usedindices = []
-        # TGN: in original code there is "for imode in range(2)" but not used at all
-        for i in range(len(ilinks)-2):
-            if i in usedindices:
-                continue
-            startindex = ilinks[i]
-            endindex   = ilinks[i+2]+1
-            p0 = self.multiplyMatrix(Links[ilinks[i  ]:ilinks[i+1]])[0:3,3]
-            p1 = self.multiplyMatrix(Links[ilinks[i+1]:ilinks[i+2]])[0:3,3]
-            has0 = self.has(p0, *solvejointvars)
-            has1 = self.has(p1, *solvejointvars)
-            
-            if has0 and has1:
-                # T0 reads A_s, A_{s+1}, ... , A_{e-1}
-                T0links = Links[startindex:endindex]
-                
-                # T1 reads inv(A_{s-1}), ..., inv(A_1), inv(A_0), Tee, inv(A_{n-1}), ..., inv(A_e)
-                T1links = LinksInv[:startindex][::-1]
-                T1links.append(self.Tee)
-                T1links += LinksInv[endindex:][::-1]
 
-                # prod(T0) = prod(T1) as A_0*A_1*...*A_s*...*A_e*...A_{n-1} = Tee
-                usedindices.append(i)
-                usedvars = [var for var in solvejointvars if any([self.has(T0,var) for T0 in T0links])]
-                log.info('Found 3 consecutive non-intersecting axes links [%d : %d]\n' + \
-                         '        vars = %s', startindex, endindex, str(usedvars))
-                yield T0links, T1links
+        for imode in range(2): 
+            for i in range(len(ilinks)-2): 
+                if i in usedindices: 
+                    continue 
+                startindex = ilinks[i] 
+                endindex   = ilinks[i+2]+1 
+                p0 = self.multiplyMatrix(Links[ilinks[i]  :ilinks[i+1]])[0:3,3] 
+                p1 = self.multiplyMatrix(Links[ilinks[i+1]:ilinks[i+2]])[0:3,3]
+                
+                has0 = self.has(p0, *solvejointvars) 
+                has1 = self.has(p1, *solvejointvars)
+                
+                if (imode == 0 and has0 and has1) or (imode == 1 and (has0 or has1)):
+                    # T0 reads A_s, A_{s+1}, ... , A_{e-1} 
+                    T0links = Links[startindex:endindex]
+                    # T1 reads inv(A_{s-1}), ..., inv(A_1), inv(A_0), Tee, inv(A_{n-1}), ..., inv(A_e) 
+                    T1links = LinksInv[:startindex][::-1] 
+                    T1links.append(self.Tee) 
+                    T1links += LinksInv[endindex:][::-1]
+
+                    # prod(T0) = prod(T1) as A_0*A_1*...*A_s*...*A_e*...A_{n-1} = Tee 
+                    usedindices.append(i) 
+                    usedvars = [var for var in solvejointvars if any([self.has(T0,var) for T0 in T0links])] 
+                    log.info('Found 3 consecutive non-intersecting axes links [%d : %d]\n' + \
+                             '        vars = %s', startindex, endindex, str(usedvars)) 
+                    yield T0links, T1links 
 
     def solve6DIntersectingAxes(self, T0links, T1links, transvars, rotvars, solveRotationFirst, endbranchtree):
         """
