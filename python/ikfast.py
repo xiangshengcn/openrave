@@ -598,33 +598,39 @@ class IKFastSolver(AutoReloader):
     class DegenerateCases:
         def __init__(self):
             self.handleddegeneratecases = []
+            
         def Clone(self):
-            clone=IKFastSolver.DegenerateCases()
-            clone.handleddegeneratecases = self.handleddegeneratecases[:]
+            clone = IKFastSolver.DegenerateCases()
+            clone.handleddegeneratecases = self.handleddegeneratecases[:] # deep copy
             return clone
+        
         def AddCasesWithConditions(self,newconds,currentcases):
             for case in newconds:
                 newcases = set(currentcases)
                 newcases.add(case)
                 assert(not self.CheckCases(newcases))
                 self.handleddegeneratecases.append(newcases)
+                
         def AddCases(self,currentcases):
             if not self.CheckCases(currentcases):
                 self.handleddegeneratecases.append(currentcases)
             else:
                 log.warn('case already added') # sometimes this can happen, but it isn't a bug, just bad bookkeeping
+                
         def RemoveCases(self, currentcases):
             for i, handledcases in enumerate(self.handleddegeneratecases):
                 if handledcases == currentcases:
                     self.handleddegeneratecases.pop(i)
                     return True
             return False
+        
         def GetHandledConditions(self,currentcases):
             handledconds = []
             for handledcases in self.handleddegeneratecases:
                 if len(currentcases)+1==len(handledcases) and currentcases < handledcases:
                     handledconds.append((handledcases - currentcases).pop())
             return handledconds
+        
         def CheckCases(self,currentcases):
             for handledcases in self.handleddegeneratecases:
                 if handledcases == currentcases:
@@ -1688,7 +1694,7 @@ class IKFastSolver(AutoReloader):
             # TGN: sol can be a SolverSolution class object or a SolverPolynomialRoots class object
 
             assert(sol.__class__.__name__=='SolverSolution' or \
-                   sol.__class__.__name__=='SolverPolynomialRoots'):
+                   sol.__class__.__name__=='SolverPolynomialRoots')
             
             if sol.jointeval is not None:
                 subexprs = sol.jointeval
@@ -6777,6 +6783,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # get those that do not start with gconst
         transformsubstitutions = [(var, self.globalsymbols[var]) for var in self.globalsymbols \
                                   if var.is_Symbol and not var.name.startswith('gconst')]
+        
+        simpiter = 0
+        origeq = eq
+        changed = True
 
         def _SimplifyRotationFcn(fcn, eq, changed, groups):
             neweq = fcn(eq, self._rotpossymbols, groups)
@@ -6791,18 +6801,18 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if self._iktype == 'translationdirection5d':
             # since this IK type includes direction, we use the first row only,
             # i.e., r00**2 + r01**2 + r02**2 = 1
-            simpiter = 0
-            origeq = eq
 
             # first simplify just rotations since they don't add any new variables
-            changed = True
+            # TGN: no need to check if self.pp is not None, i.e. if full 3D position is available
             while changed and eq.has(*self._rotsymbols):
                 # log.info('simpiter = %d, complexity = %d', \
                 #          simpiter, \
                 #          self.codeComplexity(eq.as_expr() if isinstance(eq,Poly) else eq))
                 simpiter += 1
                 changed = False
-                neweq = self._SimplifyRotationNorm(eq, self._rotnormgroups[0:1]) # first row
+                neweq, newchanged = _SimplifyRotationFcn(self._SimplifyRotationNorm_new, \
+                                                         eq, changed, \
+                                                         self._rotnormgroups_new[0:1])
                 if neweq is not None:
                     eq2 = self._SubstituteGlobalSymbols(neweq, transformsubstitutions)
                     if not self.equal(eq, eq2):
@@ -6821,12 +6831,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             elif fraction(eq)[1].has(*self._rotsymbols):
                 log.info('equation %s has _rotsymbols in its denom; skip', eq)
                 return eq
-
-            simpiter = 0
-            origeq = eq
-
-            # TGN: no need to check if self.pp is not None, i.e. if full 3D position is available
-            changed = True
 
             #fcn_groups_pair = [[self._SimplifyRotationNorm , self._rotposnormgroups ], \
             fcn_groups_pair = [[self._SimplifyRotationNorm_new, self._rotposnormgroups_new ], \
