@@ -262,6 +262,9 @@ from operator import itemgetter, mul
 # mul for reduce(mul, [...], 1), same as prod([...]) in Matlab 
 from itertools import izip, chain, product
 
+def prod(m):
+    return reduce(mul, m, 1)
+
 try:
     from itertools import combinations, permutations
 except ImportError:
@@ -10930,9 +10933,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     @staticmethod
     def recursiveFraction(expr):
         """
-        return the numerator and denominator of the expression as if it was one fraction
+        Returns (numerator, denominator) pair of the expression EXPR as if it were one fraction
         """
         if expr.is_Add:
+            allpoly = [IKFastSolver.recursiveFraction(arg) for arg in expr.args]
+            all_d = [d for n, d in allpoly]
+            finaldenom = reduce(mul, all_d, 1)
+            finalnum = sum( [n*(finaldenom/d) for n, d in allpoly] )
+            """
             allpoly = []
             finaldenom = S.One
             for arg in expr.args:
@@ -10942,23 +10950,36 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             finalnum = S.Zero
             for n,d in allpoly:
                 finalnum += n*(finaldenom/d)
-            return finalnum,finaldenom
+            """
+            return finalnum, finaldenom
+        
         elif expr.is_Mul:
+            allpoly = [IKFastSolver.recursiveFraction(arg) for arg in expr.args]
+            all_num = [n for n, d in allpoly]
+            all_denom = [d for n, d in allpoly]
+            finalnum = reduce(mul, all_num, 1)
+            finaldenom = reduce(mul, all_denom, 1)
+            """
             finalnum = S.One
             finaldenom = S.One
             for arg in expr.args:
                 n,d = IKFastSolver.recursiveFraction(arg)
                 finalnum = finalnum * n
                 finaldenom = finaldenom * d
-            return finalnum,finaldenom
+            """ 
+            return finalnum, finaldenom
+        
         elif expr.is_Pow and expr.exp.is_number:
-            n,d=IKFastSolver.recursiveFraction(expr.base)
+            n, d = IKFastSolver.recursiveFraction(expr.base)
             if expr.exp < 0:
+                if n == S.Zero:
+                    raise ValueError('Base is 0 and exp < 0')
                 exponent = -expr.exp
                 n,d = d,n
             else:
                 exponent = expr.exp
-            return n**exponent,d**exponent
+            return n**exponent, d**exponent
+        
         else:
             return fraction(expr)
 
@@ -10975,69 +10996,102 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         try:
             p = Poly(expr, *vars)
         except PolynomialError:
-            return expr, symbols
+            return expr, []
         
         newexpr = S.Zero
         for m, c in p.terms():
-            # make huge numbers into constants too
+            # also convert huge numbers into constants
             if (c.is_number and len(str(c)) > 40) or \
                not (c.is_number or c.is_Symbol):
-                # if it is a product of a symbol and a number, then ignore
-                if not (c.is_Mul and all([e.is_number or e.is_Symbol for e in c.args])):
+                if c.is_Mul and all([e.is_number or e.is_Symbol for e in c.args]):
+                    # if c is a product of symbols and numbers, then pass
+                    pass
+                else:
                     sym = symbolgen.next()
-                    symbols.append((sym,c))
+                    symbols.append((sym, c))
                     c = sym
             if __builtin__.sum(m) == 0:
+                # TC is S.Zero
                 newexpr += c
             else:
-                for i,degree in enumerate(m):
-                    c = c*vars[i]**degree
-                newexpr += c
+                """
+                for i, degree in enumerate(m): 
+                c = c*vars[i]**degree 
+                newexpr += c 
+                """
+                newexpr += c * reduce(mul, [vars[i]**degree for i, degree in enumerate(m)], 1)
         return newexpr, symbols
 
     @staticmethod
     def replaceNumbers(expr, symbolgen = None):
-        """Replaces all numbers with symbols, this is to make gcd faster when fractions get too big"""
+        """
+        Replaces all numbers with symbols, this is to make gcd faster when fractions get too big
+        """
         if symbolgen is None:
             symbolgen = cse_main.numbered_symbols('const')
-        symbols = []
+        
         if expr.is_number:
             result = symbolgen.next()
-            symbols.append((result, expr))
+            symbols = [(result, expr)]
+            
         elif expr.is_Mul:
+            res_sym = [IKFastSolver.replaceNumbers(arg, symbolgen) for arg in expr.args]
+            result = reduce(mul, [res for (res, sym) in res_sym], 1)
+            symbols = [sym for (res, sym) in res_sym]
+            """
             result = S.One
             for arg in expr.args:
                 newresult, newsymbols = IKFastSolver.replaceNumbers(arg, symbolgen)
                 result *= newresult
                 symbols += newsymbols
+            """
+                
         elif expr.is_Add:
+            res_sym = [IKFastSolver.replaceNumbers(arg, symbolgen) for arg in expr.args]
+            result = sum([res for (res, sym) in res_sym])
+            symbols = [sym for (res, sym) in res_sym]
+            """
             result = S.Zero
             for arg in expr.args:
                 newresult, newsymbols = IKFastSolver.replaceNumbers(arg, symbolgen)
                 result += newresult
                 symbols += newsymbols
+            """
+                
         elif expr.is_Pow:
             # don't replace the exponent
             newresult, newsymbols = IKFastSolver.replaceNumbers(expr.base, symbolgen)
-            symbols += newsymbols
             result = newresult**expr.exp
+            symbols = newsymbols
+            
         else:
             result = expr
-        return result,symbols
+            symbols = []
+            
+        return result, symbols
 
     @staticmethod
     def frontnumbers(eq):
         if eq.is_Number:
             return [eq]
-        if eq.is_Mul:
-            n = []
-            for arg in eq.args:
-                n += IKFastSolver.frontnumbers(arg)
-            return n
-        return []
+        elif eq.is_Mul:
+            return [arg for arg in eq.args if arg.is_Number]
+        else:
+            return []
 
     def IsAnyImaginaryByEval(self, eq):
-        """checks if an equation ever evaluates to an imaginary number
+        """
+        Checks if an equation ever evaluates to an imaginary number
+
+        TGN: these two functions are shaky because 
+
+        value.is_complex and not value.is_real
+
+        is True ONLY if value is purely imaginary, like I, -3*I
+
+        If value = 3+I, I+oo, -oo, then value.is_complex is None, and so is value.is_complex and not value.is_real
+
+        If value = Float(3), S.One, S.Zero, then the logical expression evaluates to False
         """
         for testconsistentvalue in self.testconsistentvalues:
             value = eq.subs(testconsistentvalue).evalf()
@@ -11047,46 +11101,45 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return False
 
     def AreAllImaginaryByEval(self, eq):
-        """checks if an equation ever evaluates to an imaginary number
+        """
+        Checks if an equation ever evaluates to an imaginary number.
+
+        TGN: See in the previous function
         """
         for testconsistentvalue in self.testconsistentvalues:
             value = eq.subs(testconsistentvalue).evalf()
-            if not (value.is_complex and not value.is_real):
+            if not value.is_complex or value.is_real:
+            # if not (value.is_complex and not value.is_real):
                 return False
             
         return True
     
-    def IsDeterminantNonZeroByEval(self, A, evalfirst=True):
-        """checks if a determinant is non-zero by evaluating all the possible solutions.
-        :param evalfirst: if True, then call evalf() first before any complicated operation in order to avoid freezes. Set this to false to get more accurate results when A is known to be simple.
+    def IsDeterminantNonZeroByEval(self, A, evalfirst = True):
+        """
+        Checks if the determinant of A is non-zero by evaluating all the possible solutions.
+
+        :param evalfirst: if True, then call evalf() first before any complicated operation to avoid freezing
+
+        When A is known to be simple, set this to False to get more accurate results.
+
         :return: True if there exist values where det(A) is not zero
         """
-        N = A.shape[0]
-        thresh = 0.0003**N # when translationdirection5d is used with direction that is 6+ digits, the determinent gets small... pi_robot requires 0.0003**N
-        if evalfirst:
-            if thresh > 1e-14:
-                # make sure thresh isn't too big...
-                thresh = 1e-14
-        else:
-            # can have a tighter thresh since evaluating last...
-            if thresh > 1e-40:
-                # make sure thresh isn't too big...
-                thresh = 1e-40
+        # when translationdirection5d is used with direction that is 6+ digits,
+        # the determinent gets small... pi_robot requires 0.0003**A.shape[0]
+        thresh = 0.0003**A.shape[0]
+        # make sure thresh isn't too big...
+        thresh = min(thresh, 1e-14 if evalfirst else 1e-40)
                 
-        nummatrixsymbols = __builtin__.sum([1 for a in A if not a.is_number])
-        if nummatrixsymbols == 0:
-            if evalfirst:
-                return abs(A.evalf().det()) > thresh
-            else:
-                return abs(A.det().evalf()) > thresh
-        
-        for testconsistentvalue in self.testconsistentvalues:
-            if evalfirst:
-                detvalue = A.subs(testconsistentvalue).evalf().det()
-            else:
-                detvalue = A.subs(testconsistentvalue).det().evalf()
-            if abs(detvalue) > thresh:
-                return True
+        if all([a.is_number for a in A]):
+            detvalue = A.evalf().det() if evalfirst else A.det().evalf()
+            return abs(detvalue) > thresh
+        else:
+            for testconsistentvalue in self.testconsistentvalues:
+                # plug in a set of test consistent values
+                detvalue = A.subs(testconsistentvalue)
+                detvalue = detvalue.evalf().det() if evalfirst else detvalue.det().evalf()
+                if abs(detvalue) > thresh:
+                    return True
             
         return False
     
@@ -11102,90 +11155,79 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         eq = eq.expand() # doesn't work otherwise
 
-        # use with "from operator import mul"
-        assert(reduce(mul,[],1) == S.One)
-        assert(sum([]) == S.Zero)
-        
         if eq.is_Add:
             exprs = eq.args
             totaldenom = S.One
             common = S.One
-            len_exprs = len(exprs)
-            if onlynumbers:
-                for i in range(len_exprs):
-                    denom = reduce(mul, IKFastSolver.frontnumbers(fraction(exprs[i])[1]), 1)
+            if onlynumbers: # default
+                for expri in exprs:
+                    denom = reduce(mul, IKFastSolver.frontnumbers(fraction(expri)[1]), 1)
                     if denom != S.One:
                         exprs = [expr*denom for expr in exprs]
                         totaldenom *= denom
-                if onlygcd:
+                        
+                if onlygcd: # not default
                     common = None
-                    for i in range(len_exprs):
-                        coeff = reduce(mul, IKFastSolver.frontnumbers(exprs[i]), 1)
-                        if common == None:
-                            common = coeff
-                        else:
-                            common = igcd(common,coeff)
+                    for expri in exprs:
+                        coeff = reduce(mul, IKFastSolver.frontnumbers(expri), 1)
+                        common = coeff if common == None else igcd(common, coeff)
                         if common == S.One:
                             break
-            else:
-                for i in range(len_exprs):
-                    denom = fraction(exprs[i])[1]
+            else: # not onlynumbers, not default
+                for expri in exprs:
+                    denom = fraction(expri)[1]
                     if denom != S.One:
-                        exprs = [expr*denom for expr in exprs]
+                        exprs = [expr*denom for expr in exprs] # TGN: need simplify, cancel, expand??
                         totaldenom *= denom
                         
                 # there are no fractions, so we can start simplifying
-                common = exprs[0]/fraction(cancel(exprs[0]/exprs[1]))[0]
-                for i in range(2, len_exprs):
-                    common = common/fraction(cancel(common/exprs[i]))[0]
+                common = exprs[0]#/fraction(cancel(exprs[0]/exprs[1]))[0]
+                for expri in exprs[1:]:
+                    common = common/fraction(cancel(common/expri))[0]
                     if common.is_number:
                         common = S.One
+                        break
                         
             # find the smallest number and divide by it
-            if not onlygcd:
-                smallestnumber = None
+            if not onlygcd: # default
+                smallestnumber = oo
                 for expr in exprs:
-                    if expr.is_number \
-                       and (smallestnumber is None or smallestnumber > Abs(expr)):
-                            smallestnumber = Abs(expr)
+                    if expr.is_number and smallestnumber > Abs(expr):
+                        smallestnumber = Abs(expr)
 
                     elif expr.is_Mul:
                         n = reduce(mul, [arg for arg in expr.args if arg.is_number], 1)
-                        if smallestnumber is None or smallestnumber > Abs(n):
+                        if smallestnumber > Abs(n):
                             smallestnumber = Abs(n)
                             
-                if smallestnumber is not None:
+                if smallestnumber != oo:
                     common = common*smallestnumber
                     
             eq = sum(expr/common for expr in exprs)
-            if returncommon:
-                return eq, common/totaldenom
+            
+            return (eq, common/totaldenom) if returncommon else eq
             
         elif eq.is_Mul:
             coeff = reduce(mul, IKFastSolver.frontnumbers(eq), 1)
 
-            if returncommon:
-                return eq/coeff, coeff
-            return eq/coeff
-        
-        if returncommon:
-            return eq, S.One
-        
-        return eq
+            return (eq/coeff, coeff) if returncommon else eq/coeff
+
+        return (eq, S.One) if returncommon else eq
 
     @staticmethod
     def det_bareis(M, *vars, **kwargs):
-        """Function from sympy with a couple of improvements.
-           Compute matrix determinant using Bareis' fraction-free
-           algorithm which is an extension of the well known Gaussian
-           elimination method. This approach is best suited for dense
-           symbolic matrices and will result in a determinant with
-           minimal number of fractions. It means that less term
-           rewriting is needed on resulting formulae.
+        """
+        Function from sympy with a couple of improvements.
+        Compute matrix determinant using Bareis' fraction-free
+        algorithm which is an extension of the well known Gaussian
+        elimination method. This approach is best suited for dense
+        symbolic matrices and will result in a determinant with
+        minimal number of fractions. It means that less term
+        rewriting is needed on resulting formulae.
 
-           TODO: Implement algorithm for sparse matrices (SFF).
-
-           Function from sympy/matrices/matrices.py
+        TODO: Implement algorithm for sparse matrices (SFF).
+        
+        Function from sympy/matrices/matrices.py
         """
         if not M.is_square:
             raise NonSquareMatrixException()
@@ -11220,9 +11262,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         if k > 0:
                             if len(vars) > 0 and D != S.Zero and not M[k-1, k-1].is_number:
                                 try:
-                                    D,r = div(Poly(D,*vars),M[k-1, k-1])
+                                    D, r = div(Poly(D,*vars), M[k-1, k-1])
                                 except UnificationFailed:
-                                    log.warn('unification failed, trying direct division')
+                                    log.warn('Unification failed; try direct division')
                                     D /= M[k-1, k-1]
                             else:
                                 D /= M[k-1, k-1]
@@ -11240,7 +11282,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return det.expand()
 
     @staticmethod
-    def LUdecompositionFF(self,*vars):
+    def LUdecompositionFF(M, *vars):
         """
         Compute a fraction-free LU decomposition.
 
@@ -11252,14 +11294,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             - W. Zhou & D.J. Jeffrey, "Fraction-free matrix factors: new forms
               for LU and QR factors". Frontiers in Computer Science in China,
               Vol 2, no. 1, pp. 67-80, 2008.
+
+        Called by reduceBothSidesInverseMatrix and solveLiWoernleHiller only.
+
+        Function from sympy/matrices/matrices.py
         """
-        n, m = self.rows, self.cols
-        U, L, P = self[:,:], eye(n), eye(n)
+
+        n, m = M.rows, M.cols
+        U, L, P = M[:,:], eye(n), eye(n)
         DD = zeros(n) # store it smarter since it's just diagonal
         oldpivot = S.One
 
         for k in range(n-1):
-            log.info('row=%d', k)
+            log.info('row = %d', k)
             if U[k,k] == 0:
                 for kpivot in range(k+1, n):
                     if U[kpivot, k] != 0:
@@ -11278,9 +11325,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     D = Ukk * U[i,j] - U[k,j]*Uik
                     if len(vars) > 0 and D != S.Zero and not oldpivot.is_number:
                         try:
-                            D,r = div(Poly(D,*vars),oldpivot)
+                            D, r = div(Poly(D,*vars), oldpivot)
                         except UnificationFailed:
-                            log.warn('unification failed, trying direct division')
+                            log.warn('Unification failed; try direct division')
                             D /= oldpivot
                     else:
                         D /= oldpivot
@@ -11299,7 +11346,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
 
     @staticmethod
     def sequence_cross_product(*sequences):
-        """iterates through the cross product of all items in the sequences"""
+        """
+        Iterates through the cross product of all items in the sequences
+        """
         # visualize an odometer, with "wheels" displaying "digits"...:
         wheels = map(iter, sequences)
         digits = [it.next( ) for it in wheels]
