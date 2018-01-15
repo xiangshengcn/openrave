@@ -717,11 +717,9 @@ class IKFastSolver(AutoReloader):
 
     def ConvertRealToRationalEquation(self, eq, precision = None):
         if eq.is_Add:
-            neweq = sum([self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args])
+            neweq = sum(self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args)
         elif eq.is_Mul:
-            neweq = reduce(mul, \
-                           [self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args], \
-                           1)
+            neweq = prod(self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args)
         elif eq.is_Function:
             newargs = [self.ConvertRealToRationalEquation(subeq, precision) for subeq in eq.args]
             neweq = eq.func(*newargs)
@@ -928,7 +926,7 @@ class IKFastSolver(AutoReloader):
 
     @staticmethod
     def multiplyMatrix(Ts):
-        return eye(4) if len(Ts)==0 else reduce(mul, Ts, 1)
+        return eye(4) if len(Ts)==0 else prod(Ts)
     
     @staticmethod
     def equal(eq0, eq1):
@@ -1111,7 +1109,7 @@ class IKFastSolver(AutoReloader):
         Counts the number of terms in expr in which var appears
         """
         if expr.is_Add or expr.is_Mul: # TGN added expr.is_Mul
-            return sum([1 for term in expr.args if term.has(var)])
+            return sum(1 for term in expr.args if term.has(var))
         else:
             return 1 if expr.has(var) else 0
     
@@ -1274,7 +1272,7 @@ class IKFastSolver(AutoReloader):
         # incos/insin indicates whether eq is inside cos/sin
         if eq.is_Add:
             if incos:
-                lefteq = sum([arg for arg in eq.args[1:]])
+                lefteq = sum(arg for arg in eq.args[1:])
                 # cos(a+b) = cos(a)*cos(b) - sin(a)*sin(b)         
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
@@ -1284,7 +1282,7 @@ class IKFastSolver(AutoReloader):
                 processed = True
                 
             elif insin:
-                lefteq = sum([arg for arg in eq.args[1:]])
+                lefteq = sum(arg for arg in eq.args[1:])
                 # sin(a+b) = cos(a)*sin(b) + sin(a)*cos(b)
                 neweq = \
                         self.SimplifyAtan2(eq.args[0], incos = True) * \
@@ -1294,9 +1292,9 @@ class IKFastSolver(AutoReloader):
                 processed = True
                 
             else:
-                neweq = sum([(arg if arg.is_number or arg.is_Symbol \
-                              else self.SimplifyAtan2(arg)) \
-                             for arg in eq.args])
+                neweq = sum((arg if arg.is_number or arg.is_Symbol \
+                             else self.SimplifyAtan2(arg)) \
+                             for arg in eq.args)
                 #neweq = S.Zero
                 #for subeq in eq.args:
                 #    neweq += self.SimplifyAtan2(subeq)
@@ -1346,10 +1344,9 @@ class IKFastSolver(AutoReloader):
                     processed = True 
                         
             if not processed:
-                neweq = reduce(mul, \
-                              [(arg if arg.is_number or arg.is_Symbol \
-                                 else self.SimplifyAtan2(arg)) \
-                                for arg in eq.args], 1) 
+                neweq = prod(arg if arg.is_number or arg.is_Symbol \
+                             else self.SimplifyAtan2(arg) \
+                             for arg in eq.args)
                 # neweq = self.SimplifyAtan2(eq.args[0])
                 # for subeq in eq.args[1:]:
                 #     neweq *= self.SimplifyAtan2(subeq)
@@ -1446,9 +1443,9 @@ class IKFastSolver(AutoReloader):
         Called by solveFullIK_6DGeneral only.
         """
         assert(peq.is_Poly)
-        return sum([ self.codeComplexity(coeff) + 1 + \
-                     sum([2 if m>1 else m for m in monoms]) \
-                     for monoms, coeff in peq.terms() ])
+        return sum( self.codeComplexity(coeff) + 1 + \
+                    sum(2 if m>1 else m for m in monoms) \
+                    for monoms, coeff in peq.terms() )
 
     def sortComplexity(self, exprs):
 
@@ -1488,7 +1485,7 @@ class IKFastSolver(AutoReloader):
 
         if s0.is_Mul and s1.is_Mul:
             #exec(ipython_str, globals(), locals())
-            c1 = reduce(mul, [arg for arg in s1.args if arg.is_number], 1)
+            c1 = prod(arg for arg in s1.args if arg.is_number)
             #print 'c1 = ', c1
             g_const *= c1
             s0 = cancel(s0/c1)
@@ -1725,13 +1722,13 @@ class IKFastSolver(AutoReloader):
             while len(sexprs) > 0:
                 sexpr = sexprs.pop(0)
                 if sexpr.is_Add:
-                    sol.score += sum([sum([self.checkpow(arg2, sexprs, unsolvedvars) \
-                                           for arg2 in arg.args  ]) if arg.is_Mul \
-                                      else self.checkpow(arg , sexprs, unsolvedvars) \
-                                      for arg  in sexpr.args])
+                    sol.score += sum(sum(self.checkpow(arg2, sexprs, unsolvedvars) \
+                                         for arg2 in arg.args) if arg.is_Mul \
+                                     else self.checkpow(arg , sexprs, unsolvedvars) \
+                                     for arg  in sexpr.args)
                 elif sexpr.is_Mul:
-                    sol.score += sum([self.checkpow(arg, sexprs, unsolvedvars) \
-                                      for arg in sexpr.args])
+                    sol.score += sum(self.checkpow(arg, sexprs, unsolvedvars) \
+                                     for arg in sexpr.args)
                     
                 elif sexpr.is_Function:
                     sexprs += sexpr.args
@@ -3082,8 +3079,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             T0 = self.multiplyMatrix(T0links)
 
             # count number of variables in T0[0:3,0:3]
-            numVariablesInRotation = sum([self.has(T0[0:3,0:3],solvejointvar) \
-                                          for solvejointvar in solvejointvars])
+            numVariablesInRotation = sum(self.has(T0[0:3,0:3],solvejointvar) \
+                                         for solvejointvar in solvejointvars)
             if numVariablesInRotation < 3:
                 assert(numVariableInRotation is 3)
                 continue
@@ -3107,8 +3104,6 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 if not self.has(translationeqs,*hingejointvars):                    
                     # second attempt succeeds
                     log.info('Second succeeds with T0linksInv and i = %d' % i)
-                    exec(ipython_str)
-            
                     T1links = TestLinks[endindex:]
                     # A_e, A_{e+1}, ..., A_{n-1}
                     if len(T1links) > 0:
@@ -3201,10 +3196,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             epsilon = 5*(10**-self.precision)
 
         if eq.is_Add: # ..+..-..+..
-            neweq = sum([self.RoundEquationTerms(subeq, epsilon) for subeq in eq.args])
+            neweq = sum(self.RoundEquationTerms(subeq, epsilon) for subeq in eq.args)
                 
         elif eq.is_Mul: # ..*../..*..
-            neweq = reduce(mul, [self.RoundEquationTerms(subeq, epsilon) for subeq in eq.args], 1)
+            neweq = prod(self.RoundEquationTerms(subeq, epsilon) for subeq in eq.args)
                 
         elif eq.is_Function: # for sin, cos, etc.
             newargs = [self.RoundEquationTerms(subeq,epsilon) for subeq in eq.args]
@@ -3412,19 +3407,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     rawpolyeqs,numminvars = self.buildRaghavanRothEquationsFromMatrix(T0,T1,solvejointvars,simplify=False)
                     if numminvars <= 5 or len(rawpolyeqs[0][1].gens) <= 6:
                         rawpolyeqs2[splitindex] = rawpolyeqs
-                complexities[splitindex] = sum([self.ComputePolyComplexity(peq0)+self.ComputePolyComplexity(peq1) for peq0, peq1 in rawpolyeqs2[splitindex]])
+                complexities[splitindex] = sum(self.ComputePolyComplexity(peq0)+self.ComputePolyComplexity(peq1) for peq0, peq1 in rawpolyeqs2[splitindex])
             # try the lowest complexity first and then simplify!
             sortedindices = sorted(zip(complexities,[0,1]))
             
             for complexity, splitindex in sortedindices:
                 for peqs in rawpolyeqs2[splitindex]:
-                    c = sum([self.codeComplexity(eq) for eq in peqs[0].coeffs()])
+                    c = sum(self.codeComplexity(eq) for eq in peqs[0].coeffs())
                     if c < 5000:
                         peqs[0] = self.SimplifyTransformPoly (peqs[0])
                     else:
                         log.info('skip simplification since complexity = %d...', c)
                     #self.codeComplexity(poly0.as_expr()) < 2000:
-                    c = sum([self.codeComplexity(eq) for eq in peqs[1].coeffs()])
+                    c = sum(self.codeComplexity(eq) for eq in peqs[1].coeffs())
                     if c < 5000:
                         peqs[1] = self.SimplifyTransformPoly (peqs[1])
                     else:
@@ -4272,7 +4267,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             for i,index in enumerate(eqindices):
                 for k in range(len(allmonomsleft)):
                     A[i,k] = systemcoeffs[index][2][k]
-            nummatrixsymbols = __builtin__.sum([1 for a in A if not a.is_number])
+            nummatrixsymbols = __builtin__.sum(1 for a in A if not a.is_number)
             if nummatrixsymbols > 10:
                 # if too many symbols, evaluate numerically
                 if not self.IsDeterminantNonZeroByEval(A, evalfirst=nummatrixsymbols>60): # pi_robot has 55 symbols and still finishes ok
@@ -4499,7 +4494,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             detvars = [s for s,v in localsymbols] + self.pvars
             for eqindices in combinations(range(len(newleftsideeqs)),len(newunknowns)):
                 # very quick rejection
-                numsymbols = __builtin__.sum([numsymbolcoeffs[i] for i in eqindices])
+                numsymbols = __builtin__.sum(numsymbolcoeffs[i] for i in eqindices)
                 if numsymbols > maxsymbols:
                     continue
                 M = Matrix([systemcoeffs[i] for i in eqindices])
@@ -4748,7 +4743,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             # if first symbol is cjX, then next should be sjX
             if originalsymbols[i].name[0] == 'c':
                 assert( originalsymbols[i+1].name == 's'+originalsymbols[i].name[1:])
-                if 8 == __builtin__.sum([int(peq[0].has(originalsymbols[i],originalsymbols[i+1])) for peq in rawpolyeqs]):
+                if 8 == __builtin__.sum(int(peq[0].has(originalsymbols[i],originalsymbols[i+1])) for peq in rawpolyeqs):
                     allowedindices.append(i)
                     
         if len(allowedindices) == 0:
@@ -10938,8 +10933,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if expr.is_Add:
             allpoly = [IKFastSolver.recursiveFraction(arg) for arg in expr.args]
             all_d = [d for n, d in allpoly]
-            finaldenom = reduce(mul, all_d, 1)
-            finalnum = sum( [n*(finaldenom/d) for n, d in allpoly] )
+            finaldenom = prod(all_d)
+            finalnum = sum(n*(finaldenom/d) for n, d in allpoly)
             """
             allpoly = []
             finaldenom = S.One
@@ -10957,8 +10952,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             allpoly = [IKFastSolver.recursiveFraction(arg) for arg in expr.args]
             all_num = [n for n, d in allpoly]
             all_denom = [d for n, d in allpoly]
-            finalnum = reduce(mul, all_num, 1)
-            finaldenom = reduce(mul, all_denom, 1)
+            finalnum = prod(all_num)
+            finaldenom = prod(all_denom)
             """
             finalnum = S.One
             finaldenom = S.One
@@ -11019,7 +11014,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 c = c*vars[i]**degree 
                 newexpr += c 
                 """
-                newexpr += c * reduce(mul, [vars[i]**degree for i, degree in enumerate(m)], 1)
+                newexpr += c * prod(vars[i]**degree for i, degree in enumerate(m))
         return newexpr, symbols
 
     @staticmethod
@@ -11036,7 +11031,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             
         elif expr.is_Mul:
             res_sym = [IKFastSolver.replaceNumbers(arg, symbolgen) for arg in expr.args]
-            result = reduce(mul, [res for (res, sym) in res_sym], 1)
+            result = prod(res for (res, sym) in res_sym)
             symbols = [sym for (res, sym) in res_sym]
             """
             result = S.One
@@ -11048,7 +11043,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 
         elif expr.is_Add:
             res_sym = [IKFastSolver.replaceNumbers(arg, symbolgen) for arg in expr.args]
-            result = sum([res for (res, sym) in res_sym])
+            result = sum(res for (res, sym) in res_sym)
             symbols = [sym for (res, sym) in res_sym]
             """
             result = S.Zero
@@ -11161,7 +11156,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             common = S.One
             if onlynumbers: # default
                 for expri in exprs:
-                    denom = reduce(mul, IKFastSolver.frontnumbers(fraction(expri)[1]), 1)
+                    denom = prod(IKFastSolver.frontnumbers(fraction(expri)[1]))
                     if denom != S.One:
                         exprs = [expr*denom for expr in exprs]
                         totaldenom *= denom
@@ -11169,7 +11164,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 if onlygcd: # not default
                     common = None
                     for expri in exprs:
-                        coeff = reduce(mul, IKFastSolver.frontnumbers(expri), 1)
+                        coeff = prod(IKFastSolver.frontnumbers(expri))
                         common = coeff if common == None else igcd(common, coeff)
                         if common == S.One:
                             break
@@ -11196,7 +11191,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         smallestnumber = Abs(expr)
 
                     elif expr.is_Mul:
-                        n = reduce(mul, [arg for arg in expr.args if arg.is_number], 1)
+                        n = prod(arg for arg in expr.args if arg.is_number)
                         if smallestnumber > Abs(n):
                             smallestnumber = Abs(n)
                             
@@ -11208,7 +11203,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             return (eq, common/totaldenom) if returncommon else eq
             
         elif eq.is_Mul:
-            coeff = reduce(mul, IKFastSolver.frontnumbers(eq), 1)
+            coeff = prod(IKFastSolver.frontnumbers(eq))
 
             return (eq/coeff, coeff) if returncommon else eq/coeff
 
@@ -11740,11 +11735,8 @@ class AST:
         def clearConstantsForAbs(expr):
             expr = factor(expr)
             if expr.is_Mul:
-                c = reduce(mul, [arg for arg in expr.args if arg.is_number], 1)
-                if c==S.Zero:
-                    expr = S.Zero
-                else:
-                    expr /= c
+                c = prod(arg for arg in expr.args if arg.is_number)
+                expr = S.Zero if c==S.Zero else expr/c
             return expr
         
         def getPresetCheckForZeros(self):
