@@ -981,7 +981,7 @@ class IKFastSolver(AutoReloader):
             
             for i, joint in enumerate(chainjoints):
                 if len(joint.GetName()) == 0:
-                    raise self.CannotSolveError('chain %s : %s contains a joint with no name!' \
+                    raise self.CannotSolveError('Chain %s : %s contains a joint with no name!' \
                                                 % (chainlinks[0].GetName(), \
                                                   chainlinks[-1].GetName()))
                 
@@ -1019,7 +1019,7 @@ class IKFastSolver(AutoReloader):
                             # joint doesn't move so assume identity
                             pass
                         else:
-                            raise ValueError('cannot solve for mechanism' + \
+                            raise ValueError('Cannot solve for mechanism' + \
                                              'when a non-mimic passive joint %s is in chain' % str(joint))
                         
                         Tj = eye(4)
@@ -1030,7 +1030,7 @@ class IKFastSolver(AutoReloader):
                             elif joint.IsPrismatic(iaxis):
                                 Tj[0:3,3] = jaxis*(var)
                             else:
-                                raise ValueError('failed to process joint %s' % joint.GetName())
+                                raise ValueError('Failed to process joint %s' % joint.GetName())
                         
                         Tjoints.append(Tj)
                         
@@ -1046,7 +1046,7 @@ class IKFastSolver(AutoReloader):
                         if angle > 1e-8:
                             axisangle = axisangle/angle
 
-                        log.debug('rotation angle of Links[%d]: %f, ' + \
+                        log.debug('Rotation angle of Links[%d]: %f, ' + \
                                   'axis = [%f, %f, %f]', \
                                   len(Links), (angle*180/pi).evalf(), \
                                   axisangle[0], axisangle[1], axisangle[2])
@@ -1077,14 +1077,13 @@ class IKFastSolver(AutoReloader):
             Ttrans[0:3,3] = Links[iright-1][0:3,0:3].transpose() * Links[iright-1][0:3,3]
             Trot_with_trans = Ttrans * Links[iright]
             separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
+
             for j in range(0,3):
-                if separated_trans[j].has(*jointvars):
-                    Ttrans[j,3] = S.Zero
-                else:
-                    Ttrans[j,3] = separated_trans[j]
+                Ttrans[j,3] = S.Zero if separated_trans[j].has(*jointvars) else separated_trans[j]
+
             Links[iright+1] = Ttrans * Links[iright+1]
             Links[iright-1] = Links[iright-1] * self.affineInverse(Ttrans)
-            log.info("moved translation %s to right end",Ttrans[0:3,3].transpose())
+            log.info("Moved translation %s to right end", Ttrans[0:3,3].transpose())
             
         if len(jointinds) > 1:
             ileft = jointinds[0]
@@ -1095,7 +1094,7 @@ class IKFastSolver(AutoReloader):
                     Ttrans[j,3] = separated_trans[j]
             Links[ileft-1] = Links[ileft-1] * Ttrans
             Links[ileft+1] = self.affineInverse(Ttrans) * Links[ileft+1]
-            log.info("moved translation %s to left end",Ttrans[0:3,3].transpose())
+            log.info("Moved translation %s to left end", Ttrans[0:3,3].transpose())
             
         if len(jointinds) > 3: # last 3 axes always have to be intersecting, move the translation of the first axis to the left
             ileft = jointinds[-3]
@@ -1106,7 +1105,7 @@ class IKFastSolver(AutoReloader):
                     Ttrans[j,3] = separated_trans[j]
             Links[ileft-1] = Links[ileft-1] * Ttrans
             Links[ileft+1] = self.affineInverse(Ttrans) * Links[ileft+1]
-            log.info("moved translation on intersecting axis %s to left",Ttrans[0:3,3].transpose())
+            log.info("Moved translation on intersecting axis %s to left", Ttrans[0:3,3].transpose())
             
         return Links, jointvars
     
@@ -1633,9 +1632,7 @@ class IKFastSolver(AutoReloader):
                     
                 #self.codeComplexity(eqtemp)
                 if self.codeComplexity(eqtemp) < 500:
-                    checkeq = self.removecommonexprs(eqtemp, \
-                                                     onlygcd = False, \
-                                                     onlynumbers = True)
+                    checkeq = self.removecommonexprs(eqtemp)
                     if self.CheckExpressionUnique(newcheckforzeros, checkeq):
                         newcheckforzeros.append(checkeq)
                 else:
@@ -1758,9 +1755,7 @@ class IKFastSolver(AutoReloader):
                 if len(eqtemp.find(sign)) > 0:
                     newcheckforzeros.append(eqtemp)
                 else:
-                    checkeq = self.removecommonexprs(eqtemp, \
-                                                     onlygcd = False, \
-                                                     onlynumbers = True)
+                    checkeq = self.removecommonexprs(eqtemp)
                     if self.CheckExpressionUnique(newcheckforzeros, checkeq):
                         newcheckforzeros.append(checkeq)
             else:
@@ -1870,9 +1865,9 @@ class IKFastSolver(AutoReloader):
         if solvefn is None:
             solvefn = IKFastSolver.solveFullIK_6D
             
-        chainlinks  = self.kinbody.GetChain(baselink,eelink,returnjoints = False)
-        chainjoints = self.kinbody.GetChain(baselink,eelink,returnjoints =  True)
-        LinksRaw, jointvars = self.forwardKinematicsChain(chainlinks,chainjoints)
+        chainlinks  = self.kinbody.GetChain(baselink, eelink, returnjoints = False)
+        chainjoints = self.kinbody.GetChain(baselink, eelink, returnjoints =  True)
+        LinksRaw, jointvars = self.forwardKinematicsChain(chainlinks, chainjoints)
         
         for T in LinksRaw:
             log.info('[' + ','.join(['[%s, %s, %s, %s]' % \
@@ -1901,7 +1896,7 @@ class IKFastSolver(AutoReloader):
         for i,v in enumerate(jointvars):
             var = self.getVariable(v)      
             axis = self.axismap[v.name] # axismap is dictionary
-            dofindex = axis.joint.GetDOFIndex()+axis.iaxis
+            dofindex = axis.joint.GetDOFIndex() + axis.iaxis
             if dofindex in freeindices:
                 # convert all free variables to constants
                 self.ifreejointvars.append(i)
@@ -4283,7 +4278,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 det = self.det_bareis(A,*self.pvars)
                 if det == S.Zero:
                     continue
-                solution.checkforzeros = [self.removecommonexprs(det,onlygcd=False,onlynumbers=True)]
+                solution.checkforzeros = [self.removecommonexprs(det)]
             solution = AST.SolverMatrixInverse(A=A,Asymbols=Asymbols)
             self.usinglapack = True
             Aadj=A.adjugate() # too big to be useful for now, but can be used to see if any symbols are always 0
@@ -4430,10 +4425,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if usesymbols and not allnumbers:
                 # check if all the equations are within a constant from each other
                 # This is neceesary since the current linear system solver cannot handle too many symbols.
-                reducedeq0,common0 = self.removecommonexprs(leftcoeffs[0],returncommon=True)
+                reducedeq0,common0 = self.removecommonexprs(leftcoeffs[0], returncommon = True)
                 commonmults = [S.One]
                 for c in leftcoeffs[1:]:
-                    reducedeq1,common1 = self.removecommonexprs(c,returncommon=True)
+                    reducedeq1,common1 = self.removecommonexprs(c, returncommon = True)
                     if self.equal(reducedeq1,reducedeq0):
                         commonmults.append(common1/common0)
                     elif self.equal(reducedeq1,-reducedeq0):
@@ -4451,7 +4446,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             # look in the dividesymbols for something similar
                             gmult = None
                             for gsym,geq in dividesymbols:
-                                greducedeq,gcommon = self.removecommonexprs(S.One/geq,returncommon=True)
+                                greducedeq,gcommon = self.removecommonexprs(S.One/geq, returncommon = True)
                                 if self.equal(greducedeq,reducedeq0):
                                     gmult = gsym*(gcommon/common0)
                                     break
@@ -5258,7 +5253,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     for j in range(AUinv.shape[1]):
                         numerator,denominator = self.recursiveFraction(AUinv[i,j])
                         numerator = self.trigsimp(numerator.subs(self.freevarsubsinv),self.freejointvars).subs(self.freevarsubs)
-                        numerator, common = self.removecommonexprs(numerator,onlygcd=True,returncommon=True)
+                        numerator, common = self.removecommonexprs(numerator, onlygcd = True, returncommon = True)
                         denominator = self.trigsimp((denominator/common).subs(self.freevarsubsinv),self.freejointvars).subs(self.freevarsubs)
                         try:
                             q,r=div(numerator*AUdet,denominator,self.freevars)
@@ -5286,7 +5281,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             #div(q.extranumerator
 
                         AUadjugate[i,j] = self.trigsimp(q.subs(self.freevarsubsinv),self.freejointvars).subs(self.freevarsubs)
-                checkforzeros.append(self.removecommonexprs(AUdet,onlygcd=False,onlynumbers=True))
+                checkforzeros.append(self.removecommonexprs(AUdet))
                 # reason we're multiplying by adjugate instead of inverse is to get rid of the potential divides by (free) parameters
                 BUresult = AUadjugate*BU
                 C = AL*BUresult-BL*AUdet
@@ -6444,7 +6439,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         hasunknown = True
             if hasunknown:
                 continue
-            commondenom = self.removecommonexprs(commondenom.as_expr(),onlygcd=True,onlynumbers=True)
+            commondenom = self.removecommonexprs(commondenom.as_expr(), onlygcd = True)
             finaleq = eq0.as_expr()*commondenom
             for m,c in eq1.terms():
                 foundreq = [req[1] for req in reducedeqs if req[0].monoms()[0] == m]
@@ -8013,7 +8008,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     # don't even add it if it is too big
                     if checkzeroComplexity < 500:
                         checkforzeros.append(checkzero)
-                        #self.removecommonexprs(checkzero.evalf(),onlygcd=False,onlynumbers=True))
+                        #self.removecommonexprs(checkzero.evalf())
                 else:
                     checkzero2 = self._SubstituteGlobalSymbols(checkzero, originalGlobalSymbols)
                     checkzero2Complexity = self.codeComplexity(checkzero2)
@@ -8025,7 +8020,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                             checkforzeros.append(checkzero)
                         else:
                             checkforzeros.append(checkzero.evalf())
-                            #self.removecommonexprs(checkzero.evalf(),onlygcd=False,onlynumbers=True)
+                            #self.removecommonexprs(checkzero.evalf())
                             
                     checksimplezeroexprs = [checkzero]
                     if not checkzero.has(*allothersolvedvars):
@@ -9575,9 +9570,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for peq in polyeqs:
             # do some type of resultants, for now just choose first polynomial
             finaleq = simplify(peq.as_expr()).expand()
-            pfinal = Poly(self.removecommonexprs(finaleq, \
-                                                 onlygcd = False,\
-                                                 onlynumbers=True), \
+            pfinal = Poly(self.removecommonexprs(finaleq), \
                           varsym.htvar)
             pfinal = self.checkFinalEquation(pfinal, tosubs)
             if pfinal is not None and pfinal.degree(0) > 0:
@@ -9686,9 +9679,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         # sanity check that polynomial can produce a solution and is not actually very small values
         found = False
         LCnormalized, common = self.removecommonexprs(pfinal.LC(), \
-                                                      returncommon = True, \
-                                                      onlygcd      = False, \
-                                                      onlynumbers  = True)
+                                                      returncommon = True)
 
         deg = pfinal.degree()
         ind_list = [deg-m[0] for m,c in pfinal.terms()]
@@ -10619,7 +10610,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     # make sure there's only one monom that includes other variables
                     othervars = [__builtin__.sum(m) - m[i] > 0 for m in eq.monoms()]
                     if __builtin__.sum(othervars) <= 1:
-                        eqcmp = self.removecommonexprs(eq.subs(allsymbols).as_expr(),onlynumbers=False,onlygcd=True)
+                        eqcmp = self.removecommonexprs(eq.subs(allsymbols).as_expr(), \
+                                                       onlygcd = True, \
+                                                       onlynumbers = False)
                         if self.CheckExpressionUnique(listeqscmp,eqcmp):
                             listeqs.append(eq)
                             listeqscmp.append(eqcmp)
@@ -10653,7 +10646,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                         if othervars <= 1:
                             addeq = True
                     if addeq:
-                        eqcmp = self.removecommonexprs(eq.subs(allsymbols).as_expr(),onlynumbers=False,onlygcd=True)
+                        eqcmp = self.removecommonexprs(eq.subs(allsymbols).as_expr(), \
+                                                       onlygcd = True, \
+                                                       onlynumbers = False)
                         if self.CheckExpressionUnique(listeqscmp,eqcmp):
                             listeqs.append(eq)
                             listeqscmp.append(eqcmp)
@@ -10713,7 +10708,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                 #log.info('ptotal complexity is %d', ptotalcomplexity)
                                 finaleq = (ptotal_cos.as_expr()**2 - (1-polysymbols[0]**2)*ptotal_sin.as_expr()**2).expand()
                                 # sometimes denominators can accumulate
-                                pfinal = Poly(self.removecommonexprs(finaleq,onlygcd=False,onlynumbers=True),polysymbols[0])
+                                pfinal = Poly(self.removecommonexprs(finaleq),polysymbols[0])
                                 pfinal = self.checkFinalEquation(pfinal)
                                 if pfinal is not None:
                                     jointsol = atan2(ptotal_cos.as_expr()/ptotal_sin.as_expr(), polysymbols[0])
@@ -10776,7 +10771,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             denomlcm = Poly(S.One,*lcmvars)
             for denom in denoms:
                 if denom != S.One:
-                    checkforzeros.append(self.removecommonexprs(denom,onlygcd=False,onlynumbers=True))
+                    checkforzeros.append(self.removecommonexprs(denom))
                     denomlcm = Poly(lcm(denomlcm,denom),*lcmvars)
             finaleq = simplify(finaleq*denomlcm.as_expr()**2)
             complementvarindex = varindex-(varindex%2)+((varindex+1)%2)
@@ -11152,7 +11147,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         """
         Factors out common expressions from a sum, assuming all coefficients are rational.
  
-        E.g. from a*c_0 + a*c_1 + a*c_2 = 0 we obtain c_0 + c_1 + c_2 = 0
+        E.g. if eq = a*c0 + a*c1 + a*c2 = 0, then we obtain c0 + c1 + c2 when returncommon = False (default)
+
+             and (c0 + c1 + c2, a) when returncommon = True.
         """
         eq = eq.expand() # doesn't work otherwise
 
