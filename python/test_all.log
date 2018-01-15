@@ -32,3 +32,4 @@
 18/01/12-21:03:26, --robot=robotfiles/schunk-lwa3-dual.robot.xml, 1000, 997, 0, 99.7, 0.000, 0.300, 4.900, runtime = 45.9s
 18/01/12-21:03:50, --robot=robotfiles/testik0.zae, 1000, 1000, 0, 100.0, 0.000, 0.000, 71.300, runtime = 18.3s
 18/01/12-21:04:20, --robot=robotfiles/unimation-pumaarm.zae, 1000, 1000, 0, 100.0, 0.000, 0.000, 33.300, runtime = 26.9s
+18/01/15-09:55:30, --robot=robots/neuronics-katana.zae, 1000, 919, 0, 91.9, 0.000, 8.100, 6.000, runtime = 461.3s
