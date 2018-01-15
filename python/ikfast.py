@@ -705,15 +705,17 @@ class IKFastSolver(AutoReloader):
             self._checkpreemptfn(msg, progress = progress)
     
     def convertRealToRational(self, x, precision = None):
+        """
+        Converts numpy's float number to sympy's Rational number (up to precision)
+        """
         if precision is None:
             precision = self.precision
-        if Abs(x) < 10**-precision:
+        if x == S.Zero or Abs(x) < 10**-precision:
             return S.Zero
-        r0 = Rational(str(round(Float(float(x),30),precision)))
-        if x == 0:
-            return r0
-        r1 = 1/Rational(str(round(Float(1/float(x),30),precision)))
-        return r0 if len(str(r0)) < len(str(r1)) else r1
+        else:
+            r0 = Rational(str(round(Float(float(x), 30), precision)))
+            r1 = 1/Rational(str(round(Float(1/float(x), 30), precision)))
+            return r0 if len(str(r0)) < len(str(r1)) else r1
 
     def ConvertRealToRationalEquation(self, eq, precision = None):
         if eq.is_Add:
@@ -753,7 +755,7 @@ class IKFastSolver(AutoReloader):
         return M
     
     def GetMatrixFromNumpy(self,T):
-        return Matrix(4,4,[x for x in T.flat])
+        return Matrix(4, 4, [x for x in T.flat])
     
     def RoundMatrix(self, T):
         """
@@ -862,8 +864,9 @@ class IKFastSolver(AutoReloader):
             return self.normalizeRotation(Matrix(4,4,[x for x in T])) if isinstance(T, Matrix) \
                 else self.normalizeRotation(Matrix(4,4,[x for x in T.flat]))
         
-    def numpyVectorToSympy(self,v,precision=None):
-        return Matrix(len(v),1,[self.convertRealToRational(x,precision) for x in v])
+    def numpyVectorToSympy(self, v, precision = None):
+        return Matrix(len(v), 1, \
+                      [self.convertRealToRational(x, precision) for x in v])
     
     @staticmethod
     def rodrigues(axis, angle):
@@ -965,7 +968,9 @@ class IKFastSolver(AutoReloader):
 
     def forwardKinematicsChain(self, chainlinks, chainjoints):
         """
-        The first and last matrices returned are always non-symbolic
+        The first and last matrices returned are always non-symbolic.
+
+        Called by generateIkSolver only.
         """
         with self.kinbody:
             assert(len(chainjoints)+1 == len(chainlinks))
@@ -973,13 +978,14 @@ class IKFastSolver(AutoReloader):
             Tright = eye(4)
             jointvars = []
             jointinds = []
-            for i,joint in enumerate(chainjoints):
+            
+            for i, joint in enumerate(chainjoints):
                 if len(joint.GetName()) == 0:
-                    raise self.CannotSolveError('chain %s:%s contains a joint with no name!' \
+                    raise self.CannotSolveError('chain %s : %s contains a joint with no name!' \
                                                 % (chainlinks[0].GetName(), \
                                                   chainlinks[-1].GetName()))
                 
-                if chainjoints[i].GetHierarchyParentLink() == chainlinks[i]:
+                if joint.GetHierarchyParentLink() == chainlinks[i]:
                     TLeftjoint  = self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform())
                     TRightjoint = self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform())
                     axissign = S.One
