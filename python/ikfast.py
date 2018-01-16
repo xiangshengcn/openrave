@@ -572,7 +572,10 @@ class IKFastSolver(AutoReloader):
             return s
 
     class JointAxis:
-        __slots__ = ['joint','iaxis']
+        __slots__ = ['joint', 'iaxis']
+        def __init__(self, joint, iaxis):
+            self.joint = joint
+            self.iaxis = iaxis
 
     class Variable:
         __slots__ = ['name','var','svar','cvar','tvar','htvar','vars','subs','subsinv']
@@ -667,10 +670,12 @@ class IKFastSolver(AutoReloader):
         self.axismapinv = {}
         with self.kinbody:
             for idof in range(self.kinbody.GetDOF()):
-                axis = IKFastSolver.JointAxis()
-                axis.joint = self.kinbody.GetJointFromDOFIndex(idof)
-                axis.iaxis = idof-axis.joint.GetDOFIndex()
-                name = str('j%d')%idof
+                joint = self.kinbody.GetJointFromDOFIndex(idof)
+                iaxis = idof - joint.GetDOFIndex()
+                # call JointAxis constructor
+                axis = IKFastSolver.JointAxis(joint, iaxis)
+                name = str('j%d') % idof
+                # add in dictionaries
                 self.axismap[name] = axis
                 self.axismapinv[idof] = name
 
@@ -732,25 +737,29 @@ class IKFastSolver(AutoReloader):
             neweq = eq
         return neweq
     
-    def normalizeRotation(self,M):
+    def normalizeRotation(self, M):
         """
-        Error from openrave can be on the order of 1e-6 (especially if they are defined diagonal to some axis)
+        Error from openrave can be on the order of 1e-6 
+        (especially if they are defined diagonal to some axis)
 
-        Called by RoundMatrix only.
+        Called by RoundMatrix only. When called, the rotation angle is not special,
+        i.e. 3*pi/2, pi, 2*pi/3, pi/2, pi/3, pi/4, pi/6
         """
-        right = Matrix(3,1,[self.convertRealToRational(x,self.precision-3) for x in M[0,0:3]])
+        right = Matrix(3,1,\
+                       [self.convertRealToRational(x, self.precision-3) for x in M[0,0:3]])
         right = right/right.norm()
-        up = Matrix(3,1,[self.convertRealToRational(x,self.precision-3) for x in M[1,0:3]])
+        up    = Matrix(3,1,\
+                       [self.convertRealToRational(x, self.precision-3) for x in M[1,0:3]])
         up = up - right*right.dot(up)
         up = up/up.norm()
-        d = right.cross(up)
+        d  = right.cross(up)
         for i in range(3):
             # don't round the rotational part anymore since it could lead to unnormalized rotations!
             M[0,i] = right[i]
             M[1,i] = up[i]
             M[2,i] = d[i]
-            M[i,3] = self.convertRealToRational(M[i,3])
             M[3,i] = S.Zero
+            M[i,3] = self.convertRealToRational(M[i,3]) # translation vector
         M[3,3] = S.One
         return M
     
@@ -759,20 +768,32 @@ class IKFastSolver(AutoReloader):
     
     def RoundMatrix(self, T):
         """
-        Given a sympy matrix, we round the matrix and snap all its values to 15, 30, 45, 60, and 90 degrees.
+        We round the given sympy homogeneous matrix T. If the rotation angle is special, 
+        then we compute entries of T corresponding to 15, 22.5, 30, 45, 60, 90, and 135 
+        degrees.
 
         Called by forwardKinematicsChain and solveFullIK_TranslationAxisAngle4D only.
         """
 
-        if axisAngleFromRotationMatrix is not None:
-            Teval = T.evalf()
-            axisangle = axisAngleFromRotationMatrix([[Teval[0,0], Teval[0,1], Teval[0,2]], \
-                                                     [Teval[1,0], Teval[1,1], Teval[1,2]], \
-                                                     [Teval[2,0], Teval[2,1], Teval[2,2]]])
+        # check if axisAngleFromRotationMatrix has been imported from openravepy
+        if axisAngleFromRotationMatrix is None:
+            # use normalizeRotation only
+            Tij = [x for x in (T if isinstance(T, Matrix) else T.flat)]
+            return self.normalizeRotation(Matrix(4, 4, Tij))
+
+        else:
+            # Can compute rotation axis by openravepy's axisAngleFromRotationMatrix (in openravepy_global.cpp).
+            # It calls axisAngleFromMatrix (in geometry.h) that returns axisAngleFromQuat(quatFromMatrix(rotation)).
+            #
+            # quatFromMatrix converts a 3D rotation matrix into a quaternion, and
+            # axisAngleFromQuat converts a quarternion into axis-angle representation.
+            axisangle = axisAngleFromRotationMatrix(numpy.array(T).astype(numpy.float64))
             angle = sqrt(axisangle[0]**2+axisangle[1]**2+axisangle[2]**2)
+            
             if abs(angle) < 10**(-self.precision):
-                # rotation is identity
+                # rotation matrix is identity matrix
                 M = eye(4)
+                log.debug('No rotation')
             else:
                 axisangle = axisangle/angle
                 log.debug('Rotation angle: %f, axis = [%f, %f, %f]', \
@@ -783,10 +804,17 @@ class IKFastSolver(AutoReloader):
                 # normailize
                 accurateaxisangle = accurateaxisangle/accurateaxisangle.norm()
                 
-                # angle is not a multiple of 90, can get long fractions.
-                # so check if there's any way to simplify it
-                #
-                # So far we consider angles 3*pi/2, pi, 2*pi/3, pi/2, pi/3, pi/4, pi/6
+                # If angle is not a multiple of 90, then we can get long fractions.
+                # So we check if there's a way to simplify it when the angle is close to
+                # a special one: so far we consider 3*pi/2, pi, 2*pi/3, pi/2, pi/3, pi/4, pi/6
+                # If angle is special, we compute quaternion; otherwise call normalizeRotation
+
+                """
+                quat = [cos(angle), \
+                        accurateaxisangle[0]*sin(angle), \
+                        accurateaxisangle[1]*sin(angle), \
+                        accurateaxisangle[2]*sin(angle)]
+                """
                 
                 if abs(angle-3*pi/2) < 10**(-self.precision+2):
                     # cos(3*pi/4) = -1/sqrt(2)
@@ -850,19 +878,17 @@ class IKFastSolver(AutoReloader):
                             accurateaxisangle[1]*sin_angle, \
                             accurateaxisangle[2]*sin_angle  ]
                 else:
-                    # could not simplify further
-                    #assert(0)
+                    # angle is not special
                     return self.normalizeRotation(T)
-                
+
+                # angle is special
                 M = self.GetMatrixFromQuat(quat)
-                
+
+            # translation vector
             for i in range(3):
                 M[i,3] = self.convertRealToRational(T[i,3], self.precision)
             return M
 
-        else:
-            return self.normalizeRotation(Matrix(4,4,[x for x in T])) if isinstance(T, Matrix) \
-                else self.normalizeRotation(Matrix(4,4,[x for x in T.flat]))
         
     def numpyVectorToSympy(self, v, precision = None):
         return Matrix(len(v), 1, \
@@ -974,8 +1000,10 @@ class IKFastSolver(AutoReloader):
         """
         with self.kinbody:
             assert(len(chainjoints)+1 == len(chainlinks))
-            Links     = []
+            # to multiply
             Tright    = eye(4)
+            # to collect
+            Links     = []
             jointvars = []
             jointinds = []
             
@@ -984,25 +1012,31 @@ class IKFastSolver(AutoReloader):
                     raise self.CannotSolveError('Chain %s : %s contains a joint with no name!' \
                                                 % (chainlinks[0].GetName(), \
                                                   chainlinks[-1].GetName()))
-                
+
+                # these two joint.Get...Transform() functions return numpy ndarray's
                 TLeftjoint  = self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform())
                 TRightjoint = self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform())
                 axissign = S.One
+
                 if joint.GetHierarchyParentLink() != chainlinks[i]:
+                    exec(ipython_str, globals(), locals())
                     TLeftjoint  = self.affineInverse(TLeftjoint)
                     TRightjoint = self.affineInverse(TRightjoint)
                     axissign = -S.One
                     
                 if joint.IsStatic():
+                    # multiply TLeftjoint, TRightjoint accumulatively
                     Tright = self.affineSimplify(Tright * TLeftjoint * TRightjoint)
                 else:
                     Tjoints = []
                     for iaxis in range(joint.GetDOF()):
                         var = None
-                        if joint.GetDOFIndex() >= 0:
-                            var = Symbol(self.axismapinv[joint.GetDOFIndex()])
+                        dofindex = joint.GetDOFIndex()
+                        if dofindex >= 0:
+                            var = Symbol(self.axismapinv[dofindex])
                             cosvar = cos(var)
                             sinvar = sin(var)
+                            # collect jointvars
                             jointvars.append(var)
                             
                         elif joint.IsMimic(iaxis):
@@ -1032,32 +1066,22 @@ class IKFastSolver(AutoReloader):
                                 raise ValueError('Failed to process joint %s' % joint.GetName())
                         
                         Tjoints.append(Tj)
-                        
-                    if axisAngleFromRotationMatrix is not None:
-                        axisangle = axisAngleFromRotationMatrix(\
-                                                                numpy.array(\
-                                                                            numpy.array(\
-                                                                                        Tright * TLeftjoint), \
-                                                                            numpy.float64))
-                        
-                        angle = sqrt(axisangle[0]**2 + axisangle[1]**2 + axisangle[2]**2)
-                        
-                        if angle > 1e-8:
-                            axisangle = axisangle/angle
 
-                        log.debug('Rotation angle of Links[%d]: %f, ' + \
-                                  'axis = [%f, %f, %f]', \
-                                  len(Links), (angle*180/pi).evalf(), \
-                                  axisangle[0], axisangle[1], axisangle[2])
-                            
-                    Links.append(self.RoundMatrix(Tright * TLeftjoint))
-                    
+                    TrightTLeftjoint = Tright * TLeftjoint
+
+                    log.debug('Call RoundMatrix to compute rotation angle of Links[%d]', len(Links))
+
+                    Links.append(self.RoundMatrix(TrightTLeftjoint))
+                    print Tjoints
+                    exec(ipython_str, globals(), locals())
                     for Tj in Tjoints:
+                        # collect jointinds and Links
                         jointinds.append(len(Links))
                         Links.append(Tj)
                         
                     Tright = TRightjoint
-                    
+
+            # after chainjoints for-loop
             Links.append(self.RoundMatrix(Tright))
         
         # Before returning the final links, we try to push as much translation components
@@ -1067,7 +1091,7 @@ class IKFastSolver(AutoReloader):
 
             # TGN: this executes only once, so it is trivial to modify
             #
-            # Better is to not multiply translation matrix, but to add values to a translation vector
+            # Better is to not multiply translation matrix but add values to translation vector [0:3,3]
             # 
             # TO-DO
 
@@ -1077,7 +1101,7 @@ class IKFastSolver(AutoReloader):
             Trot_with_trans = Ttrans * Links[iright]
             separated_trans = Trot_with_trans[0:3,0:3].transpose() * Trot_with_trans[0:3,3]
 
-            for j in range(0,3):
+            for j in range(3):
                 Ttrans[j,3] = S.Zero if separated_trans[j].has(*jointvars) else separated_trans[j]
 
             Links[iright+1] = Ttrans * Links[iright+1]
@@ -1088,7 +1112,7 @@ class IKFastSolver(AutoReloader):
             ileft = jointinds[0]
             separated_trans = Links[ileft][0:3,0:3] * Links[ileft+1][0:3,3]
             Ttrans = eye(4)
-            for j in range(0,3):
+            for j in range(3):
                 if not separated_trans[j].has(*jointvars):
                     Ttrans[j,3] = separated_trans[j]
             Links[ileft-1] = Links[ileft-1] * Ttrans
@@ -1099,7 +1123,7 @@ class IKFastSolver(AutoReloader):
             ileft = jointinds[-3]
             separated_trans = Links[ileft][0:3,0:3] * Links[ileft+1][0:3,3]
             Ttrans = eye(4)
-            for j in range(0,3):
+            for j in range(3):
                 if not separated_trans[j].has(*jointvars):
                     Ttrans[j,3] = separated_trans[j]
             Links[ileft-1] = Links[ileft-1] * Ttrans
@@ -2177,11 +2201,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         chaintree.dictequations += self.globalsymbols.items()
         return chaintree
 
+    """
     def MatchSimilarFraction(self, num, numbersubs, matchlimit = 40):
-        """
-        Returns None if no appropriate match found
-        """
-        for c,v in numbersubs:
+
+        # Returns None if no appropriate match found
+        for c, v in numbersubs:
             if self.equal(v, num):
                 return c
         
@@ -2196,14 +2220,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     largestgcd = curgcd
                     retnum = c * newfraction
         return retnum
-
-    def ComputeConsistentValues(self,jointvars,T,numsolutions=1,subs=None):
-        """computes a set of substitutions that satisfy the IK equations 
+    """
+    
+    def ComputeConsistentValues(self, jointvars, T, \
+                                numsolutions = 1, \
+                                subs = None):
         """
-        possibleangles_old = [S.Zero, pi.evalf()/2, asin(3.0/5).evalf(), asin(4.0/5).evalf(), asin(5.0/13).evalf(), asin(12.0/13).evalf()]
+        Generates up to 6 sets of consistent values that are to be plugged into IK equations
+        """
+        possibleangles_old = [S.Zero, pi.evalf()/2, asin(3.0/5).evalf(), asin(4.0/5).evalf(), \
+                              asin(5.0/13).evalf(), asin(12.0/13).evalf()]
         possibleangles = [self.convertRealToRational(x) for x in possibleangles_old]
+
         # TGN: use symbolic numbers for all possible angles instead of floating-point numbers
-        
         possibleanglescos = [S.One, S.Zero, Rational(4,5), Rational(3,5), Rational(12,13), Rational(5,13)]
         possibleanglessin = [S.Zero, S.One, Rational(3,5), Rational(4,5), Rational(5,13), Rational(12,13)]
         testconsistentvalues = []
@@ -2219,22 +2248,27 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     inds[j] = (isol+j)%len(possibleangles)
                     
             valsubs = []
-            for i,ind in enumerate(inds):
-                v,s,c = possibleangles[ind],possibleanglessin[ind],possibleanglescos[ind]
+            for i, ind in enumerate(inds):
+                v = possibleangles[ind]
+                s = possibleanglessin[ind]
+                c = possibleanglescos[ind]
                 var = self.getVariable(jointvars[i])
-                valsubs += [(var.var,v),(var.cvar,c),(var.svar,s),(var.tvar,s/c),(var.htvar,s/(1+c))]
+                valsubs += [(var.var,v), (var.cvar,c), (var.svar,s), \
+                            (var.tvar,s/c), (var.htvar,s/(1+c))]
                 
             psubs = []
             for i in range(12):
-                psubs.append((self.pvars[i],T[i].subs(varsubs).subs(self.globalsymbols).subs(valsubs)))
-            for s,v in self.ppsubs+self.npxyzsubs+self.rxpsubs:
-                psubs.append((s,v.subs(psubs)))
+                psubs.append((self.pvars[i], \
+                              T[i].subs(varsubs).subs(self.globalsymbols).subs(valsubs)))
+            for s, v in self.ppsubs + self.npxyzsubs + self.rxpsubs:
+                psubs.append((s, v.subs(psubs)))
                 
-            allsubs = valsubs+psubs
+            allsubs = valsubs + psubs
             if subs is not None:
                 allsubs += [(dvar,var.subs(varsubs).subs(valsubs)) for dvar,var in subs]
-            testconsistentvalues.append(allsubs)
 
+            # collect sets of consistent values    
+            testconsistentvalues.append(allsubs)
 
         print('========================== START OF CONSISTENT VALUES PRINT ================================\n')
         set_num_counter = 0
@@ -2250,6 +2284,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             print('\n')
             set_num_counter += 1
         print('========================== END OF CONSISTENT VALUES PRINT  ================================\n')
+
+        exec(ipython_str, globals(), locals())
         return testconsistentvalues
 
     def solveFullIK_Direction3D(self,LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One])):
@@ -11341,11 +11377,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         DD[n-1,n-1] = oldpivot
         return P, L, DD, U
 
+    """
     @staticmethod
     def sequence_cross_product(*sequences):
-        """
-        Iterates through the cross product of all items in the sequences
-        """
+        # Iterates through the cross product of all items in the sequences
         # visualize an odometer, with "wheels" displaying "digits"...:
         wheels = map(iter, sequences)
         digits = [it.next( ) for it in wheels]
@@ -11360,7 +11395,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     digits[i] = wheels[i].next( )
             else:
                 break
-
+    """
+    
     @staticmethod
     def tolatex(e):
         s = printing.latex(e)
