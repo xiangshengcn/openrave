@@ -2,7 +2,10 @@
 
 python -m cProfile -o ikfast_profile.out /home/mujin/mujin/jhbuildapppickworker/install/bin/openrave.py \
        --database inversekinematics \
-       --robot=../src/collada_robots/kawada-hironx.zae --numiktests=1000
+       --robot=robotfiles/neuronics-katana.zae \
+       --iktype=translationdirection5d \
+       --manipname=arm \
+       --numiktests=1000
 
 python ikfast_profile.py
 

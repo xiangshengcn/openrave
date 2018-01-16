@@ -974,8 +974,8 @@ class IKFastSolver(AutoReloader):
         """
         with self.kinbody:
             assert(len(chainjoints)+1 == len(chainlinks))
-            Links = []
-            Tright = eye(4)
+            Links     = []
+            Tright    = eye(4)
             jointvars = []
             jointinds = []
             
@@ -985,13 +985,12 @@ class IKFastSolver(AutoReloader):
                                                 % (chainlinks[0].GetName(), \
                                                   chainlinks[-1].GetName()))
                 
-                if joint.GetHierarchyParentLink() == chainlinks[i]:
-                    TLeftjoint  = self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform())
-                    TRightjoint = self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform())
-                    axissign = S.One
-                else:
-                    TLeftjoint  = self.affineInverse(self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform()))
-                    TRightjoint = self.affineInverse(self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform()))
+                TLeftjoint  = self.GetMatrixFromNumpy(joint.GetInternalHierarchyLeftTransform())
+                TRightjoint = self.GetMatrixFromNumpy(joint.GetInternalHierarchyRightTransform())
+                axissign = S.One
+                if joint.GetHierarchyParentLink() != chainlinks[i]:
+                    TLeftjoint  = self.affineInverse(TLeftjoint)
+                    TRightjoint = self.affineInverse(TRightjoint)
                     axissign = -S.One
                     
                 if joint.IsStatic():
@@ -1768,10 +1767,9 @@ class IKFastSolver(AutoReloader):
     def checkSolvability(self, AllEquations, checkvars, othervars):
         pass
 
+    """
     def checkSolvabilityReal(self, AllEquations, checkvars, othervars):
-        """
-        Returns True if there are enough equations to solve for checkvars
-        """
+        # Returns True if there are enough equations to solve for checkvars
         subs = []
         checksymbols = []
         allsymbols = []
@@ -1822,6 +1820,7 @@ class IKFastSolver(AutoReloader):
             
         if not found:
             raise self.IKFeasibilityError(AllEquations,checkvars)
+    """
         
     def writeIkSolver(self, chaintree, lang = None):
         """
@@ -1830,6 +1829,7 @@ class IKFastSolver(AutoReloader):
         self._CheckPreemptFn(progress = 0.5)
         if lang is None:
             if CodeGenerators.has_key('cpp'):
+                # TGN: CodeGenerators['cpp'] = ikfast_generator_cpp.CodeGenerator
                 lang = 'cpp'
             else:
                 lang = CodeGenerators.keys()[0]
@@ -1850,8 +1850,7 @@ class IKFastSolver(AutoReloader):
         return CodeGenerators[lang](kinematicshash = self.kinematicshash, \
                                     version = __version__, \
                                     iktypestr = self._iktype, \
-                                    checkpreemptfn = _CheckPreemtCodeGen)\
-                                    .generate(chaintree)
+                                    checkpreemptfn = _CheckPreemtCodeGen).generate(chaintree)
     
     def generateIkSolver(self, baselink, eelink, \
                          freeindices = None, \
