@@ -369,10 +369,10 @@ def trigsimp_custom(self, **args):
     from sympy.simplify.fu import TR10
     return TR10(sympy_trigsimp(self, **args))
 
-if not sympy_smaller_073:
-    trigsimp = trigsimp_custom
-else:
+if sympy_smaller_073:
     power.Pow._eval_subs = Pow_eval_subs
+else:
+    trigsimp = trigsimp_custom
 
 from sympy.core import function # for sympy 0.7.1+
 
@@ -1047,10 +1047,7 @@ class IKFastSolver(AutoReloader):
                             # this needs to be reduced!
                             cosvar = cos(var)
                             sinvar = sin(var)
-                            
-                        elif joint.IsStatic():
-                            # joint doesn't move so assume identity
-                            pass
+
                         else:
                             raise ValueError('Cannot solve for mechanism' + \
                                              'when a non-mimic passive joint %s is in chain' % str(joint))
@@ -1072,8 +1069,6 @@ class IKFastSolver(AutoReloader):
                     log.debug('Call RoundMatrix to compute rotation angle of Links[%d]', len(Links))
 
                     Links.append(self.RoundMatrix(TrightTLeftjoint))
-                    print Tjoints
-                    exec(ipython_str, globals(), locals())
                     for Tj in Tjoints:
                         # collect jointinds and Links
                         jointinds.append(len(Links))
@@ -1848,17 +1843,16 @@ class IKFastSolver(AutoReloader):
         
     def writeIkSolver(self, chaintree, lang = None):
         """
-        Write the AST into C++
+        Returns a string that contains C++ code solving the IK.
+
+        Called by __main__ only.
         """
         self._CheckPreemptFn(progress = 0.5)
         if lang is None:
-            if CodeGenerators.has_key('cpp'):
-                # TGN: CodeGenerators['cpp'] = ikfast_generator_cpp.CodeGenerator
-                lang = 'cpp'
-            else:
-                lang = CodeGenerators.keys()[0]
+            # TGN: CodeGenerators['cpp'] = ikfast_generator_cpp.CodeGenerator
+            lang = 'cpp' if CodeGenerators.has_key('cpp') else CodeGenerators.keys()[0]
                 
-        log.info('Generating %s code...' % lang)
+        log.info('Generating %s code using %s ...', lang, CodeGenerators[lang])
         
         if self._checkpreemptfn is not None:
             import weakref
@@ -1870,7 +1864,8 @@ class IKFastSolver(AutoReloader):
                 
         else:
             _CheckPreemtCodeGen = None
-            
+
+        # call CodeGenerator constructor and generate function implemented in ikfast_generator_cpp.py
         return CodeGenerators[lang](kinematicshash = self.kinematicshash, \
                                     version = __version__, \
                                     iktypestr = self._iktype, \
@@ -2224,9 +2219,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     
     def ComputeConsistentValues(self, jointvars, T, \
                                 numsolutions = 1, \
-                                subs = None):
+                                tosubs = None):
         """
-        Generates up to 6 sets of consistent values that are to be plugged into IK equations
+        Generates up to 6 (default 1) sets of consistent values that are to be plugged into 
+        IK equations to derive orientation and coordinates of the end-effector, described by
+        the homogeneous matrix T.
         """
         possibleangles_old = [S.Zero, pi.evalf()/2, asin(3.0/5).evalf(), asin(4.0/5).evalf(), \
                               asin(5.0/13).evalf(), asin(12.0/13).evalf()]
@@ -2236,17 +2233,16 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         possibleanglescos = [S.One, S.Zero, Rational(4,5), Rational(3,5), Rational(12,13), Rational(5,13)]
         possibleanglessin = [S.Zero, S.One, Rational(3,5), Rational(4,5), Rational(5,13), Rational(12,13)]
         testconsistentvalues = []
-        varsubs = []
-        for jointvar in jointvars:
-            varsubs += self.getVariable(jointvar).subs
-            
+        varsubs = list(chain.from_iterable([self.getVariable(jointvar).subs for jointvar in jointvars]))
+
+        njointvars = len(jointvars)
+        npossibleangles = len(possibleangles)
+        
         for isol in range(numsolutions):
 
-            inds = [0]*len(jointvars)
-            if isol < numsolutions-1:
-                for j in range(len(jointvars)):
-                    inds[j] = (isol+j)%len(possibleangles)
-                    
+            inds = [(isol+j)% npossibleangles for j in range(njointvars)] \
+                   if isol < numsolutions-1 else         [0]*njointvars
+            
             valsubs = []
             for i, ind in enumerate(inds):
                 v = possibleangles[ind]
@@ -2255,21 +2251,19 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 var = self.getVariable(jointvars[i])
                 valsubs += [(var.var,v), (var.cvar,c), (var.svar,s), \
                             (var.tvar,s/c), (var.htvar,s/(1+c))]
-                
-            psubs = []
-            for i in range(12):
-                psubs.append((self.pvars[i], \
-                              T[i].subs(varsubs).subs(self.globalsymbols).subs(valsubs)))
-            for s, v in self.ppsubs + self.npxyzsubs + self.rxpsubs:
-                psubs.append((s, v.subs(psubs)))
-                
+
+            psubs = [(self.pvars[i], \
+                      T[i].subs(varsubs).subs(self.globalsymbols).subs(valsubs)) for i in range(12)]
+            psubs += [(s, v.subs(psubs)) for s, v in self.ppsubs + self.npxyzsubs + self.rxpsubs]
+
             allsubs = valsubs + psubs
-            if subs is not None:
-                allsubs += [(dvar,var.subs(varsubs).subs(valsubs)) for dvar,var in subs]
+            if tosubs is not None:
+                allsubs += [(dvar, var.subs(varsubs).subs(valsubs)) for dvar, var in tosubs]
 
             # collect sets of consistent values    
             testconsistentvalues.append(allsubs)
 
+        assert(len(testconsistentvalues)==numsolutions)
         print('========================== START OF CONSISTENT VALUES PRINT ================================\n')
         set_num_counter = 0
         for each_set_consistent_values in testconsistentvalues:
@@ -2284,11 +2278,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             print('\n')
             set_num_counter += 1
         print('========================== END OF CONSISTENT VALUES PRINT  ================================\n')
-
-        exec(ipython_str, globals(), locals())
         return testconsistentvalues
 
-    def solveFullIK_Direction3D(self,LinksRaw, jointvars, isolvejointvars, rawmanipdir=Matrix(3,1,[S.Zero,S.Zero,S.One])):
+    def solveFullIK_Direction3D(self, LinksRaw, jointvars, isolvejointvars, \
+                                rawmanipdir = Matrix(3,1,[S.Zero,S.Zero,S.One])):
         """manipdir needs to be filled with a 3elemtn vector of the initial direction to control"""
         self._iktype = 'direction3d'
         manipdir = Matrix(3,1,[Float(x,30) for x in rawmanipdir])
@@ -2830,7 +2823,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self.Tfinal = self.multiplyMatrix(Links)
 
         # plug simple pre-set values into forward kinematics formulas
-        self.testconsistentvalues = self.ComputeConsistentValues(jointvars,self.Tfinal,numsolutions=4)
+        self.testconsistentvalues = self.ComputeConsistentValues(jointvars, self.Tfinal, numsolutions = 6)
 
         # construct a SolverStoreSolution object
         endbranchtree = [AST.SolverStoreSolution (jointvars,isHinge=[self.IsHinge(var.name) for var in jointvars])]
