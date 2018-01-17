@@ -2412,8 +2412,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         endbranchtree = [AST.SolverStoreSolution(jointvars, \
                                                  checkgreaterzero = [frontcond], \
                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
-        AllEquations = self.buildEquationsFromTwoSides(Positions, Positionsee, jointvars, \
-                                                       uselength = True)
+        AllEquations = self.buildEquationsFromTwoSides(Positions, Positionsee, jointvars)
 
         # check, solve, verify
         self.checkSolvability(AllEquations, solvejointvars, self.freejointvars)
@@ -2568,27 +2567,32 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self.ppsubs = [] # disable since pz is not valid
         self.pp = None
         manippos = Matrix(2,1,[self.convertRealToRational(x) for x in rawmanippos])
-        Links = LinksRaw[:]
+        
+        Links = LinksRaw[:] # copy
         LinksInv = [self.affineInverse(link) for link in Links]
         self.Tfinal = self.multiplyMatrix(Links)
-        self.Tfinal[0:2,3] = self.Tfinal[0:2,0:2]*manippos+self.Tfinal[0:2,3]
+        
+        self.Tfinal[0:2,3] = self.Tfinal[0:2,0:2]*manippos + self.Tfinal[0:2,3]
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars, self.Tfinal, \
                                                                  numsolutions = self._numsolutions)
+        # AST.SolverStoreSolution
         endbranchtree = [AST.SolverStoreSolution(jointvars, \
                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 2:
-            raise self.CannotSolveError('need 2 joints')
+            raise self.CannotSolveError('Need 2 joints; now there are %i' % len(solvejointvars))
 
         log.info('ikfast translationxy2d: %s',solvejointvars)
         Tmanipposinv = eye(4)
         Tmanipposinv[2,2] = S.Zero
         Tmanipposinv[0:2,3] = -manippos
+        
         Tmanippos = eye(4)
         Tmanippos[2,2] = S.Zero
         Tmanippos[0:2,3] = manippos
-        T1links = [Tmanipposinv]+LinksInv[::-1]+[self.Tee]
-        T1linksinv = [Tmanippos]+Links[::-1]+[self.Teeinv]
+        
+        T1links = [Tmanipposinv] + LinksInv[::-1] + [self.Tee]
+        T1linksinv = [Tmanippos] + Links[::-1] + [self.Teeinv]
         Taccum = eye(4)
         numvarsdone = 1
         Positions = []
@@ -2607,10 +2611,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         if len(Positions) == 0:
             Positions.append(zeros((2,1)))
             Positionsee.append(self.multiplyMatrix(T1links)[0:2,3])
+            
         AllEquations = self.buildEquationsFromTwoSides(Positions, \
                                                        Positionsee, \
-                                                       solvejointvars + self.freejointvars, \
-                                                       uselength=True)
+                                                       solvejointvars + self.freejointvars)
 
         self.checkSolvability(AllEquations, \
                               solvejointvars, \
@@ -2643,27 +2647,34 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def solveFullIK_Ray4D(self, LinksRaw, jointvars, isolvejointvars, \
                           rawmanipdir = Matrix(3,1,[S.Zero,S.Zero,S.One]), \
                           rawmanippos = Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
-        """manipdir,manippos needs to be filled with a direction and position of the ray to control"""
+        """
+        manipdir,manippos needs to be filled with a direction and position of the ray to control
+        """
         self._iktype = 'ray4d'
+        
         manipdir = Matrix(3,1,[Float(x,30) for x in rawmanipdir])
-        manippos = Matrix(3,1,[self.convertRealToRational(x) for x in rawmanippos])
         manipdir /= sqrt(manipdir[0]*manipdir[0]+manipdir[1]*manipdir[1]+manipdir[2]*manipdir[2])
         for i in range(3):
             manipdir[i] = self.convertRealToRational(manipdir[i])
+
+        manippos = Matrix(3,1,[self.convertRealToRational(x) for x in rawmanippos])
         manippos = manippos-manipdir*manipdir.dot(manippos)
-        Links = LinksRaw[:]
+        
+        Links = LinksRaw[:] # copy
         LinksInv = [self.affineInverse(link) for link in Links]
         T = self.multiplyMatrix(Links)
+        
         self.Tfinal = zeros((4,4))
         self.Tfinal[0,0:3] = (T[0:3,0:3]*manipdir).transpose()
-        self.Tfinal[0:3,3] = T[0:3,0:3]*manippos+T[0:3,3]
+        self.Tfinal[0:3,3] =  T[0:3,0:3]*manippos + T[0:3,3]
+        
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars, self.Tfinal, \
                                                                  numsolutions = self._numsolutions)
         endbranchtree = [AST.SolverStoreSolution(jointvars, \
                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 4:
-            raise self.CannotSolveError('need 4 joints')
+            raise self.CannotSolveError('Need 4 joints; now there are %i' % len(solvejointvars))
 
         log.info('ikfast ray4d: %s',solvejointvars)
         
@@ -2674,7 +2685,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         Positionsee = []
         for i in range(len(Links)-1):
             T = self.multiplyMatrix(Links[i:])
-            P = T[0:3,0:3]*manippos+T[0:3,3]
+            P = T[0:3,0:3]*manippos + T[0:3,3]
             D = T[0:3,0:3]*manipdir
             hasvars = [self.has(P,v) or self.has(D,v) for v in solvejointvars]
             if __builtin__.sum(hasvars) == numvarsdone:
@@ -2683,15 +2694,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 Positions.append(D)
                 Positionsee.append(Dee)
                 break
-            Tinv = self.affineInverse(Links[i])
+            Tinv = LinksInv[i] #self.affineInverse(Links[i])
             Pee = Tinv[0:3,0:3]*Pee + Tinv[0:3,3]
             Dee = Tinv[0:3,0:3]*Dee
+            
         AllEquations = self.buildEquationsFromTwoSides(Positions, \
                                                        Positionsee, \
-                                                       jointvars, \
-                                                       uselength = True)
+                                                       jointvars)
+        # check, solve, verify
         self.checkSolvability(AllEquations, solvejointvars, self.freejointvars)
-
         #try:
         tree = self.SolveAllEquations(AllEquations, \
                                       curvars = solvejointvars[:], \
@@ -2705,8 +2716,10 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                        solvejointvars, \
                                        self.freevarsubs, \
                                        tree)
-        chaintree = AST.SolverIKChainRay([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
-                                         [(v,i) for v,i in izip(self.freejointvars,self.ifreejointvars)], \
+
+        # call AST
+        chaintree = AST.SolverIKChainRay([(jointvars[ijoint], ijoint) for ijoint in isolvejointvars], \
+                                         [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
                                          Pee = self.Tee[0:3,3].subs(self.freevarsubs), \
                                          Dee = self.Tee[0,0:3].transpose().subs(self.freevarsubs), \
                                          jointtree = tree, \
@@ -2718,7 +2731,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def solveFullIK_TranslationDirection5D(self, LinksRaw, jointvars, isolvejointvars, \
                                            rawmanipdir = Matrix(3,1,[S.Zero,S.Zero,S.One]), \
                                            rawmanippos = Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
-        """Solves 3D translation + 3D direction
+        """
+        Solves 3D translation + 3D direction
         """
         self._iktype = 'translationdirection5d'
         manippos = Matrix(3,1,[self.convertRealToRational(x) for x in rawmanippos])
@@ -4312,7 +4326,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                     Positionsee[i][j] = self.RoundEquationTerms(Positionsee[i][j].expand())
                     
         return self.buildEquationsFromTwoSides(Positions, Positionsee, \
-                                               transvars+othersolvedvars, \
+                                               transvars + othersolvedvars, \
                                                uselength = uselength)
 
     def buildEquationsFromRotation(self, T0links, Ree, rotvars, othersolvedvars):
@@ -12672,6 +12686,9 @@ class AST:
             self.Dee = Tleftinv[0:3,0:3]*self.Dee
 
     class SolverIKChainRay(SolverBase):
+        """
+        Called by solveFullIK_Ray4D.
+        """
         solvejointvars = None
         freejointvars  = None
         jointtree      = None
