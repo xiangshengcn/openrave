@@ -2482,7 +2482,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                  [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
                                                  (self.Tee[0:3,0:3] * \
                                                   self.affineInverse(Tfirstright)[0:3,0:3]).subs(self.freevarsubs), \
-                                                 tree, \
+                                                 jointtree = tree, \
                                                  Rfk = self.Tfinal[0:3,0:3] * Tfirstright[0:3,0:3])
         return chaintree
 
@@ -2493,20 +2493,22 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         for i in range(4):
             for j in range(4):
                 Tgripper[i,j] = self.convertRealToRational(Tmanipraw[i,j])
-        localpos = Matrix(3,1,[self.Tee[0,0],self.Tee[1,1],self.Tee[2,2]])
-        chain = self._solveFullIK_Translation3D(LinksRaw, \
-                                                jointvars, \
-                                                isolvejointvars, \
-                                                Tgripper[0:3,3]+Tgripper[0:3,0:3]*localpos, \
-                                                False)
-        chain.uselocaltrans = True
-        return chain
+                
+        localpos = Matrix(3,1, [self.Tee[0,0], self.Tee[1,1], self.Tee[2,2]])
+        chaintree = self._solveFullIK_Translation3D(LinksRaw, \
+                                                    jointvars, \
+                                                    isolvejointvars, \
+                                                    Tgripper[0:3,3]+Tgripper[0:3,0:3]*localpos, \
+                                                    False)
+        chaintree.uselocaltrans = True
+        return chaintree
     
     def solveFullIK_Translation3D(self, LinksRaw, jointvars, isolvejointvars, \
                                   rawmanippos = Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
         self._iktype = 'translation3d'
         manippos = Matrix(3,1,[self.convertRealToRational(x) for x in rawmanippos])
-        return self._solveFullIK_Translation3D(LinksRaw, jointvars, isolvejointvars, manippos)
+        chaintree = self._solveFullIK_Translation3D(LinksRaw, jointvars, isolvejointvars, manippos)
+        return chaintree
     
     def _solveFullIK_Translation3D(self, LinksRaw, jointvars, isolvejointvars, manippos, \
                                    check = True):
@@ -2516,44 +2518,46 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         Links = LinksRaw[:]
         LinksInv = [self.affineInverse(link) for link in Links]
         self.Tfinal = self.multiplyMatrix(Links)
+        
         self.Tfinal[0:3,3] = self.Tfinal[0:3,0:3]*manippos+self.Tfinal[0:3,3]
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars, self.Tfinal, \
                                                                  numsolutions = self._numsolutions)
+        # AST.SolverStoreSolution
         endbranchtree = [AST.SolverStoreSolution(jointvars, \
                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 3:
-            raise self.CannotSolveError('need 3 joints')
+            raise self.CannotSolveError('Need 3 joints; now there are %i' % len(solvejointvars))
         
         log.info('ikfast translation3d: %s',solvejointvars)
         Tmanipposinv = eye(4)
         Tmanipposinv[0:3,3] = -manippos
-        T1links = [Tmanipposinv]+LinksInv[::-1]+[self.Tee]
-        T1linksinv = [self.affineInverse(Tmanipposinv)] + Links[::-1]+[self.Teeinv]
+        T1links = [Tmanipposinv] + LinksInv[::-1] + [self.Tee]
+        T1linksinv = [self.affineInverse(Tmanipposinv)] + Links[::-1] + [self.Teeinv]
         AllEquations = self.buildEquationsFromPositions(T1links, \
                                                         T1linksinv, \
                                                         solvejointvars, \
                                                         self.freejointvars, \
                                                         uselength = True)
+        # check, solve, verify
         if check:
             self.checkSolvability(AllEquations, \
                                   solvejointvars, \
                                   self.freejointvars)
-            
-        transtree = self.SolveAllEquations(AllEquations, \
-                                           curvars = solvejointvars[:], \
-                                           othersolvedvars = self.freejointvars, \
-                                           solsubs = self.freevarsubs[:], \
-                                           endbranchtree = endbranchtree)
-        transtree = self.verifyAllEquations(AllEquations, \
-                                            solvejointvars, \
-                                            self.freevarsubs, \
-                                            transtree)
-        
+        tree = self.SolveAllEquations(AllEquations, \
+                                      curvars = solvejointvars[:], \
+                                      othersolvedvars = self.freejointvars, \
+                                      solsubs = self.freevarsubs[:], \
+                                      endbranchtree = endbranchtree)
+        tree = self.verifyAllEquations(AllEquations, \
+                                       solvejointvars, \
+                                       self.freevarsubs, \
+                                       tree)
+        # call AST
         chaintree = AST.SolverIKChainTranslation3D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
                                                    [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
                                                    Pee = self.Tee[0:3,3], \
-                                                   jointtree = transtree, \
+                                                   jointtree = tree, \
                                                    Pfk = self.Tfinal[0:3,3])
         chaintree.dictequations += self.ppsubs
         return chaintree
@@ -12581,6 +12585,11 @@ class AST:
             self.Ree = Tleftinv[0:3,0:3]*self.Ree
 
     class SolverIKChainTranslation3D(SolverBase):
+        """
+        Called by _solveFullIK_Translation3D.
+
+        Used by solveFullIK_TranslationLocalGlobal6D and solveFullIK_Translation3D.
+        """
         solvejointvars = None
         freejointvars  = None
         jointtree      = None
@@ -12711,7 +12720,7 @@ class AST:
         dictequations  = None
         
         def __init__(self, solvejointvars, freejointvars, Pee, jointtree, \
-                     Pfk = None,Dfk = None):
+                     Pfk = None, Dfk = None):
             self.solvejointvars = solvejointvars
             self.freejointvars = freejointvars
             self.Pee = Pee
