@@ -2437,7 +2437,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         chaintree.dictequations += self.ppsubs
         return chaintree
 
-    def solveFullIK_Rotation3D(self,LinksRaw, jointvars, isolvejointvars, Rbaseraw=eye(3)):
+    def solveFullIK_Rotation3D(self,LinksRaw, jointvars, isolvejointvars, \
+                               Rbaseraw = eye(3)):
         self._iktype = 'rotation3d'
         
         Rbase = eye(4)
@@ -2451,18 +2452,21 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self.Tfinal = self.multiplyMatrix(Links)
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars, self.Tfinal, \
                                                                  numsolutions = self._numsolutions)
-        endbranchtree = [AST.SolverStoreSolution (jointvars, \
-                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
+
+        # AST.SolverStoreSolution
+        endbranchtree = [AST.SolverStoreSolution(jointvars, \
+                                                 isHinge = [self.IsHinge(var.name) for var in jointvars])]
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 3:
-            raise self.CannotSolveError('need 3 joints')
+            raise self.CannotSolveError('Need 3 joints; now there are %i' % len(solvejointvars))
         
         log.info('ikfast rotation3d: %s',solvejointvars)
 
         AllEquations = self.buildEquationsFromRotation(Links, self.Tee[0:3,0:3], solvejointvars, \
                                                        self.freejointvars)
-        self.checkSolvability(AllEquations,solvejointvars,self.freejointvars)
-        
+
+        # check, solve, verify
+        self.checkSolvability(AllEquations, solvejointvars, self.freejointvars)
         tree = self.SolveAllEquations(AllEquations, \
                                       curvars = solvejointvars[:], \
                                       othersolvedvars = self.freejointvars, \
@@ -2472,12 +2476,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                        solvejointvars, \
                                        self.freevarsubs, \
                                        tree)
-        
-        return AST.SolverIKChainRotation3D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
-                                           [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
-                                           (self.Tee[0:3,0:3] * self.affineInverse(Tfirstright)[0:3,0:3]).subs(self.freevarsubs), \
-                                           tree, \
-                                           Rfk = self.Tfinal[0:3,0:3] * Tfirstright[0:3,0:3])
+
+        # call AST
+        chaintree =  AST.SolverIKChainRotation3D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
+                                                 [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
+                                                 (self.Tee[0:3,0:3] * \
+                                                  self.affineInverse(Tfirstright)[0:3,0:3]).subs(self.freevarsubs), \
+                                                 tree, \
+                                                 Rfk = self.Tfinal[0:3,0:3] * Tfirstright[0:3,0:3])
+        return chaintree
 
     def solveFullIK_TranslationLocalGlobal6D(self, LinksRaw, jointvars, isolvejointvars, \
                                              Tmanipraw = eye(4)):
@@ -12545,6 +12552,9 @@ class AST:
             self.Tee = Tleftinv * self.Tee
 
     class SolverIKChainRotation3D(SolverBase):
+        """
+        Called by solveFullIK_Rotation3D.
+        """
         solvejointvars = None
         freejointvars  = None
         Rfk            = None
