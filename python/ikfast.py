@@ -2306,6 +2306,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         self.Tfinal[0,0:3] = (T[0:3,0:3]*manipdir).transpose()
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars, self.Tfinal, \
                                                                  numsolutions = self._numsolutions)
+        # AST.SolverStoreSolution
         endbranchtree = [AST.SolverStoreSolution(jointvars, \
                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
         
@@ -2326,8 +2327,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 Ds.append(D)
                 Dsee.append(Daccum)
                 numvarsdone -= 1
-            #Tinv = self.affineInverse(Links[i])
-            #Daccum = Tinv[0:3,0:3]*Daccum
+            # Tinv = self.affineInverse(Links[i])
+            # Daccum = Tinv[0:3,0:3]*Daccum
             Daccum = LinksInv[i][0:3,0:3]*Daccum # still 3x1
             
         AllEquations = self.buildEquationsFromTwoSides(Ds, Dsee, jointvars, \
@@ -2344,7 +2345,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                        solvejointvars, \
                                        self.freevarsubs, \
                                        tree)
-        
+        # call AST
         chaintree = AST.SolverIKChainDirection3D([(jointvars[ijoint], ijoint) for ijoint in isolvejointvars], \
                                                  [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
                                                  Dee = self.Tee[0,0:3].transpose().subs(self.freevarsubs), \
@@ -2355,32 +2356,36 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     def solveFullIK_Lookat3D(self, LinksRaw, jointvars, isolvejointvars, \
                              rawmanipdir = Matrix(3,1,[S.Zero,S.Zero,S.One]), \
                              rawmanippos = Matrix(3,1,[S.Zero,S.Zero,S.Zero])):
-        """manipdir,manippos needs to be filled with a direction and position of the ray to control the lookat
+        """
+        manipdir,manippos needs to be filled with a direction and position of the ray to control the lookat
         """
         self._iktype = 'lookat3d'
+        
         manipdir = Matrix(3,1,[Float(x,30) for x in rawmanipdir])
-        manippos = Matrix(3,1,[self.convertRealToRational(x) for x in rawmanippos])
         manipdir /= sqrt(manipdir[0]*manipdir[0]+manipdir[1]*manipdir[1]+manipdir[2]*manipdir[2])
         for i in range(3):
             manipdir[i] = self.convertRealToRational(manipdir[i])
+
+        manippos = Matrix(3,1,[self.convertRealToRational(x) for x in rawmanippos])
         manippos = manippos-manipdir*manipdir.dot(manippos)
-        Links = LinksRaw[:]
+        
+        Links = LinksRaw[:] # copy
         LinksInv = [self.affineInverse(link) for link in Links]
         T = self.multiplyMatrix(Links)
         self.Tfinal = zeros((4,4))
         self.Tfinal[0,0:3] = (T[0:3,0:3]*manipdir).transpose()
-        self.Tfinal[0:3,3] = T[0:3,0:3]*manippos+T[0:3,3]
+        self.Tfinal[0:3,3] = T[0:3,0:3]*manippos + T[0:3,3]
         self.testconsistentvalues = self.ComputeConsistentValues(jointvars, self.Tfinal, \
                                                                  numsolutions = self._numsolutions)
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 2:
-            raise self.CannotSolveError('need 2 joints')
+            raise self.CannotSolveError('Need 2 joints; now there are %i' % len(solvejointvars))
 
         log.info('ikfast lookat3d: %s', solvejointvars)
         
         Paccum = self.Tee[0:3,3]
         numvarsdone = 2
-        Positions = []
+        Positions   = []
         Positionsee = []
         
         for i in range(len(Links)-1):
@@ -2395,18 +2400,22 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 numvarsdone -= 1
                 
             Tinv = self.affineInverse(Links[i])
-            Paccum = Tinv[0:3,0:3]*Paccum+Tinv[0:3,3]
+            Paccum = Tinv[0:3,0:3]*Paccum + Tinv[0:3,3]
 
-        frontcond = (Links[-1][0:3,0:3]*manipdir).dot(Paccum-(Links[-1][0:3,0:3]*manippos+Links[-1][0:3,3]))
+        frontcond = (Links[-1][0:3,0:3]*manipdir).dot(Paccum - \
+                                                      (Links[-1][0:3,0:3]*manippos+Links[-1][0:3,3]))
         
         for v in jointvars:
             frontcond = frontcond.subs(self.getVariable(v).subs)
-            
+
+        # AST.SolverStoreSolution
         endbranchtree = [AST.SolverStoreSolution(jointvars, \
                                                  checkgreaterzero = [frontcond], \
                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
         AllEquations = self.buildEquationsFromTwoSides(Positions, Positionsee, jointvars, \
                                                        uselength = True)
+
+        # check, solve, verify
         self.checkSolvability(AllEquations, solvejointvars, self.freejointvars)
         tree = self.SolveAllEquations(AllEquations, \
                                       curvars = solvejointvars, \
@@ -2417,7 +2426,8 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                        solvejointvars, \
                                        self.freevarsubs, \
                                        tree)
-        
+
+        # call AST
         chaintree = AST.SolverIKChainLookat3D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
                                               [(v,i) for v,i in izip(self.freejointvars,self.ifreejointvars)], \
                                               Pee = self.Tee[0:3,3].subs(self.freevarsubs), \
@@ -12432,7 +12442,7 @@ class AST:
         
     class SolverStoreSolution(SolverBase):
         """
-        Called when all the unknowns have been solved to add a solution.
+        Called to add a solution when all the unknowns have been solved.
         """
         alljointvars = None
         checkgreaterzero = None # used for final sanity checks to ensure IK solution is consistent
@@ -12679,6 +12689,9 @@ class AST:
             self.Dee = Tleftinv[0:3,0:3]*self.Dee
 
     class SolverIKChainLookat3D(SolverBase):
+        """
+        Called by solveFullIK_Lookat3D.
+        """
         solvejointvars = None
         freejointvars  = None
         jointtree      = None
