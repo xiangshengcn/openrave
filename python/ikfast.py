@@ -1195,7 +1195,7 @@ class IKFastSolver(AutoReloader):
     def gen_variable_obj(self, trigvars):
         for v in trigvars:
             if v not in self.variable_obj:
-                # add (var, Variable obj) into dictionary
+                # add {var: Variable object} into dictionary
                 self.variable_obj[v] = self.Variable(v)
         return
 
@@ -2480,6 +2480,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
     
     def _solveFullIK_Translation3D(self, LinksRaw, jointvars, isolvejointvars, manippos, \
                                    check = True):
+        """
+        Called by solveFullIK_TranslationLocalGlobal6D and solveFullIK_Translation3D
+        """
         Links = LinksRaw[:]
         LinksInv = [self.affineInverse(link) for link in Links]
         self.Tfinal = self.multiplyMatrix(Links)
@@ -2518,7 +2521,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                             transtree)
         
         chaintree = AST.SolverIKChainTranslation3D([(jointvars[ijoint],ijoint) for ijoint in isolvejointvars], \
-                                                   [(v,i) for v,i in izip(self.freejointvars,self.ifreejointvars)], \
+                                                   [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
                                                    Pee = self.Tee[0:3,3], \
                                                    jointtree = transtree, \
                                                    Pfk = self.Tfinal[0:3,3])
@@ -4231,6 +4234,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         uselength indicates whether to use the 2-norm of these vectors.
 
         ignoreaxis specifies the ONE axe that is ignored; it can be None, 0, 1, 2.
+
+        Called by 
+
+        _solveFullIK_Translation3D
+        solve5DIntersectingAxes
+        solve6DIntersectingAxes
+        solveFullIK_TranslationAxisAngle4D
         """
         Taccum = eye(4)
         numvarsdone = 1
@@ -4271,9 +4281,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                transvars+othersolvedvars, \
                                                uselength = uselength)
 
-    def buildEquationsFromRotation(self,T0links,Ree,rotvars,othersolvedvars):
+    def buildEquationsFromRotation(self, T0links, Ree, rotvars, othersolvedvars):
         """
-        Ree is a 3x3 matrix
+        Ree is a 3x3 matrix.
+
+        Called by solveFullIK_Rotation3D, solve6DIntersectingAxes
         """
         Raccum = Ree
         numvarsdone = 0
@@ -4286,11 +4298,9 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
             if __builtin__.sum(hasvars) == numvarsdone:
                 R = self.multiplyMatrix(T0links[(i+1):])
                 Reqs = []
+                # TGN: ensure othersolvedvars+rotvars is a subset of self.trigvars_subs
+                assert(all([z in self.trigvars_subs for z in othersolvedvars+rotvars]))
                 for i in range(3):
-                    
-                    # TGN: ensure othersolvedvars+rotvars is a subset of self.trigvars_subs
-                    assert(all([z in self.trigvars_subs for z in othersolvedvars+rotvars]))
-                    
                     Reqs.append([self.trigsimp_new(Raccum[i,j]-R[i,j]) for j in range(3)])
                 for i in range(3):
                     for eq in Reqs[i]:
@@ -4407,7 +4417,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         return polyeqs
     """
     
-    def buildRaghavanRothEquations(self,p0, p1, l0, l1, solvejointvars, \
+    def buildRaghavanRothEquations(self, p0, p1, l0, l1, solvejointvars, \
                                    simplify = True, currentcasesubs = None):
         """
         Called by buildRaghavanRothEquationsFromMatrix and solveFullIK_TranslationDirection5D.
@@ -7692,10 +7702,11 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                               checknegative = True, \
                               removecommoncoeff = False):
         """
-        Returns True is expr is NOT in exprs; False otherwise.
+        Returns True is EXPR is NOT in EXPRS; False otherwise.
 
-        If checknegative is True, then we also check if -expr is in exprs
-        If removecommoncoeff is True, then we call self.removecommonexprs on expr first
+        By default, CHECKNEGATIVE is True and we also check if -EXPR is in EXPRS.
+
+        If REMOVECOMMONCOEFF is True, then we call self.removecommonexprs on EXPR first.
         """
         if removecommoncoeff:
             expr = self.removecommonexprs(expr)
@@ -7706,6 +7717,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 # (T,T)
                 expr.is_Function and exprtest.is_Function \
                 # RD: infinite loop for some reason if checking for this
+                # TGN: why would we include sign(...) in EXPRS or test if sign(...) is in EXPRS?
                 and (exprtest.func == sign \
                      or expr.func == sign) \
             ) \
