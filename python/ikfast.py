@@ -977,8 +977,7 @@ class IKFastSolver(AutoReloader):
     def IsHinge(self, axisname):
         if axisname[0]!='j' or not axisname in self.axismap:
             if axisname == 'j100':
-                # always revolute!
-                # TGN: what's j100?
+                # TGN: j100 is sumjoint in solveFullIK_TranslationDirection5D so always revolute
                 return True
             
             else:
@@ -2282,17 +2281,26 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
         print('========================== END OF CONSISTENT VALUES PRINT  ================================\n')
         return testconsistentvalues
 
+    @staticmethod
+    def processColumnVector(rawmanipdir):
+        manipdir = [Float(x, 30) for x in rawmanipdir]
+        L = sqrt(manipdir[0]*manipdir[0]+manipdir[1]*manipdir[1]+manipdir[2]*manipdir[2])
+        return Matrix(3,1, [self.convertRealToRational(manipdiri/L) for manipdiri in manipdir])
+
     def solveFullIK_Direction3D(self, LinksRaw, jointvars, isolvejointvars, \
                                 rawmanipdir = Matrix(3,1,[S.Zero,S.Zero,S.One])):
-        """manipdir needs to be filled with a 3elemtn vector of the initial direction to control"""
-        
+        """
+        manipdir is a 3x1 column vector that prescribes the initial direction to control
+        """
         self._iktype = 'direction3d'
         manipdir = Matrix(3,1,[Float(x,30) for x in rawmanipdir])
         manipdir /= sqrt(manipdir[0]*manipdir[0]+manipdir[1]*manipdir[1]+manipdir[2]*manipdir[2])
         for i in range(3):
             manipdir[i] = self.convertRealToRational(manipdir[i])
-        Links = LinksRaw[:]
+
+        Links = LinksRaw[:] # copy
         LinksInv = [self.affineInverse(link) for link in Links]
+        
         T = self.multiplyMatrix(Links)
         self.Tfinal = zeros((4,4))
         self.Tfinal[0,0:3] = (T[0:3,0:3]*manipdir).transpose()
@@ -2300,13 +2308,13 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                                                  numsolutions = self._numsolutions)
         endbranchtree = [AST.SolverStoreSolution(jointvars, \
                                                  isHinge = [self.IsHinge(var.name) for var in jointvars])]
+        
         solvejointvars = [jointvars[i] for i in isolvejointvars]
         if len(solvejointvars) != 2:
-            raise self.CannotSolveError('need 2 joints')
-
+            raise self.CannotSolveError('Need 2 joints; now there are %i' % len(solvejointvars))
         log.info('ikfast direction3d: %s', solvejointvars)
 
-        Daccum = self.Tee[0,0:3].transpose()
+        Daccum = self.Tee[0,0:3].transpose() # 3x1
         numvarsdone = 2
         Ds = []
         Dsee = []
@@ -2318,11 +2326,14 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 Ds.append(D)
                 Dsee.append(Daccum)
                 numvarsdone -= 1
-            Tinv = self.affineInverse(Links[i])
-            Daccum = Tinv[0:3,0:3]*Daccum
+            #Tinv = self.affineInverse(Links[i])
+            #Daccum = Tinv[0:3,0:3]*Daccum
+            Daccum = LinksInv[i][0:3,0:3]*Daccum # still 3x1
             
         AllEquations = self.buildEquationsFromTwoSides(Ds, Dsee, jointvars, \
                                                        uselength = False)
+
+        # check, solve, verify
         self.checkSolvability(AllEquations, solvejointvars, self.freejointvars)
         tree = self.SolveAllEquations(AllEquations, \
                                       curvars = solvejointvars, \
@@ -2331,13 +2342,15 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                                       endbranchtree = endbranchtree)
         tree = self.verifyAllEquations(AllEquations, \
                                        solvejointvars, \
-                                       self.freevarsubs,tree)
+                                       self.freevarsubs, \
+                                       tree)
         
-        return AST.SolverIKChainDirection3D([(jointvars[ijoint], ijoint) for ijoint in isolvejointvars], \
-                                            [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
-                                            Dee = self.Tee[0,0:3].transpose().subs(self.freevarsubs), \
-                                            jointtree = tree, \
-                                            Dfk = self.Tfinal[0,0:3].transpose())
+        chaintree = AST.SolverIKChainDirection3D([(jointvars[ijoint], ijoint) for ijoint in isolvejointvars], \
+                                                 [(v,i) for v,i in izip(self.freejointvars, self.ifreejointvars)], \
+                                                 Dee = self.Tee[0,0:3].transpose().subs(self.freevarsubs), \
+                                                 jointtree = tree, \
+                                                 Dfk = self.Tfinal[0,0:3].transpose())
+        return chaintree
 
     def solveFullIK_Lookat3D(self, LinksRaw, jointvars, isolvejointvars, \
                              rawmanipdir = Matrix(3,1,[S.Zero,S.Zero,S.One]), \
@@ -7740,9 +7753,7 @@ inv(A) = [ r02  r12  r22  npz ]    [ 2  5  8  14 ]
                 raise self.CannotSolveError('verifyAllEquations: equation is not valid: %s' % (str(expr)))
             
             if not expr.has(*unsolvedvars) and self.CheckExpressionUnique(extrazerochecks, expr):
-                extrazerochecks.append(self.removecommonexprs(expr.subs(solsubs).evalf(), \
-                                                              onlygcd = False, \
-                                                              onlynumbers = True))
+                extrazerochecks.append(self.removecommonexprs(expr.subs(solsubs).evalf()))
                 
         if len(extrazerochecks) > 0:
             return [AST.SolverCheckZeros('verify', extrazerochecks, tree, \
@@ -12603,6 +12614,9 @@ class AST:
             self.Pee = Tleftinv[0:2,0:2]*self.Pee+Tleftinv[0:2,3]
             
     class SolverIKChainDirection3D(SolverBase):
+        """
+        Called by IKFastSolver.solveFullIK_Direction3D.
+        """
         solvejointvars = None
         freejointvars  = None
         jointtree      = None
